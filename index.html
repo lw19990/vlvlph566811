@@ -635,6 +635,8 @@
                 <!-- 新增：浏览器和日记图标 -->
                 <div class="app-icon" id="spy-icon-browser" onclick="openSpyBrowser()" style="background-color:#007aff; color:#fff;">🌐<div class="app-label">浏览器</div></div>
                 <div class="app-icon" id="spy-icon-diary" onclick="openSpyDiary()" style="background-color:#8e44ad; color:#fff;">📔<div class="app-label">日记</div></div>
+                <!-- 新增：设置图标 -->
+                <div class="app-icon" id="spy-icon-settings" onclick="openSpySettings()" style="background-color:#8e8e93; color:#fff;">⚙️<div class="app-label">设置</div></div>
             </div>
         </div>
 
@@ -688,6 +690,67 @@
                 </div>
             </div>
             <div class="app-content" id="spy-browser-list"></div>
+        </div>
+
+        <!-- 新增：查岗 (Spy) - 角色手机设置 -->
+        <div id="app-spy-settings" class="screen">
+            <div class="app-header">
+                <div class="back-btn" onclick="openApp('app-spy-home')">Back</div>
+                <div class="app-title">设置</div>
+                <div class="action-btn"></div>
+            </div>
+            <div class="app-content">
+                <div class="theme-section-title">壁纸设置</div>
+                
+                <div class="form-group">
+                    <label>壁纸类型</label>
+                    <div class="theme-option-row">
+                        <div class="theme-option-btn active" id="spy-theme-type-color" onclick="switchSpyThemeType('color')">纯色</div>
+                        <div class="theme-option-btn" id="spy-theme-type-image" onclick="switchSpyThemeType('image')">图片</div>
+                    </div>
+                    
+                    <div id="spy-theme-input-color">
+                        <div class="color-picker-wrapper">
+                            <input type="color" id="spy-theme-wallpaper-color" value="#333333" style="width:50px; height:40px; padding:0; border:none;">
+                            <span>选择颜色</span>
+                        </div>
+                    </div>
+
+                    <div id="spy-theme-input-image" style="display:none;">
+                        <input type="file" id="spy-theme-wallpaper-image" accept="image/*">
+                        <input type="text" id="spy-theme-wallpaper-url" placeholder="或者输入图片URL" style="margin-top:5px;">
+                        <div style="font-size:11px; color:#888; margin-top:5px;">上传图片或输入URL作为壁纸</div>
+                    </div>
+                </div>
+
+                <button class="save-btn" onclick="saveSpyWallpaper()">保存壁纸设置</button>
+
+                <hr class="theme-divider">
+
+                <div class="theme-section-title">桌面图标设置</div>
+
+                <div class="form-group">
+                    <label>选择应用</label>
+                    <select id="spy-theme-app-select" style="margin-bottom:10px;">
+                        <option value="spy-icon-vk">Vkontakte</option>
+                        <option value="spy-icon-memos">备忘录</option>
+                        <option value="spy-icon-browser">浏览器</option>
+                        <option value="spy-icon-diary">日记</option>
+                        <option value="spy-icon-settings">设置</option>
+                    </select>
+                    
+                    <label style="margin-top:10px">图标图片</label>
+                    <input type="file" id="spy-theme-icon-file" accept="image/*">
+                    <input type="text" id="spy-theme-icon-url" placeholder="或者输入图片URL" style="margin-top:5px;">
+                    
+                    <button class="save-btn" style="margin-top:15px; background:#007aff;" onclick="saveSpyAppIcon()">保存图标</button>
+                </div>
+
+                <hr class="theme-divider">
+
+                <!-- 一键清空角色手机美化 -->
+                <button class="save-btn" style="background:#ff3b30; margin-bottom:30px;" onclick="resetSpyTheme()">⚠️ 重置角色手机美化</button>
+            </div>
         </div>
 
         <!-- 新增：查岗 (Spy) - 模拟日记 -->
@@ -1840,6 +1903,7 @@ ${memText || '（无记忆片段）'}
         // --- 新增：浏览器和日记逻辑 ---
         function openSpyBrowser() { openApp('app-spy-browser'); renderSpyBrowser(); }
         function openSpyDiary() { openApp('app-spy-diary'); renderSpyDiaries(); }
+        function openSpySettings() { openApp('app-spy-settings'); applySpyTheme(); }
 
         function renderSpyBrowser() {
             const c = document.getElementById('spy-browser-list');
@@ -2370,9 +2434,77 @@ ${memText || '（无记忆片段）'}
         async function triggerCallStartResponse() { const settings = DB.getSettings(); let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${currentChatContact.name}\n人设：${currentChatContact.persona}`; const userSettings = currentChatContact.userSettings || {}; if (userSettings.userName) systemContent += `\n\n[用户信息]\n名字：${userSettings.userName}`; systemContent += `\n\n===== 【语音通话接听模式】 =====\n用户刚刚给你拨打了语音电话，你接通了电话。\n请生成一段接听电话时的回复。回复必须包含心声。\n**重要规则**：\n1. 现在是语音通话，请像打电话一样回复。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n格式：[THOUGHTS: 心声内容] ||| 你的口语回复。`; const messages = [{ role: "system", content: systemContent }]; try { const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: 0.7 }) }); const data = await response.json(); if (data.choices && data.choices.length > 0) { let content = data.choices[0].message.content; let extractedThought = null; const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s); if (thoughtMatch) { extractedThought = thoughtMatch[1].trim(); content = content.replace(thoughtMatch[0], '').trim(); content = content.replace(/^\|\|\|\s*/, '').trim(); } document.getElementById('call-status').innerText = "通话中"; if (content && content.trim()) { saveMessage('assistant', content, null, extractedThought); } } } catch (error) { document.getElementById('call-status').innerText = "连接失败"; alert('通话连接错误: ' + error.message); } }
         function openOfflineMode() { if (!currentChatContact) return; document.getElementById('offline-mode').classList.add('active'); const settings = currentChatContact.offlineSettings || {}; if (settings.bg) { document.getElementById('offline-mode').style.backgroundImage = `url(${settings.bg})`; } else { document.getElementById('offline-mode').style.backgroundImage = 'none'; } renderChatHistory(); }
         function exitOfflineMode() { document.getElementById('offline-mode').classList.remove('active'); document.getElementById('offline-typing-indicator').style.display = 'none'; closeOfflineSettings(); }
-        function openOfflineSettings() { const settings = currentChatContact.offlineSettings || { min: 500, max: 700, style: '', bg: '' }; document.getElementById('offline-min-len').value = settings.min; document.getElementById('offline-max-len').value = settings.max; document.getElementById('offline-style-prompt').value = settings.style; document.getElementById('offline-bg-url').value = settings.bg && settings.bg.startsWith('http') ? settings.bg : ''; document.getElementById('offline-settings-modal').classList.add('active'); document.getElementById('ctx-overlay').classList.add('active'); }
+        function openOfflineSettings() { 
+            const settings = currentChatContact.offlineSettings || { min: 500, max: 700, style: '', bg: '', retell: false, interrupt: false, perspective: 'first_user' }; 
+            document.getElementById('offline-min-len').value = settings.min; 
+            document.getElementById('offline-max-len').value = settings.max; 
+            document.getElementById('offline-style-prompt').value = settings.style; 
+            document.getElementById('offline-bg-url').value = settings.bg && settings.bg.startsWith('http') ? settings.bg : ''; 
+            
+            // 加载复述设置
+            document.getElementById('offline-retell-yes').classList.toggle('active', settings.retell === true);
+            document.getElementById('offline-retell-no').classList.toggle('active', settings.retell !== true);
+            
+            // 加载抢话设置
+            document.getElementById('offline-interrupt-yes').classList.toggle('active', settings.interrupt === true);
+            document.getElementById('offline-interrupt-no').classList.toggle('active', settings.interrupt !== true);
+            
+            // 加载人称设置
+            document.getElementById('offline-perspective').value = settings.perspective || 'first_user';
+            
+            document.getElementById('offline-settings-modal').classList.add('active'); 
+            document.getElementById('ctx-overlay').classList.add('active'); 
+        }
+        
+        // 复述设置函数
+        function setOfflineRetell(value) {
+            document.getElementById('offline-retell-yes').classList.toggle('active', value === true);
+            document.getElementById('offline-retell-no').classList.toggle('active', value !== true);
+        }
+        
+        // 抢话设置函数
+        function setOfflineInterrupt(value) {
+            document.getElementById('offline-interrupt-yes').classList.toggle('active', value === true);
+            document.getElementById('offline-interrupt-no').classList.toggle('active', value !== true);
+        }
         function closeOfflineSettings() { document.getElementById('offline-settings-modal').classList.remove('active'); document.getElementById('ctx-overlay').classList.remove('active'); }
-        function saveOfflineSettings() { const min = parseInt(document.getElementById('offline-min-len').value) || 500; const max = parseInt(document.getElementById('offline-max-len').value) || 700; const style = document.getElementById('offline-style-prompt').value; const bgUrl = document.getElementById('offline-bg-url').value; const bgFile = document.getElementById('offline-bg-file'); const processSave = (bgVal) => { let contacts = DB.getContacts(); const i = contacts.findIndex(c => c.id === currentChatContact.id); if (i !== -1) { const oldBg = contacts[i].offlineSettings?.bg || ''; const finalBg = bgVal || oldBg; contacts[i].offlineSettings = { min, max, style, bg: finalBg }; DB.saveContacts(contacts); currentChatContact = contacts[i]; if (finalBg) { document.getElementById('offline-mode').style.backgroundImage = `url(${finalBg})`; } } closeOfflineSettings(); }; if (bgUrl) { processSave(bgUrl); } else if (bgFile.files && bgFile.files[0]) { const reader = new FileReader(); reader.onload = (e) => processSave(e.target.result); reader.readAsDataURL(bgFile.files[0]); } else { processSave(null); } }
+        function saveOfflineSettings() { 
+            const min = parseInt(document.getElementById('offline-min-len').value) || 500; 
+            const max = parseInt(document.getElementById('offline-max-len').value) || 700; 
+            const style = document.getElementById('offline-style-prompt').value; 
+            const bgUrl = document.getElementById('offline-bg-url').value; 
+            const bgFile = document.getElementById('offline-bg-file'); 
+            
+            // 获取复述和抢话设置
+            const retell = document.getElementById('offline-retell-yes').classList.contains('active');
+            const interrupt = document.getElementById('offline-interrupt-yes').classList.contains('active');
+            const perspective = document.getElementById('offline-perspective').value;
+            
+            const processSave = (bgVal) => { 
+                let contacts = DB.getContacts(); 
+                const i = contacts.findIndex(c => c.id === currentChatContact.id); 
+                if (i !== -1) { 
+                    const oldBg = contacts[i].offlineSettings?.bg || ''; 
+                    const finalBg = bgVal || oldBg; 
+                    contacts[i].offlineSettings = { min, max, style, bg: finalBg, retell, interrupt, perspective }; 
+                    DB.saveContacts(contacts); 
+                    currentChatContact = contacts[i]; 
+                    if (finalBg) { 
+                        document.getElementById('offline-mode').style.backgroundImage = `url(${finalBg})`; 
+                    } 
+                } 
+                closeOfflineSettings(); 
+            }; 
+            if (bgUrl) { 
+                processSave(bgUrl); 
+            } else if (bgFile.files && bgFile.files[0]) { 
+                const reader = new FileReader(); 
+                reader.onload = (e) => processSave(e.target.result); 
+                reader.readAsDataURL(bgFile.files[0]); 
+            } else { 
+                processSave(null); 
+            } 
+        }
         function toggleThoughts() { const modal = document.getElementById('thoughts-modal'); if (modal.classList.contains('active')) { modal.classList.remove('active'); } else { const chat = DB.getChats()[currentChatContact.id] || []; let lastThought = "暂无心声..."; for (let i = chat.length - 1; i >= 0; i--) { if (chat[i].role === 'assistant' && chat[i].thought) { lastThought = chat[i].thought; break; } } document.getElementById('thoughts-text').innerText = lastThought; modal.classList.add('active'); } }
         function calculateChatRounds(history) { let rounds = 0; let hasUser = false; for (const msg of history) { if (msg.role === 'user') { hasUser = true; } else if (msg.role === 'assistant' && hasUser) { rounds++; hasUser = false; } } return rounds; }
 
