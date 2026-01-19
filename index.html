@@ -334,10 +334,6 @@
             max-width: 120px;
             max-height: 120px;
             border-radius: 8px;
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-            -webkit-touch-callout: none;
         }
         #quote-preview-area { display: none; background: #f0f0f0; padding: 8px 15px; border-top: 1px solid #ddd; align-items: center; justify-content: space-between; font-size: 12px; color: #555; }
         .quote-preview-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 85%; border-left: 3px solid #007aff; padding-left: 8px; }
@@ -2845,6 +2841,14 @@ ${memText || '（无记忆片段）'}
                         b.className = `message-bubble sticker-bubble ${msg.role === 'user' ? 'user' : 'ai'}`;
                         b.innerHTML = `<img src="${msg.stickerUrl}" alt="${msg.stickerDesc}" title="${msg.stickerDesc}">`;
                         bc.appendChild(b);
+                        // 为表情包气泡添加长按事件
+                        if (!isSelectionMode) {
+                            b.addEventListener('touchstart', () => startLongPress(originalIndex));
+                            b.addEventListener('touchend', cancelLongPress);
+                            b.addEventListener('mousedown', () => startLongPress(originalIndex));
+                            b.addEventListener('mouseup', cancelLongPress);
+                            b.addEventListener('contextmenu', e => e.preventDefault());
+                        }
                     } else { 
                         const b = document.createElement('div'); 
                         b.className = `message-bubble ${msg.role === 'user' ? 'user' : 'ai'}`; 
@@ -2858,7 +2862,7 @@ ${memText || '（无记忆片段）'}
                         t.innerText = msg.content; 
                         b.appendChild(t); 
                         bc.appendChild(b);
-                    if (!isSelectionMode) { 
+                        if (!isSelectionMode) { 
                             // 修复：使用原始索引而不是过滤后的索引
                             b.addEventListener('touchstart', () => startLongPress(originalIndex)); 
                             b.addEventListener('touchend', cancelLongPress); 
@@ -3199,7 +3203,11 @@ ${memText || '（无记忆片段）'}
                 if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
                 if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
                 if (msg.type === 'call_end') return { role: 'system', content: msg.content }; 
-                if (msg.type === 'sticker') return { role: msg.role, content: content };
+                if (msg.type === 'sticker') {
+                    // 表情包消息：AI读取的是纯描述文字，不带任何标记
+                    const stickerDesc = msg.stickerDesc || '表情';
+                    return { role: msg.role, content: `[图片表情：${stickerDesc}]` };
+                }
                 return { role: msg.role, content: content };
             });
 
