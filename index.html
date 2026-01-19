@@ -155,6 +155,185 @@
         .chat-tools-bar::-webkit-scrollbar { display: none; } 
         .tool-btn { background: #fff; border: 1px solid #ddd; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; color: #333; cursor: pointer; display: flex; align-items: center; gap: 6px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .tool-btn:active { background: #f0f0f0; }
+        
+        /* --- 表情包功能样式 --- */
+        #sticker-panel {
+            display: none;
+            background: #fff;
+            border-top: 1px solid #eee;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #sticker-panel.active {
+            display: block;
+        }
+        .sticker-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .sticker-panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .sticker-add-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #007aff;
+            color: #fff;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .sticker-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .sticker-item {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid #eee;
+            position: relative;
+            background: #f9f9f9;
+        }
+        .sticker-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .sticker-item:active {
+            transform: scale(0.95);
+        }
+        .sticker-item .sticker-delete {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 59, 48, 0.9);
+            color: #fff;
+            font-size: 12px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        .sticker-item:hover .sticker-delete {
+            display: flex;
+        }
+        .sticker-empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            padding: 20px;
+        }
+
+        /* 表情包管理弹窗 */
+        #sticker-manager-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-height: 80%;
+            background: #fff;
+            border-radius: 20px;
+            z-index: 700;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        #sticker-manager-modal.active {
+            display: flex;
+        }
+        .sticker-manager-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            background: #f9f9f9;
+        }
+        .sticker-manager-content {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .sticker-upload-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .sticker-upload-tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            background: #fff;
+        }
+        .sticker-upload-tab.active {
+            background: #007aff;
+            color: #fff;
+            border-color: #007aff;
+        }
+        .sticker-upload-section {
+            display: none;
+        }
+        .sticker-upload-section.active {
+            display: block;
+        }
+        .sticker-preview-container {
+            width: 100px;
+            height: 100px;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            margin: 0 auto 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: #f9f9f9;
+        }
+        .sticker-preview-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .sticker-preview-placeholder {
+            color: #999;
+            font-size: 12px;
+        }
+
+        /* 表情包消息气泡 */
+        .sticker-bubble {
+            padding: 5px !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        .sticker-bubble img {
+            max-width: 120px;
+            max-height: 120px;
+            border-radius: 8px;
+        }
         #quote-preview-area { display: none; background: #f0f0f0; padding: 8px 15px; border-top: 1px solid #ddd; align-items: center; justify-content: space-between; font-size: 12px; color: #555; }
         .quote-preview-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 85%; border-left: 3px solid #007aff; padding-left: 8px; }
         .quote-close-btn { font-size: 16px; color: #999; cursor: pointer; padding: 5px; }
@@ -464,6 +643,185 @@
         .memo-item.daily-summary .memo-date {
             color: #2e7d32;
             font-weight: bold;
+        }
+
+        /* --- 表情包功能样式 --- */
+        #sticker-panel {
+            display: none;
+            background: #fff;
+            border-top: 1px solid #eee;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #sticker-panel.active {
+            display: block;
+        }
+        .sticker-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .sticker-panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .sticker-add-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #007aff;
+            color: #fff;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .sticker-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .sticker-item {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid #eee;
+            position: relative;
+            background: #f9f9f9;
+        }
+        .sticker-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .sticker-item:active {
+            transform: scale(0.95);
+        }
+        .sticker-item .sticker-delete {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 59, 48, 0.9);
+            color: #fff;
+            font-size: 12px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        .sticker-item:hover .sticker-delete {
+            display: flex;
+        }
+        .sticker-empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            padding: 20px;
+        }
+
+        /* 表情包管理弹窗 */
+        #sticker-manager-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-height: 80%;
+            background: #fff;
+            border-radius: 20px;
+            z-index: 700;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        #sticker-manager-modal.active {
+            display: flex;
+        }
+        .sticker-manager-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            background: #f9f9f9;
+        }
+        .sticker-manager-content {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .sticker-upload-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .sticker-upload-tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            background: #fff;
+        }
+        .sticker-upload-tab.active {
+            background: #007aff;
+            color: #fff;
+            border-color: #007aff;
+        }
+        .sticker-upload-section {
+            display: none;
+        }
+        .sticker-upload-section.active {
+            display: block;
+        }
+        .sticker-preview-container {
+            width: 100px;
+            height: 100px;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            margin: 0 auto 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: #f9f9f9;
+        }
+        .sticker-preview-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .sticker-preview-placeholder {
+            color: #999;
+            font-size: 12px;
+        }
+
+        /* 表情包消息气泡 */
+        .sticker-bubble {
+            padding: 5px !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        .sticker-bubble img {
+            max-width: 120px;
+            max-height: 120px;
+            border-radius: 8px;
         }
 
     </style>
@@ -954,7 +1312,17 @@
             <div class="chat-messages" id="chat-history"></div>
             <div class="typing-indicator" id="typing-indicator">对方正在输入...</div>
             
+            <!-- 表情包面板 -->
+            <div id="sticker-panel">
+                <div class="sticker-panel-header">
+                    <div class="sticker-panel-title">表情包</div>
+                    <button class="sticker-add-btn" onclick="openStickerManager()">+</button>
+                </div>
+                <div class="sticker-grid" id="sticker-grid"></div>
+            </div>
+
             <div class="chat-tools-bar">
+                <button class="tool-btn" onclick="toggleStickerPanel()">😊 表情包</button>
                 <button class="tool-btn" onclick="regenerateLastResponse()">🔄 刷新</button>
                 <button class="tool-btn" onclick="continueChat()">⏩ 继续</button>
                 <button class="tool-btn" onclick="openTransferModal()">💰 转账</button>
@@ -1015,6 +1383,50 @@
                     <div style="display:flex; gap:10px;">
                         <button class="save-btn" style="background:#eee; color:#333;" onclick="closeTransferModal()">取消</button>
                         <button class="save-btn" onclick="sendTransfer()">确认转账</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 表情包管理弹窗 -->
+            <div id="sticker-manager-modal">
+                <div class="sticker-manager-header">
+                    <span>表情包管理</span>
+                    <span style="color:#007aff; cursor:pointer;" onclick="closeStickerManager()">完成</span>
+                </div>
+                <div class="sticker-manager-content">
+                    <div class="sticker-upload-tabs">
+                        <div class="sticker-upload-tab active" onclick="switchStickerUploadTab('single')">单独上传</div>
+                        <div class="sticker-upload-tab" onclick="switchStickerUploadTab('batch')">批量上传</div>
+                    </div>
+
+                    <!-- 单独上传 -->
+                    <div id="sticker-upload-single" class="sticker-upload-section active">
+                        <div class="sticker-preview-container" id="sticker-preview-single">
+                            <span class="sticker-preview-placeholder">预览</span>
+                        </div>
+                        <div class="form-group">
+                            <label>上传方式</label>
+                            <input type="file" id="sticker-file-input" accept="image/*" onchange="previewSingleSticker(this)">
+                            <input type="text" id="sticker-url-input" placeholder="或输入图片URL" style="margin-top:5px;" oninput="previewSingleStickerUrl(this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>表情包描述（AI将读取此文字）</label>
+                            <input type="text" id="sticker-desc-input" placeholder="例如：开心、大笑、哭泣等">
+                        </div>
+                        <button class="save-btn" onclick="saveSingleSticker()">保存表情包</button>
+                    </div>
+
+                    <!-- 批量上传 -->
+                    <div id="sticker-upload-batch" class="sticker-upload-section">
+                        <div class="form-group">
+                            <label>批量上传格式</label>
+                            <textarea id="sticker-batch-input" placeholder="每行一个表情包，格式：描述：图片URL&#10;例如：&#10;开心：https://example.com/happy.png&#10;难过：https://example.com/sad.png" style="height:200px;"></textarea>
+                            <div style="font-size:11px; color:#888; margin-top:5px;">
+                                格式说明：每行一个表情包，使用中文冒号分隔描述和URL<br>
+                                示例：开心：https://example.com/happy.png
+                            </div>
+                        </div>
+                        <button class="save-btn" onclick="saveBatchStickers()">批量保存</button>
                     </div>
                 </div>
             </div>
@@ -1384,8 +1796,195 @@
             },
             saveMemories: (data) => localStorage.setItem('iphone_memories', JSON.stringify(data)),
             getCalendarEvents: () => JSON.parse(localStorage.getItem('iphone_calendar_events')) || {},
-            saveCalendarEvents: (data) => localStorage.setItem('iphone_calendar_events', JSON.stringify(data))
+            saveCalendarEvents: (data) => localStorage.setItem('iphone_calendar_events', JSON.stringify(data)),
+            getStickers: () => JSON.parse(localStorage.getItem('iphone_stickers')) || [],
+            saveStickers: (data) => localStorage.setItem('iphone_stickers', JSON.stringify(data))
         };
+
+        // --- 表情包功能 ---
+        let currentStickerUploadTab = 'single';
+
+        function toggleStickerPanel() {
+            const panel = document.getElementById('sticker-panel');
+            panel.classList.toggle('active');
+            if (panel.classList.contains('active')) {
+                renderStickerGrid();
+            }
+        }
+
+        function renderStickerGrid() {
+            const grid = document.getElementById('sticker-grid');
+            const stickers = DB.getStickers();
+            grid.innerHTML = '';
+            
+            if (stickers.length === 0) {
+                grid.innerHTML = '<div class="sticker-empty">暂无表情包，点击右上角 + 添加</div>';
+                return;
+            }
+
+            stickers.forEach((sticker, index) => {
+                const item = document.createElement('div');
+                item.className = 'sticker-item';
+                item.innerHTML = `
+                    <img src="${sticker.url}" alt="${sticker.desc}">
+                    <div class="sticker-delete" onclick="deleteSticker(${index}, event)">×</div>
+                `;
+                item.onclick = (e) => {
+                    if (!e.target.classList.contains('sticker-delete')) {
+                        sendSticker(sticker);
+                    }
+                };
+                grid.appendChild(item);
+            });
+        }
+
+        function sendSticker(sticker) {
+            if (!currentChatContact) return;
+            
+            // 保存消息，type为sticker，包含url和desc
+            const c = DB.getChats();
+            if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+            c[currentChatContact.id].push({
+                role: 'user',
+                type: 'sticker',
+                stickerUrl: sticker.url,
+                stickerDesc: sticker.desc,
+                content: `[表情包：${sticker.desc}]`, // AI读取的内容
+                timestamp: Date.now(),
+                mode: 'online'
+            });
+            DB.saveChats(c);
+            
+            // 关闭表情包面板
+            document.getElementById('sticker-panel').classList.remove('active');
+            
+            // 重新渲染聊天记录
+            renderChatHistory();
+        }
+
+        function deleteSticker(index, event) {
+            event.stopPropagation();
+            if (!confirm('确定删除这个表情包吗？')) return;
+            
+            const stickers = DB.getStickers();
+            stickers.splice(index, 1);
+            DB.saveStickers(stickers);
+            renderStickerGrid();
+        }
+
+        function openStickerManager() {
+            document.getElementById('sticker-manager-modal').classList.add('active');
+            document.getElementById('ctx-overlay').classList.add('active');
+            switchStickerUploadTab('single');
+        }
+
+        function closeStickerManager() {
+            document.getElementById('sticker-manager-modal').classList.remove('active');
+            document.getElementById('ctx-overlay').classList.remove('active');
+            
+            // 清空输入
+            document.getElementById('sticker-file-input').value = '';
+            document.getElementById('sticker-url-input').value = '';
+            document.getElementById('sticker-desc-input').value = '';
+            document.getElementById('sticker-batch-input').value = '';
+            document.getElementById('sticker-preview-single').innerHTML = '<span class="sticker-preview-placeholder">预览</span>';
+        }
+
+        function switchStickerUploadTab(tab) {
+            currentStickerUploadTab = tab;
+            
+            document.querySelectorAll('.sticker-upload-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.sticker-upload-section').forEach(s => s.classList.remove('active'));
+            
+            if (tab === 'single') {
+                document.querySelector('.sticker-upload-tab:first-child').classList.add('active');
+                document.getElementById('sticker-upload-single').classList.add('active');
+            } else {
+                document.querySelector('.sticker-upload-tab:last-child').classList.add('active');
+                document.getElementById('sticker-upload-batch').classList.add('active');
+            }
+        }
+
+        function previewSingleSticker(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('sticker-preview-single').innerHTML = `<img src="${e.target.result}">`;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function previewSingleStickerUrl(url) {
+            if (url) {
+                document.getElementById('sticker-preview-single').innerHTML = `<img src="${url}">`;
+            } else {
+                document.getElementById('sticker-preview-single').innerHTML = '<span class="sticker-preview-placeholder">预览</span>';
+            }
+        }
+
+        function saveSingleSticker() {
+            const fileInput = document.getElementById('sticker-file-input');
+            const urlInput = document.getElementById('sticker-url-input').value;
+            const desc = document.getElementById('sticker-desc-input').value.trim();
+            
+            if (!desc) {
+                alert('请输入表情包描述');
+                return;
+            }
+
+            const processSave = (url) => {
+                const stickers = DB.getStickers();
+                stickers.push({ url: url, desc: desc });
+                DB.saveStickers(stickers);
+                alert('表情包已保存');
+                closeStickerManager();
+                renderStickerGrid();
+            };
+
+            if (urlInput) {
+                processSave(urlInput);
+            } else if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => processSave(e.target.result);
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                alert('请选择图片或输入URL');
+            }
+        }
+
+        function saveBatchStickers() {
+            const input = document.getElementById('sticker-batch-input').value.trim();
+            if (!input) {
+                alert('请输入表情包信息');
+                return;
+            }
+
+            const lines = input.split('\n').filter(line => line.trim());
+            const stickers = DB.getStickers();
+            let successCount = 0;
+
+            lines.forEach(line => {
+                const parts = line.split('：'); // 中文冒号
+                if (parts.length === 2) {
+                    const desc = parts[0].trim();
+                    const url = parts[1].trim();
+                    if (desc && url) {
+                        stickers.push({ url: url, desc: desc });
+                        successCount++;
+                    }
+                }
+            });
+
+            if (successCount > 0) {
+                DB.saveStickers(stickers);
+                alert(`成功添加 ${successCount} 个表情包`);
+                closeStickerManager();
+                renderStickerGrid();
+            } else {
+                alert('没有有效的表情包数据，请检查格式');
+            }
+        }
 
         function loadSettings() { const s = DB.getSettings(); document.getElementById('api-url').value = s.url; document.getElementById('api-key').value = s.key; document.getElementById('model-name').value = s.model; document.getElementById('system-prompt').value = s.prompt; document.getElementById('fullscreen-toggle').checked = s.fullscreen; applyFullscreen(s.fullscreen); applyTheme(); }
         function saveSettings() { DB.saveSettings({ url: document.getElementById('api-url').value, key: document.getElementById('api-key').value, model: document.getElementById('model-name').value, prompt: document.getElementById('system-prompt').value, fullscreen: document.getElementById('fullscreen-toggle').checked }); alert('设置已保存'); }
@@ -2235,6 +2834,12 @@ ${memText || '（无记忆片段）'}
                         const title = msg.status === 'accepted' ? "已收款" : "已退还", ic = msg.status === 'accepted' ? "✅" : "↩️", desc = msg.status === 'accepted' ? "已接受您的转账" : "已拒收您的转账"; 
                         b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">¥${msg.amount}</span></div></div><div class="transfer-footer">${desc}</div>`; 
                         bc.appendChild(b); 
+                    } else if (msg.type === 'sticker') {
+                        // 表情包消息
+                        const b = document.createElement('div');
+                        b.className = `message-bubble sticker-bubble ${msg.role === 'user' ? 'user' : 'ai'}`;
+                        b.innerHTML = `<img src="${msg.stickerUrl}" alt="${msg.stickerDesc}" title="${msg.stickerDesc}">`;
+                        bc.appendChild(b);
                     } else { 
                         const b = document.createElement('div'); 
                         b.className = `message-bubble ${msg.role === 'user' ? 'user' : 'ai'}`; 
@@ -2247,7 +2852,7 @@ ${memText || '（无记忆片段）'}
                         const t = document.createElement('span'); 
                         t.innerText = msg.content; 
                         b.appendChild(t); 
-                        bc.appendChild(b); 
+                        bc.appendChild(b);
                     if (!isSelectionMode) { 
                             // 修复：使用原始索引而不是过滤后的索引
                             b.addEventListener('touchstart', () => startLongPress(originalIndex)); 
@@ -2579,7 +3184,7 @@ ${memText || '（无记忆片段）'}
                 let content = msg.content;
                 if (msg.isRetracted) {
                     if (msg.role === 'user') {
-                        return { role: 'system', content: `[系统提示：用户撤回了一条消息。你虽然看不到内容，但知道用户撤回了。请根据情况做出反应，比如询问“你撤回了什么？”]` };
+                        return { role: 'system', content: `[系统提示：用户撤回了一条消息。你虽然看不到内容，但知道用户撤回了。请根据情况做出反应，比如询问"你撤回了什么？"]` };
                     } else {
                         return { role: 'assistant', content: `[已撤回的消息]` };
                     }
@@ -2589,6 +3194,7 @@ ${memText || '（无记忆片段）'}
                 if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
                 if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
                 if (msg.type === 'call_end') return { role: 'system', content: msg.content }; 
+                if (msg.type === 'sticker') return { role: msg.role, content: content };
                 return { role: msg.role, content: content };
             });
 
