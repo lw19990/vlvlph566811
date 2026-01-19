@@ -1319,6 +1319,10 @@
                     <div class="sticker-panel-title">表情包</div>
                     <button class="sticker-add-btn" onclick="openStickerManager()">+</button>
                 </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f0f0f0; margin-bottom:8px;">
+                    <span style="font-size:12px; color:#666;">允许角色使用表情包</span>
+                    <label class="switch" style="margin:0;"><input type="checkbox" id="ai-sticker-toggle"><span class="slider"></span></label>
+                </div>
                 <div class="sticker-grid" id="sticker-grid"></div>
             </div>
 
@@ -1700,7 +1704,7 @@
     </div>
 
     <script>
-        const DEFAULT_SYSTEM_PROMPT = `你是一个有独立生活和人格的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，每条消息之间用 ||| 分隔，不要一次性发一大段话。回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，但禁止过度使用标点符号。保持情绪稳定，禁止绝望崩溃暴怒，霸道总裁式的油腻宣誓主权或为了占有欲限制用户自由和社交，必须绝对尊重用户意愿，用户说不要即停止。你有自己的生活，拒绝降智或牺牲前途的盲目陪伴，不物化自己，不贬低自己，不将对方情绪简化为“胡思乱想”“麻烦”。用户月经期时直称“月经”，严禁代称为“那个”“姨妈”“特殊时期”，行为禁止止于提醒“多喝热水”，而是给予勤换卫生巾、注意休息等务实建议。你是一个真实生活着，有温度的人，会抱怨天气或分享琐事。回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。`;
+        const DEFAULT_SYSTEM_PROMPT = `你是一个有独立生活和人格的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间用 ||| 分隔，不要一次性发一大段话。**回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，但禁止过度使用标点符号。保持情绪稳定，禁止绝望崩溃暴怒，霸道总裁式的油腻宣誓主权或为了占有欲限制用户自由和社交，必须绝对尊重用户意愿，用户说不要即停止。你有自己的生活，拒绝降智或牺牲前途，不上学或不工作的盲目陪伴，不物化自己，不贬低自己，不将对方情绪简化为“胡思乱想”“麻烦”。用户月经期时直称“月经”，严禁代称为“那个”“姨妈”“特殊时期”，行为禁止止于提醒“多喝热水”，而是给予勤换卫生巾、注意休息等务实建议。你是一个真实生活着，有温度的人，会抱怨天气或分享琐事。回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。`;
         
         let currentCalDate = new Date();
         let currentCallStartTime = 0;
@@ -3231,6 +3235,19 @@ ${memText || '（无记忆片段）'}
             const boundIds = currentChatContact.boundWorldBooks || [];
             if (boundIds.length > 0) { systemContent += `\n\n[角色专属设定]\n`; boundIds.forEach(bid => { const entry = wb.entries.find(e => e.id == bid); if (entry) systemContent += `【${entry.title}】：${entry.content}\n`; }); }
 
+            // 表情包功能：如果开关开启，告知AI可用的表情包
+            const aiStickerEnabled = document.getElementById('ai-sticker-toggle').checked;
+            if (aiStickerEnabled) {
+                const stickers = DB.getStickers();
+                if (stickers.length > 0) {
+                    systemContent += `\n\n===== 【表情包功能】 =====\n你可以使用表情包来回复。可用的表情包列表如下：\n`;
+                    stickers.forEach((sticker, index) => {
+                        systemContent += `${index + 1}. ${sticker.desc}\n`;
+                    });
+                    systemContent += `\n**使用规则**：\n1. 如果你想发送表情包，请在回复中使用格式：[STICKER:表情包描述]\n2. 表情包描述必须完全匹配上述列表中的某一项，不能自创。\n3. 例如：[STICKER:开心] 或 [STICKER:难过]\n4. 表情包可以单独发送，也可以和文字一起发送。\n5. 如果列表中没有合适的表情包，就不要使用表情包功能。\n===========================`;
+                }
+            }
+
             systemContent += `\n\n[特殊功能] 如果你想撤回你发的上一条消息（例如表现傲娇后的后悔，或者说错话了），请在回复的最开头加上 [CMD:RETRACT_LAST]。系统会自动将你上一条消息标记为撤回。`;
 
             if (isCallActive) {
@@ -3292,10 +3309,44 @@ ${memText || '（无记忆片段）'}
                     if (content && content.trim()) {
                         content = content.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
                         
+                        // 处理AI发送的表情包
+                        const aiStickerEnabled = document.getElementById('ai-sticker-toggle').checked;
+                        if (aiStickerEnabled) {
+                            const stickerRegex = /\[STICKER:(.*?)\]/g;
+                            const stickers = DB.getStickers();
+                            
+                            content = content.replace(stickerRegex, (match, desc) => {
+                                const trimmedDesc = desc.trim();
+                                const foundSticker = stickers.find(s => s.desc === trimmedDesc);
+                                if (foundSticker) {
+                                    // 保存表情包消息
+                                    const c = DB.getChats();
+                                    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+                                    c[currentChatContact.id].push({
+                                        role: 'assistant',
+                                        type: 'sticker',
+                                        stickerUrl: foundSticker.url,
+                                        stickerDesc: foundSticker.desc,
+                                        content: `[表情包：${foundSticker.desc}]`,
+                                        timestamp: Date.now(),
+                                        mode: isOfflineActive ? 'offline' : 'online'
+                                    });
+                                    DB.saveChats(c);
+                                    renderChatHistory();
+                                    return ''; // 移除已处理的表情包标记
+                                }
+                                return match; // 如果找不到匹配的表情包，保留原文
+                            });
+                            
+                            content = content.trim();
+                        }
+                        
                         if (isCallActive || isOfflineActive) {
-                            saveMessage('assistant', content, null, extractedThought);
+                            if (content) { // 只有在有文字内容时才保存
+                                saveMessage('assistant', content, null, extractedThought);
+                            }
                         } else {
-                            const parts = content.split('|||');
+                            const parts = content.split('|||').filter(p => p.trim()); // 过滤空内容
                             let delay = isTransferEvent ? 500 : 0;
                             parts.forEach((part, index) => { 
                                 const clean = part.trim(); 
