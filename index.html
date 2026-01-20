@@ -70,7 +70,16 @@
         .app-label { position: absolute; bottom: -25px; width: 140%; left: -20%; text-align: center; color: var(--global-text-color); font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         
         /* 第二页布局 */
-        .page2-layout { width: 100%; padding: 0 20px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap: 20px; }
+        .page2-layout { 
+            width: 100%; 
+            height: 100%;
+            padding: 20px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            grid-template-rows: auto auto 1fr; 
+            gap: 25px;
+            align-content: start;
+        }
         
         /* 左上角方块小组件 */
         .page2-widget-square { width: 100%; aspect-ratio: 1; background: rgba(255,255,255,0.25); border-radius: 24px; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; justify-content: center; align-items: center; overflow: hidden; cursor: pointer; color: rgba(255,255,255,0.8); font-size: 12px; font-weight: 500; }
@@ -88,8 +97,18 @@
         .sticky-note-content:empty::before { content: '点击编辑便签...'; color: #999; font-style: italic; }
         
         /* 第二页应用网格 */
-        .page2-app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .page2-app-grid .app-icon { width: 55px; height: 55px; margin: 0 auto; }
+        .page2-app-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px;
+            row-gap: 50px;
+        }
+        .page2-app-grid .app-icon { 
+            width: 55px; 
+            height: 55px; 
+            margin: 0 auto;
+            position: relative;
+        }
         
         /* --- 通用 App 布局 (修改：应用全局字体颜色) --- */
         .app-header { height: 88px; padding-top: 44px; display: flex; align-items: center; justify-content: space-between; padding-left: 15px; padding-right: 15px; border-bottom: 1px solid #eee; background: #fff; flex-shrink: 0; position: relative; z-index: 10; color: var(--global-text-color); }
@@ -937,14 +956,11 @@
                                 <div class="app-icon" id="icon-app-wallet" style="background: linear-gradient(135deg, #ffcc00, #ffd60a);">💰<div class="app-label">钱包</div></div>
                             </div>
 
-                            <!-- 右下角：黑胶唱片 -->
-                            <div class="vinyl-record" id="vinyl-record" onclick="triggerVinylUpload()">
-                                <div class="vinyl-center" id="vinyl-center">
-                                    <span>上传</span>
-                                    <img id="vinyl-center-img" src="">
-                                </div>
+                            <!-- 右下角：今日便利贴 -->
+                            <div class="sticky-note" id="sticky-note" onclick="editStickyNote()">
+                                <div class="sticky-note-title">📌 今日便签</div>
+                                <div class="sticky-note-content" id="sticky-note-content"></div>
                             </div>
-                            <input type="file" id="vinyl-file-input" style="display:none" accept="image/*" onchange="uploadVinylImage(this)">
                         </div>
                     </div>
                 </div>
