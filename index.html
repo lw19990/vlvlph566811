@@ -44,10 +44,21 @@
         @keyframes shimmer { 0% {opacity: 0.3;} 50% {opacity: 1;} 100% {opacity: 0.3;} }
 
         /* --- 主屏幕 --- */
-        #home-screen { background: var(--wallpaper); background-size: cover; background-position: center; padding-top: 50px; align-items: center; flex-direction: column; color: var(--global-text-color); }
-        .home-header { width: 100%; padding: 0 25px; margin-bottom: 20px; color: inherit; text-shadow: 0 2px 10px rgba(0,0,0,0.3); text-align: left; }
+        #home-screen { background: var(--wallpaper); background-size: cover; background-position: center; padding-top: 50px; align-items: center; flex-direction: column; color: var(--global-text-color); overflow: hidden; }
+        .home-header { width: 100%; padding: 0 25px; margin-bottom: 20px; color: inherit; text-shadow: 0 2px 10px rgba(0,0,0,0.3); text-align: left; flex-shrink: 0; }
         .home-time-big { font-size: 56px; font-weight: 300; line-height: 1; letter-spacing: -1px; margin: 0; margin-left: -3px; }
         .home-date-big { font-size: 18px; font-weight: 500; opacity: 0.9; margin-top: 5px; margin-left: 2px; }
+        
+        /* 桌面翻页容器 */
+        .home-pages-container { width: 100%; flex-grow: 1; overflow: hidden; position: relative; }
+        .home-pages-wrapper { display: flex; width: 200%; height: 100%; transition: transform 0.3s ease-out; }
+        .home-page { width: 50%; height: 100%; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding-bottom: 20px; }
+        
+        /* 页面指示器 */
+        .page-indicator { display: flex; justify-content: center; gap: 8px; padding: 10px 0; flex-shrink: 0; }
+        .page-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.4); transition: all 0.3s; cursor: pointer; }
+        .page-dot.active { background: rgba(255,255,255,0.9); transform: scale(1.2); }
+        
         .home-widget-container { width: 100%; padding: 0 25px; margin-bottom: 30px; }
         .home-widget { width: 100%; aspect-ratio: 16/9; background: rgba(255,255,255,0.25); border-radius: 24px; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; cursor: pointer; color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; }
         .home-widget img { width: 100%; height: 100%; object-fit: cover; display: none; }
@@ -57,6 +68,28 @@
         .app-icon { width: 60px; height: 60px; border-radius: 14px; background: #000; display: flex; justify-content: center; align-items: center; color: #fff; font-size: 24px; cursor: pointer; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: transform 0.1s; background-size: cover !important; background-position: center !important; flex-shrink: 0; }
         .app-icon:active { transform: scale(0.95); }
         .app-label { position: absolute; bottom: -25px; width: 140%; left: -20%; text-align: center; color: var(--global-text-color); font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* 第二页布局 */
+        .page2-layout { width: 100%; padding: 0 20px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap: 20px; }
+        
+        /* 左上角方块小组件 */
+        .page2-widget-square { width: 100%; aspect-ratio: 1; background: rgba(255,255,255,0.25); border-radius: 24px; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; justify-content: center; align-items: center; overflow: hidden; cursor: pointer; color: rgba(255,255,255,0.8); font-size: 12px; font-weight: 500; }
+        .page2-widget-square img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .page2-widget-square.has-image img { display: block; }
+        .page2-widget-square.has-image span { display: none; }
+        
+        /* 右下角黑胶唱片 */
+        .vinyl-record { width: 100%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(135deg, #1a1a1a 0%, #333 50%, #1a1a1a 100%); box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer; overflow: hidden; }
+        .vinyl-record::before { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: repeating-radial-gradient(circle at center, transparent 0px, transparent 2px, rgba(255,255,255,0.03) 3px, transparent 4px); pointer-events: none; }
+        .vinyl-record::after { content: ''; position: absolute; width: 15%; height: 15%; border-radius: 50%; background: #333; border: 2px solid #555; pointer-events: none; }
+        .vinyl-center { width: 45%; height: 45%; border-radius: 50%; background: rgba(255,255,255,0.1); border: 3px solid rgba(255,255,255,0.2); display: flex; justify-content: center; align-items: center; overflow: hidden; z-index: 1; color: rgba(255,255,255,0.5); font-size: 10px; }
+        .vinyl-center img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: none; }
+        .vinyl-center.has-image img { display: block; }
+        .vinyl-center.has-image span { display: none; }
+        
+        /* 第二页应用网格 */
+        .page2-app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .page2-app-grid .app-icon { width: 55px; height: 55px; margin: 0 auto; }
         
         /* --- 通用 App 布局 (修改：应用全局字体颜色) --- */
         .app-header { height: 88px; padding-top: 44px; display: flex; align-items: center; justify-content: space-between; padding-left: 15px; padding-right: 15px; border-bottom: 1px solid #eee; background: #fff; flex-shrink: 0; position: relative; z-index: 10; color: var(--global-text-color); }
@@ -852,24 +885,75 @@
                 <div class="home-date-big" id="home-date-big">1月1日 星期一</div>
             </div>
 
-            <div class="home-widget-container">
-                <div class="home-widget" id="home-widget" onclick="triggerWidgetUpload()">
-                    <span>点击上传图片</span>
-                    <img id="home-widget-img" src="">
+            <!-- 翻页容器 -->
+            <div class="home-pages-container" id="home-pages-container">
+                <div class="home-pages-wrapper" id="home-pages-wrapper">
+                    <!-- 第一页 -->
+                    <div class="home-page" id="home-page-1">
+                        <div class="home-widget-container">
+                            <div class="home-widget" id="home-widget" onclick="triggerWidgetUpload()">
+                                <span>点击上传图片</span>
+                                <img id="home-widget-img" src="">
+                            </div>
+                            <input type="file" id="widget-file-input" style="display:none" accept="image/*" onchange="uploadWidgetImage(this)">
+                        </div>
+
+                        <!-- APP 图标网格 -->
+                        <div class="app-grid">
+                            <div class="app-icon" id="icon-app-vk" onclick="openApp('app-vk')">VK<div class="app-label">Vkontakte</div></div>
+                            <div class="app-icon" id="icon-app-contacts" onclick="openApp('app-contacts')">👤<div class="app-label">通讯录</div></div>
+                            <div class="app-icon" id="icon-app-memos" onclick="openApp('app-memos')" style="background-color:#f1c40f; color:#000;">📝<div class="app-label">备忘录</div></div>
+                            <div class="app-icon" id="icon-app-calendar" onclick="openApp('app-calendar')" style="background-color:#fff; color:#ff3b30;">📅<div class="app-label">日历</div></div>
+                            <div class="app-icon" id="icon-app-worldbook" onclick="openApp('app-worldbook')">📖<div class="app-label">世界书</div></div>
+                            <div class="app-icon" id="icon-app-spy-list" onclick="openApp('app-spy-list')">👁️<div class="app-label">查岗</div></div>
+                            <div class="app-icon" id="icon-app-theme" onclick="openApp('app-theme')">🎨<div class="app-label">美化</div></div>
+                            <div class="app-icon" id="icon-app-settings" onclick="openApp('app-settings')">⚙️<div class="app-label">设置</div></div>
+                        </div>
+                    </div>
+
+                    <!-- 第二页 -->
+                    <div class="home-page" id="home-page-2">
+                        <div class="page2-layout">
+                            <!-- 左上角：方块小组件 -->
+                            <div class="page2-widget-square" id="page2-widget-square" onclick="triggerPage2WidgetUpload()">
+                                <span>点击上传</span>
+                                <img id="page2-widget-img" src="">
+                            </div>
+                            <input type="file" id="page2-widget-file-input" style="display:none" accept="image/*" onchange="uploadPage2WidgetImage(this)">
+
+                            <!-- 右上角：四个应用 -->
+                            <div class="page2-app-grid">
+                                <div class="app-icon" id="icon-app-couple" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
+                                <div class="app-icon" id="icon-app-tomato" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
+                                <div class="app-icon" id="icon-app-music" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
+                                <div class="app-icon" id="icon-app-forum" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
+                            </div>
+
+                            <!-- 左下角：四个应用 -->
+                            <div class="page2-app-grid">
+                                <div class="app-icon" id="icon-app-shopping" style="background: linear-gradient(135deg, #ff9500, #ff8c00);">🛒<div class="app-label">购物</div></div>
+                                <div class="app-icon" id="icon-app-game" style="background: linear-gradient(135deg, #34c759, #30d158);">🎮<div class="app-label">小游戏</div></div>
+                                <div class="app-icon" id="icon-app-accounting" style="background: linear-gradient(135deg, #007aff, #0a84ff);">📊<div class="app-label">记账</div></div>
+                                <div class="app-icon" id="icon-app-wallet" style="background: linear-gradient(135deg, #ffcc00, #ffd60a);">💰<div class="app-label">钱包</div></div>
+                            </div>
+
+                            <!-- 右下角：黑胶唱片 -->
+                            <div class="vinyl-record" id="vinyl-record" onclick="triggerVinylUpload()">
+                                <div class="vinyl-center" id="vinyl-center">
+                                    <span>上传</span>
+                                    <img id="vinyl-center-img" src="">
+                                </div>
+                            </div>
+                            <input type="file" id="vinyl-file-input" style="display:none" accept="image/*" onchange="uploadVinylImage(this)">
+                        </div>
+                    </div>
                 </div>
-                <input type="file" id="widget-file-input" style="display:none" accept="image/*" onchange="uploadWidgetImage(this)">
             </div>
 
-            <!-- APP 图标网格 -->
-            <div class="app-grid">
-                <div class="app-icon" id="icon-app-vk" onclick="openApp('app-vk')">VK<div class="app-label">Vkontakte</div></div>
-                <div class="app-icon" id="icon-app-contacts" onclick="openApp('app-contacts')">👤<div class="app-label">通讯录</div></div>
-                <div class="app-icon" id="icon-app-memos" onclick="openApp('app-memos')" style="background-color:#f1c40f; color:#000;">📝<div class="app-label">备忘录</div></div>
-                <div class="app-icon" id="icon-app-calendar" onclick="openApp('app-calendar')" style="background-color:#fff; color:#ff3b30;">📅<div class="app-label">日历</div></div>
-                <div class="app-icon" id="icon-app-worldbook" onclick="openApp('app-worldbook')">📖<div class="app-label">世界书</div></div>
-                <div class="app-icon" id="icon-app-spy-list" onclick="openApp('app-spy-list')">👁️<div class="app-label">查岗</div></div>
-                <div class="app-icon" id="icon-app-theme" onclick="openApp('app-theme')">🎨<div class="app-label">美化</div></div>
-                <div class="app-icon" id="icon-app-settings" onclick="openApp('app-settings')">⚙️<div class="app-label">设置</div></div>
+            <!-- 页面指示器 -->
+            <div class="page-indicator">
+                <div class="page-dot active" onclick="goToPage(0)"></div>
+                <div class="page-dot" onclick="goToPage(1)"></div>
             </div>
         </div>
 
@@ -2049,6 +2133,122 @@
                 reader.readAsDataURL(fileInput.files[0]); 
             } else {
                 alert('请选择图片或输入URL'); 
+            }
+        }
+
+        // --- 第二页小组件和黑胶唱片上传功能 ---
+        let currentPage = 0;
+
+        function goToPage(pageIndex) {
+            currentPage = pageIndex;
+            const wrapper = document.getElementById('home-pages-wrapper');
+            wrapper.style.transform = `translateX(-${pageIndex * 50}%)`;
+            
+            // 更新页面指示器
+            document.querySelectorAll('.page-dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === pageIndex);
+            });
+        }
+
+        // 左右滑动翻页功能
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        function handleGesture() {
+            const threshold = 50; // 滑动阈值
+            if (touchEndX < touchStartX - threshold && currentPage < 1) {
+                // 向左滑，下一页
+                goToPage(currentPage + 1);
+            }
+            if (touchEndX > touchStartX + threshold && currentPage > 0) {
+                // 向右滑，上一页
+                goToPage(currentPage - 1);
+            }
+        }
+
+        document.getElementById('home-pages-container').addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.getElementById('home-pages-container').addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleGesture();
+        });
+
+        // 第二页方块小组件上传
+        function triggerPage2WidgetUpload() {
+            const url = prompt("请输入图片 URL (或点击取消以上传文件)");
+            if (url) {
+                savePage2WidgetImage(url);
+            } else {
+                document.getElementById('page2-widget-file-input').click();
+            }
+        }
+
+        function uploadPage2WidgetImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => savePage2WidgetImage(e.target.result);
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function savePage2WidgetImage(imgData) {
+            const theme = DB.getTheme();
+            if (!theme.page2Images) theme.page2Images = {};
+            theme.page2Images.widget = imgData;
+            DB.saveTheme(theme);
+            applyPage2Images();
+        }
+
+        // 黑胶唱片上传
+        function triggerVinylUpload() {
+            const url = prompt("请输入图片 URL (或点击取消以上传文件)");
+            if (url) {
+                saveVinylImage(url);
+            } else {
+                document.getElementById('vinyl-file-input').click();
+            }
+        }
+
+        function uploadVinylImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => saveVinylImage(e.target.result);
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function saveVinylImage(imgData) {
+            const theme = DB.getTheme();
+            if (!theme.page2Images) theme.page2Images = {};
+            theme.page2Images.vinyl = imgData;
+            DB.saveTheme(theme);
+            applyPage2Images();
+        }
+
+        function applyPage2Images() {
+            const theme = DB.getTheme();
+            if (!theme.page2Images) return;
+
+            // 应用方块小组件图片
+            const widget = document.getElementById('page2-widget-square');
+            const widgetImg = document.getElementById('page2-widget-img');
+            if (theme.page2Images.widget) {
+                widgetImg.src = theme.page2Images.widget;
+                widget.classList.add('has-image');
+            } else {
+                widget.classList.remove('has-image');
+            }
+
+            // 应用黑胶唱片中心图片
+            const vinylCenter = document.getElementById('vinyl-center');
+            const vinylImg = document.getElementById('vinyl-center-img');
+            if (theme.page2Images.vinyl) {
+                vinylImg.src = theme.page2Images.vinyl;
+                vinylCenter.classList.add('has-image');
+            } else {
+                vinylCenter.classList.remove('has-image');
             }
         }
 
