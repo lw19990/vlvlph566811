@@ -985,7 +985,7 @@
 
                             <!-- 右上角：四个应用 -->
                             <div class="page2-app-grid">
-                                <div class="app-icon" id="icon-app-couple" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
+                                <div class="app-icon" id="icon-app-couple" onclick="openApp('app-couple')" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
                                 <div class="app-icon" id="icon-app-tomato" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
                                 <div class="app-icon" id="icon-app-music" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
                                 <div class="app-icon" id="icon-app-forum" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
@@ -1938,6 +1938,7 @@
             if(appId === 'app-theme') renderThemeSettings();
             if(appId === 'app-memos') renderMemoContacts();
             if(appId === 'app-calendar') renderCalendar();
+            if(appId === 'app-couple') renderCoupleSpace();
         }
 
         function goHome() {
@@ -2227,15 +2228,6 @@
             
             updateWaterBtnState();
         }
-
-        // 修改 openApp 函数以支持情侣空间初始化
-        const originalOpenApp = openApp;
-        openApp = function(appId) {
-            originalOpenApp(appId);
-            if (appId === 'app-couple') {
-                renderCoupleSpace();
-            }
-        };
 
         // --- 表情包功能 ---
         let currentStickerUploadTab = 'single';
