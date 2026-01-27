@@ -920,6 +920,41 @@
         @keyframes waterDrop { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(50px) scale(0.5); } }
         .water-anim { position: absolute; font-size: 24px; pointer-events: none; animation: waterDrop 1s forwards; }
 
+        /* 情侣空间特殊气泡 */
+        .message-bubble.couple-invite-req {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%) !important;
+            color: #fff !important;
+            font-size: 18px !important;
+            padding: 15px 20px !important;
+            border-radius: 20px !important;
+            box-shadow: 0 4px 15px rgba(255, 154, 158, 0.4);
+            border: 2px solid #fff;
+            text-align: center;
+            font-weight: bold;
+        }
+        .message-bubble.couple-invite-accept {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%) !important;
+            color: #fff !important;
+            font-size: 18px !important;
+            padding: 15px 20px !important;
+            border-radius: 20px !important;
+            box-shadow: 0 4px 15px rgba(255, 154, 158, 0.4);
+            border: 2px solid #fff;
+            text-align: center;
+            font-weight: bold;
+        }
+        .message-bubble.couple-invite-reject {
+            background: linear-gradient(135deg, #434343 0%, #000000 100%) !important;
+            color: #fff !important;
+            font-size: 18px !important;
+            padding: 15px 20px !important;
+            border-radius: 20px !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            border: 2px solid #666;
+            text-align: center;
+            font-weight: bold;
+        }
+
     </style>
 </head>
 <body>
@@ -2037,95 +2072,28 @@
             });
         }
 
-        async function sendCoupleInvite(contact) {
+        function sendCoupleInvite(contact) {
             if (!confirm(`确定向 ${contact.name} 发送开通邀请吗？`)) return;
             
             closeCoupleInvite();
-            alert(`邀请已发送给 ${contact.name}，请等待回复...`);
             
-            // 模拟 AI 思考和回复
-            const settings = DB.getSettings();
-            if (!settings.key) return alert('请配置 API Key 以获取角色回复');
-
-            const prompt = `你现在是 ${contact.name}。人设：${contact.persona}。
-用户刚刚向你发送了“情侣空间”的开通邀请。
-请根据你目前和用户的关系（参考人设），决定是否同意开通。
-情侣空间是一个私密的二人世界，意味着确立或加深亲密关系。
-
-请按以下 JSON 格式回复：
-{
-    "accepted": true/false,
-    "reply": "你的回复内容（表达你对开通情侣空间的看法，开心/害羞/拒绝的理由等）"
-}
-注意：
-1. 如果关系亲密（情侣/暧昧），通常应该接受，表现出开心或期待。
-2. 如果关系一般或疏远，可以委婉拒绝。
-3. reply 内容要符合人设口语。`;
-
-            try {
-                const res = await fetch(`${settings.url}/chat/completions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
-                    body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.7 })
-                });
-                
-                const data = await res.json();
-                if (data.choices?.length > 0) {
-                    let raw = data.choices[0].message.content.trim().replace(/```json/g, '').replace(/```/g, '').trim();
-                    const result = JSON.parse(raw);
-                    
-                    // 发送消息到聊天
-                    const c = DB.getChats();
-                    if (!c[contact.id]) c[contact.id] = [];
-                    
-                    // 用户发送邀请消息
-                    c[contact.id].push({
-                        role: 'user',
-                        content: '[系统消息] 我向你发送了“情侣空间”开通邀请 💌',
-                        timestamp: Date.now(),
-                        mode: 'online'
-                    });
-                    
-                    // AI 回复
-                    c[contact.id].push({
-                        role: 'assistant',
-                        content: result.reply,
-                        timestamp: Date.now() + 1000,
-                        mode: 'online'
-                    });
-                    
-                    if (result.accepted) {
-                        c[contact.id].push({
-                            role: 'assistant',
-                            content: '[系统消息] 对方同意了邀请，情侣空间已开启！💕',
-                            timestamp: Date.now() + 2000,
-                            mode: 'online'
-                        });
-                        
-                        // 激活情侣空间
-                        const cd = DB.getCoupleData();
-                        cd.active = true;
-                        cd.partnerId = contact.id;
-                        cd.startTime = Date.now();
-                        DB.saveCoupleData(cd);
-                        
-                        alert(`${contact.name} 同意了你的邀请！情侣空间已开启。`);
-                        renderCoupleSpace();
-                    } else {
-                        c[contact.id].push({
-                            role: 'assistant',
-                            content: '[系统消息] 对方拒绝了邀请 💔',
-                            timestamp: Date.now() + 2000,
-                            mode: 'online'
-                        });
-                        alert(`${contact.name} 拒绝了邀请。`);
-                    }
-                    
-                    DB.saveChats(c);
-                }
-            } catch (e) {
-                alert("请求失败：" + e.message);
-            }
+            // 发送特殊邀请消息
+            const c = DB.getChats();
+            if (!c[contact.id]) c[contact.id] = [];
+            
+            c[contact.id].push({
+                role: 'user',
+                type: 'couple_invite_req',
+                content: '申请开通与你的情侣空间',
+                timestamp: Date.now(),
+                mode: 'online'
+            });
+            
+            DB.saveChats(c);
+            
+            // 跳转到聊天界面
+            openChat(contact);
+            alert('邀请已发送！请点击底部的“✨”按钮呼叫 TA 回复。');
         }
 
         function resetCoupleSpace() {
@@ -3382,6 +3350,21 @@ ${memText || '（无记忆片段）'}
                         const title = msg.status === 'accepted' ? "已收款" : "已退还", ic = msg.status === 'accepted' ? "✅" : "↩️", desc = msg.status === 'accepted' ? "已接受您的转账" : "已拒收您的转账"; 
                         b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">¥${msg.amount}</span></div></div><div class="transfer-footer">${desc}</div>`; 
                         bc.appendChild(b); 
+                    } else if (msg.type === 'couple_invite_req') {
+                        const b = document.createElement('div');
+                        b.className = `message-bubble couple-invite-req`;
+                        b.innerText = msg.content;
+                        bc.appendChild(b);
+                    } else if (msg.type === 'couple_invite_accept') {
+                        const b = document.createElement('div');
+                        b.className = `message-bubble couple-invite-accept`;
+                        b.innerText = msg.content;
+                        bc.appendChild(b);
+                    } else if (msg.type === 'couple_invite_reject') {
+                        const b = document.createElement('div');
+                        b.className = `message-bubble couple-invite-reject`;
+                        b.innerText = msg.content;
+                        bc.appendChild(b);
                     } else if (msg.type === 'sticker') {
                         // 表情包消息
                         const b = document.createElement('div');
