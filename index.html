@@ -3711,12 +3711,18 @@ ${memText || '（无记忆片段）'}
             const limitedHistory = history.slice(-contextLimit);
 
             let pendingTransferIndex = -1, pendingTransferAmount = 0, pendingTransferNote = '';
+            let pendingInviteIndex = -1;
             for (let i = limitedHistory.length - 1; i >= 0; i--) {
                 if (limitedHistory[i].type === 'transfer' && limitedHistory[i].status === 'pending') {
-                    pendingTransferIndex = i; pendingTransferAmount = limitedHistory[i].amount; pendingTransferNote = limitedHistory[i].note; break;
+                    pendingTransferIndex = i; pendingTransferAmount = limitedHistory[i].amount; pendingTransferNote = limitedHistory[i].note;
                 }
+                if (i === limitedHistory.length - 1 && limitedHistory[i].type === 'couple_invite_req') {
+                    pendingInviteIndex = i;
+                }
+                if (pendingTransferIndex !== -1 || pendingInviteIndex !== -1) break;
             }
             const isTransferEvent = pendingTransferIndex !== -1;
+            const isInviteEvent = pendingInviteIndex !== -1;
             const isTimePerceptionEnabled = userSettings.enableTimePerception || false;
 
             const apiMessages = limitedHistory.map(msg => {
@@ -3732,6 +3738,9 @@ ${memText || '（无记忆片段）'}
                 if (isTimePerceptionEnabled && msg.timestamp) { const timeStr = new Date(msg.timestamp).toLocaleString('zh-CN', { hour12: false }); content = `[发送于: ${timeStr}] ${content}`; }
                 if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
                 if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
+                if (msg.type === 'couple_invite_req') return { role: 'user', content: `[用户向你发送了“情侣空间”开通邀请]` };
+                if (msg.type === 'couple_invite_accept') return { role: 'assistant', content: `[我已同意你的情侣空间邀请]` };
+                if (msg.type === 'couple_invite_reject') return { role: 'assistant', content: `[我已拒绝你的情侣空间邀请]` };
                 if (msg.type === 'call_end') return { role: 'system', content: msg.content }; 
                 if (msg.type === 'sticker') {
                     // 表情包消息：AI读取的是纯描述文字，不带任何标记
@@ -3752,6 +3761,7 @@ ${memText || '（无记忆片段）'}
 
             if (isTimePerceptionEnabled) { const nowStr = new Date().toLocaleString('zh-CN', { hour12: false }); systemContent += `\n\n[时间感知模式已开启]\n当前现实时间：${nowStr}\n请注意：\n1. 每一条消息前都标记了发送时间，这仅供你判断时间流逝。\n2. **绝对不要**在回复开头显示时间戳（如 [12:00:00]），直接回复内容即可。\n3. 请根据当前时间判断你的作息（如深夜在睡觉或熬夜，早晨在通勤）。\n4. 观察用户回复的时间间隔。如果用户隔了很久才回，请根据人设做出反应（如吐槽、担心等）。`; }
             if (isTransferEvent) systemContent += `\n\n===== 【转账处理 - 强制格式】 =====\n用户刚刚向你转账 ¥${pendingTransferAmount}，备注：${pendingTransferNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【收下】转账，回复必须以 [ACCEPT] 开头\n- 如果你决定【拒收】转账，回复必须以 [REJECT] 开头\n===================================`;
+            if (isInviteEvent) systemContent += `\n\n===== 【情侣空间邀请处理 - 强制格式】 =====\n用户刚刚向你发送了“情侣空间”开通邀请。\n情侣空间是一个私密的二人世界，意味着确立或加深亲密关系。\n请根据你目前和用户的关系（参考人设），决定是否同意。\n你必须按照以下格式回复：\n- 如果你同意，回复必须以 [ACCEPT_INVITE] 开头\n- 如果你拒绝，回复必须以 [REJECT_INVITE] 开头\n===================================`;
 
             systemContent += getCalendarContextPrompt();
 
