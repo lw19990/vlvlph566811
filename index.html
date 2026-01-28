@@ -3842,6 +3842,28 @@ ${memText || '（无记忆片段）'}
                         allChats[currentChatContact.id].push({ role: 'assistant', type: 'transfer_receipt', status: receiptStatus, amount: pendingTransferAmount, timestamp: Date.now() });
                         DB.saveChats(allChats); renderChatHistory();
                     }
+                    if (isInviteEvent) {
+                        allChats = DB.getChats();
+                        let inviteStatus = content.match(/^\s*\[ACCEPT_INVITE\]/i) ? 'accepted' : 'rejected';
+                        if (content.match(/^\s*\[REJECT_INVITE\]/i)) inviteStatus = 'rejected';
+                        
+                        content = content.replace(/^\s*\[(ACCEPT_INVITE|REJECT_INVITE)\]\s*/i, '').trim();
+                        
+                        if (inviteStatus === 'accepted') {
+                            const cd = DB.getCoupleData();
+                            cd.active = true;
+                            cd.partnerId = currentChatContact.id;
+                            cd.startTime = Date.now();
+                            cd.lastWaterTime = 0;
+                            cd.treeLevel = 0;
+                            DB.saveCoupleData(cd);
+                            
+                            allChats[currentChatContact.id].push({ role: 'assistant', type: 'couple_invite_accept', content: '我已同意你的情侣空间邀请', timestamp: Date.now() });
+                        } else {
+                            allChats[currentChatContact.id].push({ role: 'assistant', type: 'couple_invite_reject', content: '我已拒绝你的情侣空间邀请', timestamp: Date.now() });
+                        }
+                        DB.saveChats(allChats); renderChatHistory();
+                    }
                     if (content && content.trim()) {
                         content = content.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
                         
