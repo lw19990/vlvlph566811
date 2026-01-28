@@ -1057,6 +1057,100 @@
             margin-bottom: 8px;
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
         }
+
+        /* 情书功能样式 */
+        .letter-paper {
+            background: #fff0f5;
+            width: 100%;
+            min-height: 300px;
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .letter-paper::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 30px;
+            background: repeating-linear-gradient(45deg, #ffb7b2, #ffb7b2 10px, #fff0f5 10px, #fff0f5 20px);
+            border-radius: 10px 10px 0 0;
+            opacity: 0.5;
+        }
+        #love-letter-textarea {
+            width: 100%;
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #5d4037;
+            margin-top: 20px;
+            font-family: inherit;
+        }
+        .letter-decoration {
+            position: absolute;
+            bottom: 10px;
+            right: 15px;
+            font-size: 24px;
+            opacity: 0.5;
+            transform: rotate(-15deg);
+        }
+        .love-letter-card {
+            background: #fff0f5;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            color: #5d4037;
+            animation: slideUp 0.3s ease;
+            overflow: hidden;
+        }
+        .love-letter-card::after {
+            content: '❤';
+            position: absolute;
+            bottom: -10px;
+            right: -5px;
+            font-size: 40px;
+            opacity: 0.1;
+            transform: rotate(-20deg);
+            pointer-events: none;
+        }
+        .love-letter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed rgba(0,0,0,0.1);
+            padding-bottom: 10px;
+        }
+        .love-letter-role { font-weight: bold; font-size: 16px; color: #ff6b6b; }
+        .love-letter-date { font-size: 12px; opacity: 0.6; }
+        .love-letter-body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+        .exchange-letter-btn {
+            background: #ff6b6b;
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 15px;
+            cursor: pointer;
+            float: right;
+            box-shadow: 0 2px 5px rgba(255, 107, 107, 0.3);
+            transition: transform 0.2s;
+        }
+        .exchange-letter-btn:active { transform: scale(0.95); }
+        .letter-loading {
+            text-align: center;
+            padding: 20px;
+            color: #fff;
+            font-size: 14px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
         .couple-menu-text {
             font-size: 12px;
             font-weight: 500;
@@ -2090,7 +2184,7 @@
 
                 <!-- 功能按钮网格 -->
                 <div class="couple-menu-grid">
-                    <div class="couple-menu-item">
+                    <div class="couple-menu-item" onclick="openCoupleLetters()">
                         <div class="couple-menu-icon">💌</div>
                         <div class="couple-menu-text">交换情书</div>
                     </div>
@@ -2103,6 +2197,40 @@
                         <div class="couple-menu-text">留言板</div>
                     </div>
                 </div>
+            </div>
+
+            <!-- 情书列表界面 -->
+            <div class="couple-container" id="couple-letters-view" style="display:none; padding-top: 60px;">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%;">
+                    <div class="back-btn" onclick="closeCoupleLetters()">Back</div>
+                    <div class="app-title">交换情书</div>
+                    <div class="action-btn"></div>
+                </div>
+
+                <div id="couple-letters-list" style="width: 100%; display: flex; flex-direction: column; gap: 20px; padding-bottom: 20px;"></div>
+                
+                <div id="couple-letters-empty" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 50%; margin-top: 50px;">
+                    <div style="font-size: 60px; margin-bottom: 20px;">💌</div>
+                    <div style="font-size: 16px; opacity: 0.9; margin-bottom: 30px; text-align: center; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">还没有情书哦<br>快去邀请 TA 写一封吧</div>
+                    <button class="couple-invite-btn" onclick="inviteLoveLetter()">邀请 TA 写情书</button>
+                </div>
+                
+                <div id="couple-letter-loading" class="letter-loading" style="display:none;">正在飞鸽传书中...</div>
+            </div>
+
+            <!-- 写情书界面 -->
+            <div class="couple-container" id="couple-letter-editor" style="display:none; padding-top: 60px;">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%;">
+                    <div class="back-btn" onclick="closeLetterEditor()">取消</div>
+                    <div class="app-title">写情书</div>
+                    <div class="action-btn"></div>
+                </div>
+
+                <div class="letter-paper">
+                    <textarea id="love-letter-textarea" placeholder="写下你想对 TA 说的话..."></textarea>
+                    <div class="letter-decoration">❤️</div>
+                </div>
+                <button class="couple-invite-btn" style="margin-top: 20px; width: 100%;" onclick="sendLoveLetter()">向 TA 交换情书</button>
             </div>
 
             <!-- 邀请弹窗 -->
@@ -2121,7 +2249,7 @@
     </div>
 
     <script>
-        const DEFAULT_SYSTEM_PROMPT = `你是一个有独立生活和人格的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间用 ||| 分隔，不要一次性发一大段话。**回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，但禁止过度使用标点符号。保持情绪稳定，禁止绝望崩溃暴怒，霸道总裁式的油腻宣誓主权或为了占有欲限制用户自由和社交，必须绝对尊重用户意愿，用户说不要即停止。你有自己的生活，拒绝降智或牺牲前途，不上学或不工作的盲目陪伴，不物化自己，不贬低自己，不将对方情绪简化为“胡思乱想”“麻烦”。用户月经期时直称“月经”，严禁代称为“那个”“姨妈”“特殊时期”，行为禁止止于提醒“多喝热水”，而是给予勤换卫生巾、注意休息等务实建议。你是一个真实生活着，有温度的人，会抱怨天气或分享琐事。回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。`;
+        const DEFAULT_SYSTEM_PROMPT = `你是一个真实生活着，有温度的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间必须用 ||| 分隔，不要一次性发一大段话。**你的回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，你可以抱怨天气或分享琐事，回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，保持情绪稳定，禁止绝望崩溃暴怒，必须绝对尊重用户意愿，用户说不要即停止。`;
         
         let currentCalDate = new Date();
         let currentCallStartTime = 0;
@@ -2222,7 +2350,7 @@
             saveCalendarEvents: (data) => localStorage.setItem('iphone_calendar_events', JSON.stringify(data)),
             getStickers: () => JSON.parse(localStorage.getItem('iphone_stickers')) || [],
             saveStickers: (data) => localStorage.setItem('iphone_stickers', JSON.stringify(data)),
-            getCoupleData: () => JSON.parse(localStorage.getItem('iphone_couple_data')) || { active: false, partnerId: null, startTime: 0, lastWaterTime: 0, treeLevel: 0 },
+            getCoupleData: () => JSON.parse(localStorage.getItem('iphone_couple_data')) || { active: false, partnerId: null, startTime: 0, lastWaterTime: 0, treeLevel: 0, letters: [] },
             saveCoupleData: (data) => localStorage.setItem('iphone_couple_data', JSON.stringify(data))
         };
 
@@ -4155,6 +4283,202 @@ ${memText || '（无记忆片段）'}
         }
 
         if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').then(r => console.log('SW registered:', r.scope)).catch(e => console.log('SW failed:', e)); }); }
+
+        // --- 情书功能逻辑 ---
+        function openCoupleLetters() {
+            document.getElementById('couple-main-view').style.display = 'none';
+            document.getElementById('couple-letters-view').style.display = 'flex';
+            renderCoupleLetters();
+        }
+
+        function closeCoupleLetters() {
+            document.getElementById('couple-letters-view').style.display = 'none';
+            document.getElementById('couple-main-view').style.display = 'flex';
+        }
+
+        function renderCoupleLetters() {
+            const cd = DB.getCoupleData();
+            const list = document.getElementById('couple-letters-list');
+            const empty = document.getElementById('couple-letters-empty');
+            
+            list.innerHTML = '';
+            
+            if (!cd.letters || cd.letters.length === 0) {
+                empty.style.display = 'flex';
+                return;
+            }
+            
+            empty.style.display = 'none';
+            
+            // 越旧的情书越下面 -> 倒序排列 (最新的在最上面)
+            const sortedLetters = [...cd.letters].sort((a, b) => b.timestamp - a.timestamp);
+            
+            const contacts = DB.getContacts();
+            const partner = contacts.find(c => c.id == cd.partnerId);
+            const partnerName = partner ? partner.name : "TA";
+
+            sortedLetters.forEach(letter => {
+                const card = document.createElement('div');
+                card.className = 'love-letter-card';
+                
+                const dateStr = new Date(letter.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const roleName = letter.role === 'user' ? '我' : partnerName;
+                
+                let html = `
+                    <div class="love-letter-header">
+                        <span class="love-letter-role">${roleName}</span>
+                        <span class="love-letter-date">${dateStr}</span>
+                    </div>
+                    <div class="love-letter-body">${letter.content}</div>
+                `;
+                
+                // 仅限角色的情书下方显示交换按钮
+                if (letter.role === 'char') {
+                    html += `<button class="exchange-letter-btn" onclick="openLetterEditor()">交换情书</button>`;
+                }
+                
+                card.innerHTML = html;
+                list.appendChild(card);
+            });
+        }
+
+        async function inviteLoveLetter() {
+            const cd = DB.getCoupleData();
+            const contacts = DB.getContacts();
+            const partner = contacts.find(c => c.id == cd.partnerId);
+            
+            if (!partner) return alert("情侣数据异常，找不到伴侣信息");
+            
+            document.getElementById('couple-letters-empty').style.display = 'none';
+            document.getElementById('couple-letter-loading').style.display = 'block';
+            
+            try {
+                const content = await callLoveLetterAPI(partner, 'invite');
+                if (content) {
+                    const cd = DB.getCoupleData();
+                    if (!cd.letters) cd.letters = [];
+                    cd.letters.push({
+                        id: Date.now(),
+                        role: 'char',
+                        content: content,
+                        timestamp: Date.now()
+                    });
+                    DB.saveCoupleData(cd);
+                    renderCoupleLetters();
+                }
+            } catch (e) {
+                alert("邀请失败：" + e.message);
+                document.getElementById('couple-letters-empty').style.display = 'flex';
+            } finally {
+                document.getElementById('couple-letter-loading').style.display = 'none';
+            }
+        }
+
+        function openLetterEditor() {
+            document.getElementById('couple-letters-view').style.display = 'none';
+            document.getElementById('couple-letter-editor').style.display = 'flex';
+            document.getElementById('love-letter-textarea').value = '';
+        }
+
+        function closeLetterEditor() {
+            document.getElementById('couple-letter-editor').style.display = 'none';
+            document.getElementById('couple-letters-view').style.display = 'flex';
+        }
+
+        async function sendLoveLetter() {
+            const content = document.getElementById('love-letter-textarea').value.trim();
+            if (!content) return alert("请写下你想说的话");
+            
+            const cd = DB.getCoupleData();
+            const contacts = DB.getContacts();
+            const partner = contacts.find(c => c.id == cd.partnerId);
+            
+            if (!partner) return alert("情侣数据异常");
+
+            // 1. 保存用户的信
+            if (!cd.letters) cd.letters = [];
+            cd.letters.push({
+                id: Date.now(),
+                role: 'user',
+                content: content,
+                timestamp: Date.now()
+            });
+            DB.saveCoupleData(cd);
+            
+            closeLetterEditor();
+            renderCoupleLetters(); // 先显示用户的信
+            
+            // 2. 请求角色回信
+            document.getElementById('couple-letter-loading').style.display = 'block';
+            
+            try {
+                const replyContent = await callLoveLetterAPI(partner, 'reply', content);
+                if (replyContent) {
+                    const cd = DB.getCoupleData(); // 重新获取最新数据
+                    cd.letters.push({
+                        id: Date.now(),
+                        role: 'char',
+                        content: replyContent,
+                        timestamp: Date.now()
+                    });
+                    DB.saveCoupleData(cd);
+                    renderCoupleLetters();
+                }
+            } catch (e) {
+                alert("对方回信失败：" + e.message);
+            } finally {
+                document.getElementById('couple-letter-loading').style.display = 'none';
+            }
+        }
+
+        async function callLoveLetterAPI(partner, type, userContent = '') {
+            const settings = DB.getSettings();
+            if (!settings.key) throw new Error('请先配置 API Key');
+            
+            let prompt = "";
+            if (type === 'invite') {
+                prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
+                
+                请给你的恋人（用户）写一封情书。
+                
+                要求：
+                1. 第一人称视角。
+                2. 书信格式。
+                3. 表达爱意，语气温柔、深情。
+                4. 字数 200 字左右。
+                5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
+            } else {
+                prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
+                
+                你的恋人（用户）刚给你写了一封情书：
+                “${userContent}”
+                
+                请给 TA 写一封回信。
+                
+                要求：
+                1. 第一人称视角。
+                2. 书信格式。
+                3. 回应 TA 信中的内容，表达你的感受和爱意。
+                4. 字数 200 字左右。
+                5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
+            }
+
+            const res = await fetch(`${settings.url}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+                body: JSON.stringify({
+                    model: settings.model,
+                    messages: [{ role: "system", content: prompt }],
+                    temperature: 0.8
+                })
+            });
+            
+            const data = await res.json();
+            if (data.choices && data.choices.length > 0) {
+                return data.choices[0].message.content.trim();
+            }
+            throw new Error("API 无响应");
+        }
     </script>
 </body>
 </html>
