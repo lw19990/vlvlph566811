@@ -2433,7 +2433,8 @@
                 const contacts = DB.getContacts();
                 const partner = contacts.find(c => c.id == cd.partnerId);
                 if (partner) {
-                    const myAvatar = document.getElementById('user-setting-avatar-preview').src; // 获取当前用户头像
+                    // 修复：直接从 partner.userSettings 获取用户头像，而不是依赖聊天设置弹窗的 DOM
+                    const myAvatar = partner.userSettings?.userAvatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23007aff%22 width=%22100%22 height=%22100%22/></svg>';
                     const pAvatar = partner.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>';
                     
                     document.getElementById('couple-partner-info').innerHTML = `
