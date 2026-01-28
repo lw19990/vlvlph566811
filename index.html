@@ -3761,7 +3761,7 @@ ${memText || '（无记忆片段）'}
 
             if (isTimePerceptionEnabled) { const nowStr = new Date().toLocaleString('zh-CN', { hour12: false }); systemContent += `\n\n[时间感知模式已开启]\n当前现实时间：${nowStr}\n请注意：\n1. 每一条消息前都标记了发送时间，这仅供你判断时间流逝。\n2. **绝对不要**在回复开头显示时间戳（如 [12:00:00]），直接回复内容即可。\n3. 请根据当前时间判断你的作息（如深夜在睡觉或熬夜，早晨在通勤）。\n4. 观察用户回复的时间间隔。如果用户隔了很久才回，请根据人设做出反应（如吐槽、担心等）。`; }
             if (isTransferEvent) systemContent += `\n\n===== 【转账处理 - 强制格式】 =====\n用户刚刚向你转账 ¥${pendingTransferAmount}，备注：${pendingTransferNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【收下】转账，回复必须以 [ACCEPT] 开头\n- 如果你决定【拒收】转账，回复必须以 [REJECT] 开头\n===================================`;
-            if (isInviteEvent) systemContent += `\n\n===== 【情侣空间邀请处理 - 强制格式】 =====\n用户刚刚向你发送了“情侣空间”开通邀请。\n情侣空间是一个私密的二人世界，意味着确立或加深亲密关系。\n请根据你目前和用户的关系（参考人设），决定是否同意。\n你必须按照以下格式回复：\n- 如果你同意，回复必须以 [ACCEPT_INVITE] 开头\n- 如果你拒绝，回复必须以 [REJECT_INVITE] 开头\n===================================`;
+            if (isInviteEvent) systemContent += `\n\n===== 【重要指令：情侣空间邀请处理】 =====\n用户刚刚邀请你开通情侣空间。\n你现在必须做出决定。\n\n请严格遵守以下回复格式（不要包含其他多余分析，直接给出结果）：\n- 同意邀请：必须在回复内容中包含 [ACCEPT_INVITE]\n- 拒绝邀请：必须在回复内容中包含 [REJECT_INVITE]\n\n示例：\n[THOUGHTS: 我好开心...] ||| [ACCEPT_INVITE] 好呀，我也想和你有一个小窝！\n\n注意：如果没有标签，系统将无法识别你的决定，导致开通失败！请务必带上标签！`;
 
             systemContent += getCalendarContextPrompt();
 
@@ -3844,10 +3844,30 @@ ${memText || '（无记忆片段）'}
                     }
                     if (isInviteEvent) {
                         allChats = DB.getChats();
-                        let inviteStatus = content.match(/^\s*\[ACCEPT_INVITE\]/i) ? 'accepted' : 'rejected';
-                        if (content.match(/^\s*\[REJECT_INVITE\]/i)) inviteStatus = 'rejected';
                         
-                        content = content.replace(/^\s*\[(ACCEPT_INVITE|REJECT_INVITE)\]\s*/i, '').trim();
+                        // 增强解析逻辑：宽松匹配标签，并增加关键词兜底
+                        const acceptMatch = content.match(/\[ACCEPT_INVITE\]/i);
+                        const rejectMatch = content.match(/\[REJECT_INVITE\]/i);
+                        
+                        let inviteStatus = 'rejected'; // 默认为拒绝，除非明确同意
+                        
+                        if (acceptMatch) {
+                            inviteStatus = 'accepted';
+                            content = content.replace(/\[ACCEPT_INVITE\]/i, '').trim();
+                        } else if (rejectMatch) {
+                            inviteStatus = 'rejected';
+                            content = content.replace(/\[REJECT_INVITE\]/i, '').trim();
+                        } else {
+                            // 兜底逻辑：如果没标签，尝试通过关键词判断意图
+                            const positiveKeywords = ['同意', '答应', '愿意', '好呀', '好的', '没问题', '可以', '开通', '建立', '想和你', '开心'];
+                            const negativeKeywords = ['拒绝', '不行', '不要', '不答应', '不愿意', '抱歉', '对不起', '再等等', '考虑', '不想'];
+                            
+                            let score = 0;
+                            positiveKeywords.forEach(kw => { if (content.includes(kw)) score++; });
+                            negativeKeywords.forEach(kw => { if (content.includes(kw)) score -= 2; }); // 拒绝词权重更高
+                            
+                            if (score > 0) inviteStatus = 'accepted';
+                        }
                         
                         if (inviteStatus === 'accepted') {
                             const cd = DB.getCoupleData();
