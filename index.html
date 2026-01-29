@@ -95,11 +95,34 @@
                                 <div class="app-icon" id="icon-app-wallet" style="background: linear-gradient(135deg, #ffcc00, #ffd60a);">💰<div class="app-label">钱包</div></div>
                             </div>
 
-                            <!-- 右下角：今日便利贴 -->
-                            <div class="sticky-note" id="sticky-note" onclick="editStickyNote()">
-                                <div class="sticky-note-title">📌 今日便签</div>
-                                <div class="sticky-note-content" id="sticky-note-content"></div>
+                            <!-- 右下角：新设计区域 -->
+                            <div class="page2-new-design">
+                                <!-- 两个圆形 -->
+                                <div class="design-circles">
+                                    <div class="design-circle" id="circle-left" onclick="triggerCircleUpload('left')">
+                                        <span>点击上传</span>
+                                        <img id="circle-left-img" src="">
+                                    </div>
+                                    <svg class="curved-line" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                        <path d="M 20 50 Q 50 20, 80 50" stroke="rgba(255,255,255,0.6)" stroke-width="3" fill="none"/>
+                                    </svg>
+                                    <div class="design-circle" id="circle-right" onclick="triggerCircleUpload('right')">
+                                        <span>点击上传</span>
+                                        <img id="circle-right-img" src="">
+                                    </div>
+                                </div>
+                                
+                                <!-- 大长方形 -->
+                                <div class="design-rectangle" id="rectangle-bottom" onclick="triggerRectangleUpload()">
+                                    <span>点击上传</span>
+                                    <img id="rectangle-img" src="">
+                                </div>
                             </div>
+                            
+                            <!-- 隐藏的文件上传输入 -->
+                            <input type="file" id="circle-left-input" style="display:none" accept="image/*" onchange="uploadCircleImage(this, 'left')">
+                            <input type="file" id="circle-right-input" style="display:none" accept="image/*" onchange="uploadCircleImage(this, 'right')">
+                            <input type="file" id="rectangle-input" style="display:none" accept="image/*" onchange="uploadRectangleImage(this)">
                         </div>
                     </div>
                 </div>

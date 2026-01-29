@@ -583,16 +583,6 @@ function savePage2WidgetImage(imgData) {
     applyPage2Images();
 }
 
-function editStickyNote() {
-    const contentEl = document.getElementById('sticky-note-content');
-    const currentContent = localStorage.getItem('stickyNoteContent') || '';
-    const newContent = prompt('编辑今日便签', currentContent);
-    if (newContent !== null) {
-        localStorage.setItem('stickyNoteContent', newContent);
-        contentEl.innerText = newContent;
-    }
-}
-
 function applyPage2Images() {
     const theme = DB.getTheme();
     
@@ -606,11 +596,89 @@ function applyPage2Images() {
         }
     }
 
-    // 加载便签内容
-    const contentEl = document.getElementById('sticky-note-content');
-    if(contentEl) {
-        contentEl.innerText = localStorage.getItem('stickyNoteContent') || '';
+    // 应用新设计元素的图片
+    if (theme.page2Images?.circleLeft) {
+        const circle = document.getElementById('circle-left');
+        const img = document.getElementById('circle-left-img');
+        if (circle && img) {
+            img.src = theme.page2Images.circleLeft;
+            circle.classList.add('has-image');
+        }
     }
+
+    if (theme.page2Images?.circleRight) {
+        const circle = document.getElementById('circle-right');
+        const img = document.getElementById('circle-right-img');
+        if (circle && img) {
+            img.src = theme.page2Images.circleRight;
+            circle.classList.add('has-image');
+        }
+    }
+
+    if (theme.page2Images?.rectangle) {
+        const rect = document.getElementById('rectangle-bottom');
+        const img = document.getElementById('rectangle-img');
+        if (rect && img) {
+            img.src = theme.page2Images.rectangle;
+            rect.classList.add('has-image');
+        }
+    }
+}
+
+function triggerCircleUpload(side) {
+    const url = prompt("请输入图片 URL (或点击取消以上传文件)");
+    if (url) {
+        saveCircleImage(url, side);
+    } else {
+        document.getElementById(`circle-${side}-input`).click();
+    }
+}
+
+function uploadCircleImage(input, side) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => saveCircleImage(e.target.result, side);
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function saveCircleImage(imgData, side) {
+    const theme = DB.getTheme();
+    if (!theme.page2Images) theme.page2Images = {};
+    
+    if (side === 'left') {
+        theme.page2Images.circleLeft = imgData;
+    } else {
+        theme.page2Images.circleRight = imgData;
+    }
+    
+    DB.saveTheme(theme);
+    applyPage2Images();
+}
+
+function triggerRectangleUpload() {
+    const url = prompt("请输入图片 URL (或点击取消以上传文件)");
+    if (url) {
+        saveRectangleImage(url);
+    } else {
+        document.getElementById('rectangle-input').click();
+    }
+}
+
+function uploadRectangleImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => saveRectangleImage(e.target.result);
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function saveRectangleImage(imgData) {
+    const theme = DB.getTheme();
+    if (!theme.page2Images) theme.page2Images = {};
+    theme.page2Images.rectangle = imgData;
+    DB.saveTheme(theme);
+    applyPage2Images();
 }
 
 function exportThemePreset() {
