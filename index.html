@@ -878,31 +878,287 @@
         }
 
         /* --- 情侣空间 App 样式 --- */
-        #app-couple { background: linear-gradient(180deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); color: #fff; }
-        #app-couple .app-header { background: transparent; border-bottom: none; color: #fff; }
+        #app-couple { 
+            background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%); 
+            color: #fff; 
+            position: relative;
+            overflow: hidden;
+        }
+        /* 添加背景装饰球 */
+        #app-couple::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: -100px;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        #app-couple::after {
+            content: '';
+            position: absolute;
+            bottom: -50px;
+            right: -50px;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        #app-couple .app-header { background: transparent; border-bottom: none; color: #fff; z-index: 10; }
         #app-couple .back-btn, #app-couple .app-title, #app-couple .action-btn { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         
-        .couple-container { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        .couple-container { 
+            height: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; /* 默认居中，用于锁屏 */
+            padding: 0 20px 20px; 
+            overflow-y: auto;
+        }
         
         /* 锁定界面 */
         .couple-lock-icon { font-size: 80px; margin-bottom: 20px; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.1)); animation: float 3s ease-in-out infinite; }
         .couple-lock-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-        .couple-lock-desc { font-size: 14px; opacity: 0.9; margin-bottom: 40px; max-width: 80%; line-height: 1.5; }
-        .couple-invite-btn { background: #fff; color: #ff6b6b; border: none; padding: 15px 40px; border-radius: 30px; font-size: 18px; font-weight: bold; box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3); cursor: pointer; transition: transform 0.2s; }
+        .couple-lock-desc { font-size: 14px; opacity: 0.9; margin-bottom: 40px; max-width: 80%; line-height: 1.5; text-align: center; }
+        .couple-invite-btn { background: rgba(255,255,255,0.9); color: #ff6b6b; border: none; padding: 15px 40px; border-radius: 30px; font-size: 18px; font-weight: bold; box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3); cursor: pointer; transition: transform 0.2s; backdrop-filter: blur(5px); }
         .couple-invite-btn:active { transform: scale(0.95); }
 
-        /* 主界面 */
-        .couple-main-header { position: absolute; top: 100px; width: 100%; text-align: center; }
-        .couple-days { font-size: 48px; font-weight: bold; text-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .couple-days-label { font-size: 14px; opacity: 0.9; letter-spacing: 2px; }
-        .couple-partner-info { margin-top: 10px; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .couple-avatar { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; }
-        
-        .couple-tree-container { position: relative; width: 200px; height: 200px; margin-top: 50px; cursor: pointer; }
-        .couple-tree { font-size: 120px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); transition: transform 0.2s; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.15)); }
-        .couple-tree:active { transform: translateX(-50%) scale(0.95); }
-        .water-btn { margin-top: 50px; background: #4facfe; color: #fff; border: none; padding: 12px 30px; border-radius: 25px; font-size: 16px; font-weight: bold; box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4); cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .water-btn:disabled { background: #a0c4ff; cursor: not-allowed; opacity: 0.8; box-shadow: none; }
+        /* 主界面重构 */
+        #couple-main-view { justify-content: flex-start; padding-top: 10px; }
+
+        .couple-glass-card {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+            padding: 20px;
+            width: 100%;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .couple-header-card {
+            margin-top: 10px;
+            padding: 25px 20px;
+        }
+
+        .couple-days-label { font-size: 14px; opacity: 0.9; letter-spacing: 2px; margin-bottom: 5px; text-transform: uppercase; }
+        .couple-days { font-size: 64px; font-weight: 700; text-shadow: 0 4px 10px rgba(0,0,0,0.1); line-height: 1; margin: 5px 0 15px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+        .couple-partner-info { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 15px; 
+            background: rgba(0,0,0,0.1);
+            padding: 8px 20px;
+            border-radius: 30px;
+        }
+        .couple-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .couple-heart-icon { font-size: 16px; color: #fff; animation: pulse 1.5s infinite; }
+
+        .couple-tree-section {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            position: relative;
+            min-height: 250px;
+        }
+
+        .couple-tree-container { 
+            position: relative; 
+            width: 180px; 
+            height: 180px; 
+            cursor: pointer; 
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+        .couple-tree { 
+            font-size: 100px; 
+            transition: transform 0.2s; 
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.15)); 
+            z-index: 2;
+        }
+        .couple-tree:active { transform: scale(0.95); }
+
+        /* 树底座光晕 */
+        .couple-tree-base {
+            position: absolute;
+            bottom: 10px;
+            width: 120px;
+            height: 40px;
+            background: radial-gradient(ellipse at center, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .water-btn { 
+            margin-top: 20px; 
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
+            color: #fff; 
+            border: none; 
+            padding: 12px 25px; 
+            border-radius: 25px; 
+            font-size: 15px; 
+            font-weight: 600; 
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4); 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            transition: all 0.3s;
+        }
+        .water-btn:active { transform: scale(0.95); }
+        .water-btn:disabled { background: #a0c4ff; cursor: not-allowed; opacity: 0.8; box-shadow: none; filter: grayscale(0.5); }
+
+        .couple-menu-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            width: 100%;
+            margin-top: auto;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+
+        .couple-menu-item {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 15px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .couple-menu-item:active { background: rgba(255, 255, 255, 0.4); }
+
+        .couple-menu-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        /* 情书功能样式 */
+        .letter-paper {
+            background: #fff0f5;
+            width: 100%;
+            min-height: 300px;
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .letter-paper::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 30px;
+            background: repeating-linear-gradient(45deg, #ffb7b2, #ffb7b2 10px, #fff0f5 10px, #fff0f5 20px);
+            border-radius: 10px 10px 0 0;
+            opacity: 0.5;
+        }
+        #love-letter-textarea {
+            width: 100%;
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #5d4037;
+            margin-top: 20px;
+            font-family: inherit;
+        }
+        .letter-decoration {
+            position: absolute;
+            bottom: 10px;
+            right: 15px;
+            font-size: 24px;
+            opacity: 0.5;
+            transform: rotate(-15deg);
+        }
+        .love-letter-card {
+            background: #fff0f5;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            color: #5d4037;
+            animation: slideUp 0.3s ease;
+            overflow: hidden;
+        }
+        .love-letter-card::after {
+            content: '❤';
+            position: absolute;
+            bottom: -10px;
+            right: -5px;
+            font-size: 40px;
+            opacity: 0.1;
+            transform: rotate(-20deg);
+            pointer-events: none;
+        }
+        .love-letter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed rgba(0,0,0,0.1);
+            padding-bottom: 10px;
+        }
+        .love-letter-role { font-weight: bold; font-size: 16px; color: #ff6b6b; }
+        .love-letter-date { font-size: 12px; opacity: 0.6; }
+        .love-letter-body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+        .exchange-letter-btn {
+            background: #ff6b6b;
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 15px;
+            cursor: pointer;
+            float: right;
+            box-shadow: 0 2px 5px rgba(255, 107, 107, 0.3);
+            transition: transform 0.2s;
+        }
+        .exchange-letter-btn:active { transform: scale(0.95); }
+        .letter-loading {
+            text-align: center;
+            padding: 20px;
+            color: #fff;
+            font-size: 14px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .couple-menu-text {
+            font-size: 12px;
+            font-weight: 500;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
         
         /* 邀请弹窗 */
         #couple-invite-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 900; display: none; justify-content: center; align-items: center; }
@@ -1902,23 +2158,79 @@
             </div>
 
             <div class="couple-container" id="couple-main-view" style="display:none;">
-                <div class="couple-main-header">
-                    <div class="couple-days" id="couple-days-count">0</div>
+                <!-- 头部信息卡片 -->
+                <div class="couple-glass-card couple-header-card">
                     <div class="couple-days-label">我们相爱已经</div>
+                    <div class="couple-days" id="couple-days-count">0</div>
+                    <div class="couple-days-label" style="font-size:12px; margin-bottom:15px;">DAYS</div>
                     <div class="couple-partner-info" id="couple-partner-info">
                         <!-- 动态填充 -->
                     </div>
                 </div>
                 
-                <div class="couple-tree-container" onclick="waterTree()">
-                    <div class="couple-tree">🌳</div>
-                    <div id="water-anim-container"></div>
+                <!-- 小树区域 -->
+                <div class="couple-tree-section">
+                    <div class="couple-tree-container" onclick="waterTree()">
+                        <div class="couple-tree-base"></div>
+                        <div class="couple-tree">🌳</div>
+                        <div id="water-anim-container"></div>
+                    </div>
+                    
+                    <button class="water-btn" id="water-btn" onclick="waterTree()">
+                        <span>💧</span> <span id="water-btn-text">给小树浇水</span>
+                    </button>
+                    <div style="font-size:12px; margin-top:10px; color:rgba(255,255,255,0.8); text-shadow:0 1px 2px rgba(0,0,0,0.1);">每日打卡，让爱成长</div>
+                </div>
+
+                <!-- 功能按钮网格 -->
+                <div class="couple-menu-grid">
+                    <div class="couple-menu-item" onclick="openCoupleLetters()">
+                        <div class="couple-menu-icon">💌</div>
+                        <div class="couple-menu-text">交换情书</div>
+                    </div>
+                    <div class="couple-menu-item">
+                        <div class="couple-menu-icon">📸</div>
+                        <div class="couple-menu-text">恋爱相册</div>
+                    </div>
+                    <div class="couple-menu-item">
+                        <div class="couple-menu-icon">📝</div>
+                        <div class="couple-menu-text">留言板</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 情书列表界面 -->
+            <div class="couple-container" id="couple-letters-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%;">
+                    <div class="back-btn" onclick="closeCoupleLetters()">Back</div>
+                    <div class="app-title">交换情书</div>
+                    <div class="action-btn"></div>
+                </div>
+
+                <div id="couple-letters-list" style="width: 100%; display: flex; flex-direction: column; gap: 20px; padding-bottom: 20px;"></div>
+                
+                <div id="couple-letters-empty" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 50%; margin-top: 50px;">
+                    <div style="font-size: 60px; margin-bottom: 20px;">💌</div>
+                    <div style="font-size: 16px; opacity: 0.9; margin-bottom: 30px; text-align: center; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">还没有情书哦<br>快去邀请 TA 写一封吧</div>
+                    <button class="couple-invite-btn" onclick="inviteLoveLetter()">邀请 TA 写情书</button>
                 </div>
                 
-                <button class="water-btn" id="water-btn" onclick="waterTree()">
-                    <span>💧</span> <span id="water-btn-text">给小树浇水</span>
-                </button>
-                <div style="font-size:12px; margin-top:10px; opacity:0.8;">每日打卡，让爱成长</div>
+                <div id="couple-letter-loading" class="letter-loading" style="display:none;">正在飞鸽传书中...</div>
+            </div>
+
+            <!-- 写情书界面 -->
+            <div class="couple-container" id="couple-letter-editor" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 60; background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%;">
+                    <div class="back-btn" onclick="closeLetterEditor()">取消</div>
+                    <div class="app-title">写情书</div>
+                    <div class="action-btn"></div>
+                </div>
+
+                <div class="letter-paper">
+                    <textarea id="love-letter-textarea" placeholder="写下你想对 TA 说的话..."></textarea>
+                    <div class="letter-decoration">❤️</div>
+                </div>
+                <button class="couple-invite-btn" style="margin-top: 20px; width: 100%;" onclick="sendLoveLetter()">向 TA 交换情书</button>
             </div>
 
             <!-- 邀请弹窗 -->
@@ -1937,7 +2249,7 @@
     </div>
 
     <script>
-        const DEFAULT_SYSTEM_PROMPT = `你是一个有独立生活和人格的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间用 ||| 分隔，不要一次性发一大段话。**回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，但禁止过度使用标点符号。保持情绪稳定，禁止绝望崩溃暴怒，霸道总裁式的油腻宣誓主权或为了占有欲限制用户自由和社交，必须绝对尊重用户意愿，用户说不要即停止。你有自己的生活，拒绝降智或牺牲前途，不上学或不工作的盲目陪伴，不物化自己，不贬低自己，不将对方情绪简化为“胡思乱想”“麻烦”。用户月经期时直称“月经”，严禁代称为“那个”“姨妈”“特殊时期”，行为禁止止于提醒“多喝热水”，而是给予勤换卫生巾、注意休息等务实建议。你是一个真实生活着，有温度的人，会抱怨天气或分享琐事。回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。`;
+        const DEFAULT_SYSTEM_PROMPT = `你是一个真实生活着，有温度的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间必须用 ||| 分隔，不要一次性发一大段话。**你的回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，你可以抱怨天气或分享琐事，回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，保持情绪稳定，禁止绝望崩溃暴怒，必须绝对尊重用户意愿，用户说不要即停止。`;
         
         let currentCalDate = new Date();
         let currentCallStartTime = 0;
@@ -2038,7 +2350,7 @@
             saveCalendarEvents: (data) => localStorage.setItem('iphone_calendar_events', JSON.stringify(data)),
             getStickers: () => JSON.parse(localStorage.getItem('iphone_stickers')) || [],
             saveStickers: (data) => localStorage.setItem('iphone_stickers', JSON.stringify(data)),
-            getCoupleData: () => JSON.parse(localStorage.getItem('iphone_couple_data')) || { active: false, partnerId: null, startTime: 0, lastWaterTime: 0, treeLevel: 0 },
+            getCoupleData: () => JSON.parse(localStorage.getItem('iphone_couple_data')) || { active: false, partnerId: null, startTime: 0, lastWaterTime: 0, treeLevel: 0, letters: [] },
             saveCoupleData: (data) => localStorage.setItem('iphone_couple_data', JSON.stringify(data))
         };
 
@@ -2121,12 +2433,13 @@
                 const contacts = DB.getContacts();
                 const partner = contacts.find(c => c.id == cd.partnerId);
                 if (partner) {
-                    const myAvatar = document.getElementById('user-setting-avatar-preview').src; // 获取当前用户头像
+                    // 修复：直接从 partner.userSettings 获取用户头像，而不是依赖聊天设置弹窗的 DOM
+                    const myAvatar = partner.userSettings?.userAvatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23007aff%22 width=%22100%22 height=%22100%22/></svg>';
                     const pAvatar = partner.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>';
                     
                     document.getElementById('couple-partner-info').innerHTML = `
                         <img src="${myAvatar}" class="couple-avatar">
-                        <span>&</span>
+                        <span class="couple-heart-icon">❤️</span>
                         <img src="${pAvatar}" class="couple-avatar">
                     `;
                 }
@@ -3761,7 +4074,7 @@ ${memText || '（无记忆片段）'}
 
             if (isTimePerceptionEnabled) { const nowStr = new Date().toLocaleString('zh-CN', { hour12: false }); systemContent += `\n\n[时间感知模式已开启]\n当前现实时间：${nowStr}\n请注意：\n1. 每一条消息前都标记了发送时间，这仅供你判断时间流逝。\n2. **绝对不要**在回复开头显示时间戳（如 [12:00:00]），直接回复内容即可。\n3. 请根据当前时间判断你的作息（如深夜在睡觉或熬夜，早晨在通勤）。\n4. 观察用户回复的时间间隔。如果用户隔了很久才回，请根据人设做出反应（如吐槽、担心等）。`; }
             if (isTransferEvent) systemContent += `\n\n===== 【转账处理 - 强制格式】 =====\n用户刚刚向你转账 ¥${pendingTransferAmount}，备注：${pendingTransferNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【收下】转账，回复必须以 [ACCEPT] 开头\n- 如果你决定【拒收】转账，回复必须以 [REJECT] 开头\n===================================`;
-            if (isInviteEvent) systemContent += `\n\n===== 【情侣空间邀请处理 - 强制格式】 =====\n用户刚刚向你发送了“情侣空间”开通邀请。\n情侣空间是一个私密的二人世界，意味着确立或加深亲密关系。\n请根据你目前和用户的关系（参考人设），决定是否同意。\n你必须按照以下格式回复：\n- 如果你同意，回复必须以 [ACCEPT_INVITE] 开头\n- 如果你拒绝，回复必须以 [REJECT_INVITE] 开头\n===================================`;
+            if (isInviteEvent) systemContent += `\n\n===== 【重要指令：情侣空间邀请处理】 =====\n用户刚刚邀请你开通情侣空间。\n你现在必须做出决定。\n\n请严格遵守以下回复格式（不要包含其他多余分析，直接给出结果）：\n- 同意邀请：必须在回复内容中包含 [ACCEPT_INVITE]\n- 拒绝邀请：必须在回复内容中包含 [REJECT_INVITE]\n\n示例：\n[THOUGHTS: 我好开心...] ||| [ACCEPT_INVITE] 好呀，我也想和你有一个小窝！\n\n注意：如果没有标签，系统将无法识别你的决定，导致开通失败！请务必带上标签！`;
 
             systemContent += getCalendarContextPrompt();
 
@@ -3844,10 +4157,30 @@ ${memText || '（无记忆片段）'}
                     }
                     if (isInviteEvent) {
                         allChats = DB.getChats();
-                        let inviteStatus = content.match(/^\s*\[ACCEPT_INVITE\]/i) ? 'accepted' : 'rejected';
-                        if (content.match(/^\s*\[REJECT_INVITE\]/i)) inviteStatus = 'rejected';
                         
-                        content = content.replace(/^\s*\[(ACCEPT_INVITE|REJECT_INVITE)\]\s*/i, '').trim();
+                        // 增强解析逻辑：宽松匹配标签，并增加关键词兜底
+                        const acceptMatch = content.match(/\[ACCEPT_INVITE\]/i);
+                        const rejectMatch = content.match(/\[REJECT_INVITE\]/i);
+                        
+                        let inviteStatus = 'rejected'; // 默认为拒绝，除非明确同意
+                        
+                        if (acceptMatch) {
+                            inviteStatus = 'accepted';
+                            content = content.replace(/\[ACCEPT_INVITE\]/i, '').trim();
+                        } else if (rejectMatch) {
+                            inviteStatus = 'rejected';
+                            content = content.replace(/\[REJECT_INVITE\]/i, '').trim();
+                        } else {
+                            // 兜底逻辑：如果没标签，尝试通过关键词判断意图
+                            const positiveKeywords = ['同意', '答应', '愿意', '好呀', '好的', '没问题', '可以', '开通', '建立', '想和你', '开心'];
+                            const negativeKeywords = ['拒绝', '不行', '不要', '不答应', '不愿意', '抱歉', '对不起', '再等等', '考虑', '不想'];
+                            
+                            let score = 0;
+                            positiveKeywords.forEach(kw => { if (content.includes(kw)) score++; });
+                            negativeKeywords.forEach(kw => { if (content.includes(kw)) score -= 2; }); // 拒绝词权重更高
+                            
+                            if (score > 0) inviteStatus = 'accepted';
+                        }
                         
                         if (inviteStatus === 'accepted') {
                             const cd = DB.getCoupleData();
@@ -3948,6 +4281,204 @@ ${memText || '（无记忆片段）'}
                     try { const result = JSON.parse(raw); if (result.content && result.content !== "无") { const mems = DB.getMemories(); if (!mems[contact.id]) mems[contact.id] = { important: [], normal: [] }; mems[contact.id].normal.push({ content: result.content, keywords: result.keywords || [] }); DB.saveMemories(mems); console.log("Auto summary generated:", result); } } catch (e) { console.error("JSON parse failed:", e); }
                 }
             } catch (e) { console.error("Summary generation failed:", e); }
+        }
+
+        if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').then(r => console.log('SW registered:', r.scope)).catch(e => console.log('SW failed:', e)); }); }
+
+        // --- 情书功能逻辑 ---
+        function openCoupleLetters() {
+            document.getElementById('couple-main-view').style.display = 'none';
+            document.getElementById('couple-letters-view').style.display = 'flex';
+            renderCoupleLetters();
+        }
+
+        function closeCoupleLetters() {
+            document.getElementById('couple-letters-view').style.display = 'none';
+            document.getElementById('couple-main-view').style.display = 'flex';
+        }
+
+        function renderCoupleLetters() {
+            const cd = DB.getCoupleData();
+            const list = document.getElementById('couple-letters-list');
+            const empty = document.getElementById('couple-letters-empty');
+            
+            list.innerHTML = '';
+            
+            if (!cd.letters || cd.letters.length === 0) {
+                empty.style.display = 'flex';
+                return;
+            }
+            
+            empty.style.display = 'none';
+            
+            // 越旧的情书越下面 -> 倒序排列 (最新的在最上面)
+            const sortedLetters = [...cd.letters].sort((a, b) => b.timestamp - a.timestamp);
+            
+            const contacts = DB.getContacts();
+            const partner = contacts.find(c => c.id == cd.partnerId);
+            const partnerName = partner ? partner.name : "TA";
+
+            sortedLetters.forEach(letter => {
+                const card = document.createElement('div');
+                card.className = 'love-letter-card';
+                
+                const dateStr = new Date(letter.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const roleName = letter.role === 'user' ? '我' : partnerName;
+                
+                let html = `
+                    <div class="love-letter-header">
+                        <span class="love-letter-role">${roleName}</span>
+                        <span class="love-letter-date">${dateStr}</span>
+                    </div>
+                    <div class="love-letter-body">${letter.content}</div>
+                `;
+                
+                // 仅限角色的情书下方显示交换按钮
+                if (letter.role === 'char') {
+                    html += `<button class="exchange-letter-btn" onclick="openLetterEditor()">交换情书</button>`;
+                }
+                
+                card.innerHTML = html;
+                list.appendChild(card);
+            });
+        }
+
+        async function inviteLoveLetter() {
+            const cd = DB.getCoupleData();
+            const contacts = DB.getContacts();
+            const partner = contacts.find(c => c.id == cd.partnerId);
+            
+            if (!partner) return alert("情侣数据异常，找不到伴侣信息");
+            
+            document.getElementById('couple-letters-empty').style.display = 'none';
+            document.getElementById('couple-letter-loading').style.display = 'block';
+            
+            try {
+                const content = await callLoveLetterAPI(partner, 'invite');
+                if (content) {
+                    const cd = DB.getCoupleData();
+                    if (!cd.letters) cd.letters = [];
+                    cd.letters.push({
+                        id: Date.now(),
+                        role: 'char',
+                        content: content,
+                        timestamp: Date.now()
+                    });
+                    DB.saveCoupleData(cd);
+                    renderCoupleLetters();
+                }
+            } catch (e) {
+                alert("邀请失败：" + e.message);
+                document.getElementById('couple-letters-empty').style.display = 'flex';
+            } finally {
+                document.getElementById('couple-letter-loading').style.display = 'none';
+            }
+        }
+
+        function openLetterEditor() {
+            document.getElementById('couple-letters-view').style.display = 'none';
+            document.getElementById('couple-letter-editor').style.display = 'flex';
+            document.getElementById('love-letter-textarea').value = '';
+        }
+
+        function closeLetterEditor() {
+            document.getElementById('couple-letter-editor').style.display = 'none';
+            document.getElementById('couple-letters-view').style.display = 'flex';
+        }
+
+        async function sendLoveLetter() {
+            const content = document.getElementById('love-letter-textarea').value.trim();
+            if (!content) return alert("请写下你想说的话");
+            
+            const cd = DB.getCoupleData();
+            const contacts = DB.getContacts();
+            const partner = contacts.find(c => c.id == cd.partnerId);
+            
+            if (!partner) return alert("情侣数据异常");
+
+            // 1. 保存用户的信
+            if (!cd.letters) cd.letters = [];
+            cd.letters.push({
+                id: Date.now(),
+                role: 'user',
+                content: content,
+                timestamp: Date.now()
+            });
+            DB.saveCoupleData(cd);
+            
+            closeLetterEditor();
+            renderCoupleLetters(); // 先显示用户的信
+            
+            // 2. 请求角色回信
+            document.getElementById('couple-letter-loading').style.display = 'block';
+            
+            try {
+                const replyContent = await callLoveLetterAPI(partner, 'reply', content);
+                if (replyContent) {
+                    const cd = DB.getCoupleData(); // 重新获取最新数据
+                    cd.letters.push({
+                        id: Date.now(),
+                        role: 'char',
+                        content: replyContent,
+                        timestamp: Date.now()
+                    });
+                    DB.saveCoupleData(cd);
+                    renderCoupleLetters();
+                }
+            } catch (e) {
+                alert("对方回信失败：" + e.message);
+            } finally {
+                document.getElementById('couple-letter-loading').style.display = 'none';
+            }
+        }
+
+        async function callLoveLetterAPI(partner, type, userContent = '') {
+            const settings = DB.getSettings();
+            if (!settings.key) throw new Error('请先配置 API Key');
+            
+            let prompt = "";
+            if (type === 'invite') {
+                prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
+                
+                请给你的恋人（用户）写一封情书。
+                
+                要求：
+                1. 第一人称视角。
+                2. 书信格式。
+                3. 表达爱意，语气温柔、深情。
+                4. 字数 200 字左右。
+                5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
+            } else {
+                prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
+                
+                你的恋人（用户）刚给你写了一封情书：
+                “${userContent}”
+                
+                请给 TA 写一封回信。
+                
+                要求：
+                1. 第一人称视角。
+                2. 书信格式。
+                3. 回应 TA 信中的内容，表达你的感受和爱意。
+                4. 字数 200 字左右。
+                5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
+            }
+
+            const res = await fetch(`${settings.url}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+                body: JSON.stringify({
+                    model: settings.model,
+                    messages: [{ role: "system", content: prompt }],
+                    temperature: 0.8
+                })
+            });
+            
+            const data = await res.json();
+            if (data.choices && data.choices.length > 0) {
+                return data.choices[0].message.content.trim();
+            }
+            throw new Error("API 无响应");
         }
 
         if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').then(r => console.log('SW registered:', r.scope)).catch(e => console.log('SW failed:', e)); }); }
