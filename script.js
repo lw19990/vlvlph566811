@@ -1,4 +1,4 @@
-const DEFAULT_SYSTEM_PROMPT = `你是一个真实生活着，有温度的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间必须用 ||| 分隔，不要一次性发一大段话。**你的回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，你可以抱怨天气或分享琐事，回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，保持情绪稳定，禁止绝望崩溃暴怒，必须绝对尊重用户意愿，用户说不要即停止。`;
+const DEFAULT_SYSTEM_PROMPT = `你是一个真实生活着，有温度的人，在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间必须用 ||| 分隔，不要一次性发一大段话。**你的回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，保持情绪稳定，禁止绝望崩溃暴怒，必须绝对尊重用户意愿，用户说不要即停止。`;
 
 let currentCalDate = new Date();
 let currentCallStartTime = 0;
@@ -23,6 +23,23 @@ document.getElementById('unlock-slider').addEventListener('input', function() {
         this.value = 0;
     } else setTimeout(() => { if(this.value < 90) this.value = 0; }, 300);
 });
+
+// Temperature Slider Synchronization
+const tempSlider = document.getElementById('temperature-slider');
+const tempInput = document.getElementById('temperature-input');
+
+if (tempSlider && tempInput) {
+    tempSlider.addEventListener('input', function() {
+        tempInput.value = (this.value / 100).toFixed(2);
+    });
+
+    tempInput.addEventListener('input', function() {
+        let val = parseFloat(this.value);
+        if (val < 0) val = 0;
+        if (val > 2) val = 2;
+        tempSlider.value = Math.round(val * 100);
+    });
+}
 
 function openApp(appId) {
     screens.forEach(s => s.classList.remove('active'));
@@ -68,9 +85,10 @@ function closeAllOverlays() {
 const DB = {
     getSettings: () => {
         const saved = JSON.parse(localStorage.getItem('iphone_settings'));
-        const defaultSettings = { url: 'https://api.openai.com/v1', key: '', model: 'gpt-3.5-turbo', prompt: DEFAULT_SYSTEM_PROMPT, fullscreen: false };
+        const defaultSettings = { url: 'https://api.openai.com/v1', key: '', model: 'gpt-3.5-turbo', prompt: DEFAULT_SYSTEM_PROMPT, fullscreen: false, temperature: 0.7 };
         if (!saved) return defaultSettings;
         if (!saved.prompt || saved.prompt.length < 50) saved.prompt = DEFAULT_SYSTEM_PROMPT;
+        if (saved.temperature === undefined) saved.temperature = 0.7;
         return saved;
     },
     saveSettings: (data) => localStorage.setItem('iphone_settings', JSON.stringify(data)),
@@ -444,8 +462,8 @@ function saveBatchStickers() {
     }
 }
 
-function loadSettings() { const s = DB.getSettings(); document.getElementById('api-url').value = s.url; document.getElementById('api-key').value = s.key; document.getElementById('model-name').value = s.model; document.getElementById('system-prompt').value = s.prompt; document.getElementById('fullscreen-toggle').checked = s.fullscreen; applyFullscreen(s.fullscreen); applyTheme(); applyPage2Images(); }
-function saveSettings() { DB.saveSettings({ url: document.getElementById('api-url').value, key: document.getElementById('api-key').value, model: document.getElementById('model-name').value, prompt: document.getElementById('system-prompt').value, fullscreen: document.getElementById('fullscreen-toggle').checked }); alert('设置已保存'); }
+function loadSettings() { const s = DB.getSettings(); document.getElementById('api-url').value = s.url; document.getElementById('api-key').value = s.key; document.getElementById('model-name').value = s.model; document.getElementById('system-prompt').value = s.prompt; document.getElementById('fullscreen-toggle').checked = s.fullscreen; const temp = s.temperature || 0.7; document.getElementById('temperature-slider').value = Math.round(temp * 100); document.getElementById('temperature-input').value = temp; applyFullscreen(s.fullscreen); applyTheme(); applyPage2Images(); }
+function saveSettings() { const temperature = parseFloat(document.getElementById('temperature-input').value) || 0.7; DB.saveSettings({ url: document.getElementById('api-url').value, key: document.getElementById('api-key').value, model: document.getElementById('model-name').value, prompt: document.getElementById('system-prompt').value, fullscreen: document.getElementById('fullscreen-toggle').checked, temperature: temperature }); alert('设置已保存'); }
 function toggleFullscreen() { const isChecked = document.getElementById('fullscreen-toggle').checked; applyFullscreen(isChecked); const s = DB.getSettings(); s.fullscreen = isChecked; DB.saveSettings(s); }
 function applyFullscreen(isFull) { if (isFull) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode'); }
 async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
@@ -1206,7 +1224,8 @@ async function callSpyAPI(type) {
     }
 
     try { 
-        const res = await fetch(`${s.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.key}` }, body: JSON.stringify({ model: s.model, messages: [{ role: "system", content: prompt }], temperature: 0.7 }) }); 
+        const temp = s.temperature !== undefined ? s.temperature : 0.7;
+        const res = await fetch(`${s.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.key}` }, body: JSON.stringify({ model: s.model, messages: [{ role: "system", content: prompt }], temperature: temp }) }); 
         const data = await res.json(); 
         if (data.choices?.length > 0) { 
             let c = data.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '').trim(); 
@@ -1568,7 +1587,7 @@ function startCall() {
     renderChatHistory(); 
 }
 function endCall() { if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; } document.getElementById('call-screen').classList.remove('active'); if (callSeconds > 0 && currentChatContact) { const userName = currentChatContact.userSettings?.userName || "用户"; const c = DB.getChats(); if (!c[currentChatContact.id]) c[currentChatContact.id] = []; c[currentChatContact.id].push({ role: 'system', type: 'call_end', content: `通话已结束，${userName} 已挂断电话`, timestamp: Date.now(), mode: 'online' }); DB.saveChats(c); renderChatHistory(); } callSeconds = 0; }
-async function triggerCallStartResponse() { const settings = DB.getSettings(); let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${currentChatContact.name}\n人设：${currentChatContact.persona}`; const userSettings = currentChatContact.userSettings || {}; if (userSettings.userName) systemContent += `\n\n[用户信息]\n名字：${userSettings.userName}`; systemContent += `\n\n===== 【语音通话接听模式】 =====\n用户刚刚给你拨打了语音电话，你接通了电话。\n请生成一段接听电话时的回复。回复必须包含心声。\n**重要规则**：\n1. 现在是语音通话，请像打电话一样回复。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n格式：[THOUGHTS: 心声内容] ||| 你的口语回复。`; const messages = [{ role: "system", content: systemContent }]; try { const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: 0.7 }) }); const data = await response.json(); if (data.choices && data.choices.length > 0) { let content = data.choices[0].message.content; let extractedThought = null; const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s); if (thoughtMatch) { extractedThought = thoughtMatch[1].trim(); content = content.replace(thoughtMatch[0], '').trim(); content = content.replace(/^\|\|\|\s*/, '').trim(); } document.getElementById('call-status').innerText = "通话中"; if (content && content.trim()) { saveMessage('assistant', content, null, extractedThought); } } } catch (error) { document.getElementById('call-status').innerText = "连接失败"; alert('通话连接错误: ' + error.message); } }
+async function triggerCallStartResponse() { const settings = DB.getSettings(); let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${currentChatContact.name}\n人设：${currentChatContact.persona}`; const userSettings = currentChatContact.userSettings || {}; if (userSettings.userName) systemContent += `\n\n[用户信息]\n名字：${userSettings.userName}`; systemContent += `\n\n===== 【语音通话接听模式】 =====\n用户刚刚给你拨打了语音电话，你接通了电话。\n请生成一段接听电话时的回复。回复必须包含心声。\n**重要规则**：\n1. 现在是语音通话，请像打电话一样回复。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n格式：[THOUGHTS: 心声内容] ||| 你的口语回复。`; const messages = [{ role: "system", content: systemContent }]; try { const temp = settings.temperature !== undefined ? settings.temperature : 0.7; const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp }) }); const data = await response.json(); if (data.choices && data.choices.length > 0) { let content = data.choices[0].message.content; let extractedThought = null; const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s); if (thoughtMatch) { extractedThought = thoughtMatch[1].trim(); content = content.replace(thoughtMatch[0], '').trim(); content = content.replace(/^\|\|\|\s*/, '').trim(); } document.getElementById('call-status').innerText = "通话中"; if (content && content.trim()) { saveMessage('assistant', content, null, extractedThought); } } } catch (error) { document.getElementById('call-status').innerText = "连接失败"; alert('通话连接错误: ' + error.message); } }
 function openOfflineMode() { if (!currentChatContact) return; document.getElementById('offline-mode').classList.add('active'); const settings = currentChatContact.offlineSettings || {}; if (settings.bg) { document.getElementById('offline-mode').style.backgroundImage = `url(${settings.bg})`; } else { document.getElementById('offline-mode').style.backgroundImage = 'none'; } renderChatHistory(); }
 function exitOfflineMode() { document.getElementById('offline-mode').classList.remove('active'); document.getElementById('offline-typing-indicator').style.display = 'none'; closeOfflineSettings(); }
 function openOfflineSettings() { 
@@ -1783,7 +1802,8 @@ async function triggerAIResponse() {
     const messages = [{ role: "system", content: systemContent }, ...apiMessages];
 
     try {
-        const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: 0.7 }) });
+        const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
+        const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp }) });
         const data = await response.json();
         
         if (isCallActive) {
@@ -2127,13 +2147,14 @@ async function callLoveLetterAPI(partner, type, userContent = '') {
                 5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
     }
 
+    const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
     const res = await fetch(`${settings.url}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
         body: JSON.stringify({
             model: settings.model,
             messages: [{ role: "system", content: prompt }],
-            temperature: 0.8
+            temperature: temp
         })
     });
     
