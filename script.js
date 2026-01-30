@@ -728,7 +728,78 @@ function importThemePreset(input) {
     reader.readAsText(file);
 }
 
-function calculatePeriodDays(year, month) { const events = DB.getCalendarEvents(); const periodMap = {}; const predictedStarts = []; const manualStarts = []; const manualEnds = []; Object.keys(events).forEach(dateStr => { events[dateStr].forEach(ev => { if (ev.type === 'period_start' || ev.type === 'period') { manualStarts.push({ date: new Date(dateStr), cycle: ev.cycle || 28, duration: ev.duration || 5 }); } if (ev.type === 'period_end') { manualEnds.push(new Date(dateStr)); } }); }); manualStarts.sort((a, b) => a.date - b.date); manualEnds.sort((a, b) => a.date - b.date); manualStarts.forEach(startObj => { const startDate = startObj.date; const endDate = manualEnds.find(end => end >= startDate); let limitDate; if (endDate) { limitDate = endDate; } else { limitDate = new Date(startDate); limitDate.setDate(startDate.getDate() + startObj.duration - 1); } let temp = new Date(startDate); while (temp <= limitDate) { const dStr = `${temp.getFullYear()}-${String(temp.getMonth()+1).padStart(2,'0')}-${String(temp.getDate()).padStart(2,'0')}`; periodMap[dStr] = 'active'; temp.setDate(temp.getDate() + 1); } }); if (manualStarts.length > 0) { const lastManual = manualStarts[manualStarts.length - 1]; let nextStart = new Date(lastManual.date); const viewEnd = new Date(year, month + 1, 15); while (nextStart <= viewEnd) { nextStart.setDate(nextStart.getDate() + lastManual.cycle); if (nextStart > lastManual.date) { const pStr = `${nextStart.getFullYear()}-${String(nextStart.getMonth()+1).padStart(2,'0')}-${String(nextStart.getDate()).padStart(2,'0')}`; if (!periodMap[pStr]) { predictedStarts.push(pStr); let tempP = new Date(nextStart); for (let i = 0; i < lastManual.duration; i++) { const pdStr = `${tempP.getFullYear()}-${String(tempP.getMonth()+1).padStart(2,'0')}-${String(tempP.getDate()).padStart(2,'0')}`; if (!periodMap[pdStr]) { periodMap[pdStr] = 'predicted'; } tempP.setDate(tempP.getDate() + 1); } } } } } return { periodMap, predictedStarts }; }
+function calculatePeriodDays(year, month) {
+    const events = DB.getCalendarEvents();
+    const periodMap = {};
+    const predictedStarts = [];
+    const manualStarts = [];
+    const manualEnds = [];
+    
+    Object.keys(events).forEach(dateStr => {
+        events[dateStr].forEach(ev => {
+            if (ev.type === 'period_start' || ev.type === 'period') {
+                manualStarts.push({ date: new Date(dateStr), cycle: ev.cycle || 28, duration: ev.duration || 5 });
+            }
+            if (ev.type === 'period_end') {
+                manualEnds.push(new Date(dateStr));
+            }
+        });
+    });
+    
+    manualStarts.sort((a, b) => a.date - b.date);
+    manualEnds.sort((a, b) => a.date - b.date);
+    
+    manualStarts.forEach(startObj => {
+        const startDate = startObj.date;
+        const endDate = manualEnds.find(end => end >= startDate);
+        let limitDate;
+        if (endDate) {
+            limitDate = endDate;
+        } else {
+            limitDate = new Date(startDate);
+            limitDate.setDate(startDate.getDate() + startObj.duration - 1);
+        }
+        let temp = new Date(startDate);
+        while (temp <= limitDate) {
+            const dStr = `${temp.getFullYear()}-${String(temp.getMonth()+1).padStart(2,'0')}-${String(temp.getDate()).padStart(2,'0')}`;
+            periodMap[dStr] = 'active';
+            temp.setDate(temp.getDate() + 1);
+        }
+    });
+    
+    if (manualStarts.length > 0) {
+        const lastManual = manualStarts[manualStarts.length - 1];
+        let nextStart = new Date(lastManual.date);
+        const viewEnd = new Date(year, month + 1, 15);
+        
+        let safeCycle = lastManual.cycle;
+        if (!safeCycle || safeCycle <= 0) safeCycle = 28;
+
+        let loopCount = 0;
+        while (nextStart <= viewEnd) {
+            loopCount++;
+            if (loopCount > 1000) break;
+
+            nextStart.setDate(nextStart.getDate() + safeCycle);
+            if (nextStart > lastManual.date) {
+                const pStr = `${nextStart.getFullYear()}-${String(nextStart.getMonth()+1).padStart(2,'0')}-${String(nextStart.getDate()).padStart(2,'0')}`;
+                if (!periodMap[pStr]) {
+                    predictedStarts.push(pStr);
+                    let tempP = new Date(nextStart);
+                    for (let i = 0; i < lastManual.duration; i++) {
+                        const pdStr = `${tempP.getFullYear()}-${String(tempP.getMonth()+1).padStart(2,'0')}-${String(tempP.getDate()).padStart(2,'0')}`;
+                        if (!periodMap[pdStr]) {
+                            periodMap[pdStr] = 'predicted';
+                        }
+                        tempP.setDate(tempP.getDate() + 1);
+                    }
+                }
+            }
+        }
+    }
+    return { periodMap, predictedStarts };
+}
+
 function renderCalendar() { const year = currentCalDate.getFullYear(); const month = currentCalDate.getMonth(); document.getElementById('calendar-month-title').innerText = `${year}年 ${month + 1}月`; const firstDay = new Date(year, month, 1); const lastDay = new Date(year, month + 1, 0); const daysInMonth = lastDay.getDate(); const startDayOfWeek = firstDay.getDay(); const grid = document.getElementById('calendar-grid'); grid.innerHTML = ''; const { periodMap } = calculatePeriodDays(year, month); const events = DB.getCalendarEvents(); const today = new Date(); for (let i = 0; i < startDayOfWeek; i++) { const div = document.createElement('div'); div.className = 'calendar-day other-month'; grid.appendChild(div); } for (let d = 1; d <= daysInMonth; d++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const div = document.createElement('div'); div.className = 'calendar-day'; const dayEvents = events[dateStr]; if (dayEvents && dayEvents.length > 0) { div.classList.add('has-event'); } if (periodMap[dateStr]) { div.classList.add('period-day'); } if (year === today.getFullYear() && month === today.getMonth() && d === today.getDate()) { div.classList.add('today'); } div.innerHTML = `<div class="day-number">${d}</div>`; div.onclick = () => openCalendarModal(dateStr); grid.appendChild(div); } renderMonthEventList(year, month); }
 function renderMonthEventList(year, month) { const container = document.getElementById('calendar-month-events'); container.innerHTML = ''; const events = DB.getCalendarEvents(); const lastDay = new Date(year, month + 1, 0).getDate(); const { predictedStarts } = calculatePeriodDays(year, month); let hasEvents = false; for (let d = 1; d <= lastDay; d++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const dayEvents = events[dateStr]; if (dayEvents && dayEvents.length > 0) { dayEvents.forEach(ev => { if (ev.type === 'period_end') return; hasEvents = true; const row = document.createElement('div'); row.className = 'calendar-event-row'; let displayText = `${year}年${month+1}月${d}日`; let dotColor = '#ccc'; switch(ev.type) { case 'anniversary': displayText += ` - 纪念日 - ${ev.title}`; dotColor = '#ff9500'; break; case 'birthday_char': displayText += ` - TA的生日 - ${ev.title || '未知角色'}`; dotColor = '#5856d6'; break; case 'birthday_user': displayText += ` - 我的生日`; dotColor = '#5856d6'; break; case 'period_start': case 'period': displayText += ` - 上次月经来潮日`; dotColor = '#ff2d55'; break; case 'custom': displayText += ` - 行程 - ${ev.title}`; dotColor = '#34c759'; break; } row.innerHTML = `<div class="cal-event-dot" style="background:${dotColor}"></div><div>${displayText}</div>`; container.appendChild(row); }); } if (predictedStarts.includes(dateStr)) { hasEvents = true; const row = document.createElement('div'); row.className = 'calendar-event-row'; row.innerHTML = `<div class="cal-event-dot" style="background:#ff2d55; opacity:0.6;"></div><div style="color:#666;">${year}年${month+1}月${d}日 - 预计下月月经来潮日</div>`; container.appendChild(row); } } if (!hasEvents) { container.innerHTML = '<div style="text-align:center; color:#ccc; padding:20px; font-size:12px;">本月暂无标记事件</div>'; } }
 function changeCalendarMonth(delta) { currentCalDate.setMonth(currentCalDate.getMonth() + delta); renderCalendar(); }
@@ -767,9 +838,11 @@ function addCalendarEvent(type) {
         const c = prompt("请输入月经周期 (天)：", "28"); 
         if (c === null) return; 
         cycle = parseInt(c) || 28; 
+        if (cycle <= 0) { alert("周期必须大于0"); cycle = 28; }
         const d = prompt("请输入行经期 (天)：", "5"); 
         if (d === null) return; 
         duration = parseInt(d) || 5; 
+        if (duration <= 0) duration = 5;
     } 
     
     const allEvents = DB.getCalendarEvents(); 
@@ -1763,6 +1836,7 @@ function getCalendarContextPrompt() {
 }
 
 async function triggerAIResponse() {
+    console.log("Triggering AI Response...");
     if (!currentChatContact) return;
     const settings = DB.getSettings();
     if (!settings.key) return alert('请配置 API Key');
@@ -1836,7 +1910,9 @@ async function triggerAIResponse() {
     if (isTransferEvent) systemContent += `\n\n===== 【转账处理 - 强制格式】 =====\n用户刚刚向你转账 ¥${pendingTransferAmount}，备注：${pendingTransferNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【收下】转账，回复必须以 [ACCEPT] 开头\n- 如果你决定【拒收】转账，回复必须以 [REJECT] 开头\n===================================`;
     if (isInviteEvent) systemContent += `\n\n===== 【重要指令：情侣空间邀请处理】 =====\n用户刚刚邀请你开通情侣空间。\n你现在必须做出决定。\n\n请严格遵守以下回复格式（不要包含其他多余分析，直接给出结果）：\n- 同意邀请：必须在回复内容中包含 [ACCEPT_INVITE]\n- 拒绝邀请：必须在回复内容中包含 [REJECT_INVITE]\n\n示例：\n[THOUGHTS: 我好开心...] ||| [ACCEPT_INVITE] 好呀，我也想和你有一个小窝！\n\n注意：如果没有标签，系统将无法识别你的决定，导致开通失败！请务必带上标签！`;
 
+    console.log("Building system content...");
     systemContent += getCalendarContextPrompt();
+    console.log("Calendar context added.");
 
     const wb = DB.getWorldBook();
     const globalEntries = wb.entries.filter(e => e.type === 'global');
@@ -1870,8 +1946,10 @@ async function triggerAIResponse() {
     const messages = [{ role: "system", content: systemContent }, ...apiMessages];
 
     try {
+        console.log("Sending fetch request...");
         const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
         const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp }) });
+        console.log("Fetch response received:", response.status);
         const data = await response.json();
         
         if (isCallActive) {
@@ -2016,6 +2094,7 @@ async function triggerAIResponse() {
             }
         }
     } catch (error) { 
+        console.error("AI Response Error:", error);
         if (isCallActive) document.getElementById('call-status').innerText = "连接错误";
         else if (isOfflineActive) document.getElementById('offline-typing-indicator').style.display = 'none';
         else document.getElementById('typing-indicator').style.display = 'none'; 
