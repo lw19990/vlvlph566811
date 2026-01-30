@@ -469,7 +469,158 @@ function applyFullscreen(isFull) { if (isFull) document.body.classList.add('full
 async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
 function selectModel(sel) { if (sel.value) document.getElementById('model-name').value = sel.value; }
 function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
-function importBackup(input) { const file = input.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const data = JSON.parse(e.target.result); if (data.settings) DB.saveSettings(data.settings); if (data.contacts) DB.saveContacts(data.contacts); if (data.chats) DB.saveChats(data.chats); if (data.worldbook) DB.saveWorldBook(data.worldbook); if (data.spyData) DB.saveSpyData(data.spyData); if (data.theme) DB.saveTheme(data.theme); if (data.memories) DB.saveMemories(data.memories); if (data.calendar) DB.saveCalendarEvents(data.calendar); alert("备份导入成功！"); location.reload(); } catch (err) { alert("导入失败：" + err.message); } }; reader.readAsText(file); }
+function importBackup(input) { 
+    const file = input.files[0]; 
+    if (!file) return; 
+    const reader = new FileReader(); 
+    reader.onload = function(e) { 
+        try { 
+            const data = JSON.parse(e.target.result); 
+            
+            // 计算备份数据大小
+            const dataSize = new Blob([e.target.result]).size;
+            const dataSizeMB = (dataSize / (1024 * 1024)).toFixed(2);
+            
+            console.log(`备份文件大小: ${dataSizeMB} MB`);
+            
+            // 检查当前存储使用情况
+            let currentSize = 0;
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    currentSize += localStorage[key].length + key.length;
+                }
+            }
+            const currentSizeMB = (currentSize / (1024 * 1024)).toFixed(2);
+            console.log(`当前存储使用: ${currentSizeMB} MB`);
+            
+            // 尝试导入，使用 try-catch 捕获配额错误
+            try {
+                if (data.settings) DB.saveSettings(data.settings); 
+                if (data.contacts) DB.saveContacts(data.contacts); 
+                if (data.chats) DB.saveChats(data.chats); 
+                if (data.worldbook) DB.saveWorldBook(data.worldbook); 
+                if (data.spyData) DB.saveSpyData(data.spyData); 
+                if (data.theme) DB.saveTheme(data.theme); 
+                if (data.memories) DB.saveMemories(data.memories); 
+                if (data.calendar) DB.saveCalendarEvents(data.calendar); 
+                
+                alert("备份导入成功！"); 
+                location.reload(); 
+            } catch (storageErr) {
+                if (storageErr.name === 'QuotaExceededError' || storageErr.message.includes('quota')) {
+                    // 配额超限错误处理
+                    handleQuotaExceeded(data, dataSizeMB);
+                } else {
+                    throw storageErr;
+                }
+            }
+        } catch (err) { 
+            alert("导入失败：" + err.message); 
+        } 
+    }; 
+    reader.readAsText(file); 
+}
+
+function handleQuotaExceeded(data, dataSizeMB) {
+    // 分析各部分数据大小
+    const sizes = {
+        settings: JSON.stringify(data.settings || {}).length,
+        contacts: JSON.stringify(data.contacts || []).length,
+        chats: JSON.stringify(data.chats || {}).length,
+        worldbook: JSON.stringify(data.worldbook || {}).length,
+        spyData: JSON.stringify(data.spyData || {}).length,
+        theme: JSON.stringify(data.theme || {}).length,
+        memories: JSON.stringify(data.memories || {}).length,
+        calendar: JSON.stringify(data.calendar || {}).length
+    };
+    
+    const sortedSizes = Object.entries(sizes)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, size]) => `${key}: ${(size / 1024).toFixed(2)} KB`);
+    
+    const message = `❌ 存储空间不足！\n\n备份文件大小: ${dataSizeMB} MB\n浏览器存储限制通常为 5-10 MB\n\n各部分数据大小：\n${sortedSizes.join('\n')}\n\n建议解决方案：\n1. 清空当前数据后再导入\n2. 使用选择性导入功能\n3. 清理聊天记录中的大图片\n\n是否清空当前所有数据后重新导入？`;
+    
+    if (confirm(message)) {
+        // 清空所有数据
+        localStorage.clear();
+        
+        // 重新尝试导入
+        try {
+            if (data.settings) DB.saveSettings(data.settings); 
+            if (data.contacts) DB.saveContacts(data.contacts); 
+            if (data.chats) DB.saveChats(data.chats); 
+            if (data.worldbook) DB.saveWorldBook(data.worldbook); 
+            if (data.spyData) DB.saveSpyData(data.spyData); 
+            if (data.theme) DB.saveTheme(data.theme); 
+            if (data.memories) DB.saveMemories(data.memories); 
+            if (data.calendar) DB.saveCalendarEvents(data.calendar); 
+            
+            alert("✅ 备份导入成功！"); 
+            location.reload(); 
+        } catch (err) {
+            alert("❌ 即使清空数据后仍然失败。\n备份文件可能过大，请尝试选择性导入。\n\n错误: " + err.message);
+            openSelectiveImport(data);
+        }
+    } else {
+        openSelectiveImport(data);
+    }
+}
+
+function openSelectiveImport(data) {
+    const sizes = {
+        settings: { size: JSON.stringify(data.settings || {}).length, label: '设置' },
+        contacts: { size: JSON.stringify(data.contacts || []).length, label: '通讯录' },
+        chats: { size: JSON.stringify(data.chats || {}).length, label: '聊天记录' },
+        worldbook: { size: JSON.stringify(data.worldbook || {}).length, label: '世界书' },
+        spyData: { size: JSON.stringify(data.spyData || {}).length, label: '查岗数据' },
+        theme: { size: JSON.stringify(data.theme || {}).length, label: '主题美化' },
+        memories: { size: JSON.stringify(data.memories || {}).length, label: '记忆' },
+        calendar: { size: JSON.stringify(data.calendar || {}).length, label: '日历' }
+    };
+    
+    let message = "📦 选择性导入\n\n请选择要导入的数据（输入序号，用逗号分隔）：\n\n";
+    const keys = Object.keys(sizes);
+    keys.forEach((key, index) => {
+        const sizeMB = (sizes[key].size / 1024).toFixed(2);
+        message += `${index + 1}. ${sizes[key].label} (${sizeMB} KB)\n`;
+    });
+    message += "\n例如：1,2,3 表示导入设置、通讯录和聊天记录";
+    
+    const input = prompt(message);
+    if (!input) return;
+    
+    const selected = input.split(',').map(s => parseInt(s.trim()) - 1).filter(i => i >= 0 && i < keys.length);
+    
+    if (selected.length === 0) {
+        alert("未选择任何数据");
+        return;
+    }
+    
+    try {
+        selected.forEach(index => {
+            const key = keys[index];
+            switch(key) {
+                case 'settings': if (data.settings) DB.saveSettings(data.settings); break;
+                case 'contacts': if (data.contacts) DB.saveContacts(data.contacts); break;
+                case 'chats': if (data.chats) DB.saveChats(data.chats); break;
+                case 'worldbook': if (data.worldbook) DB.saveWorldBook(data.worldbook); break;
+                case 'spyData': if (data.spyData) DB.saveSpyData(data.spyData); break;
+                case 'theme': if (data.theme) DB.saveTheme(data.theme); break;
+                case 'memories': if (data.memories) DB.saveMemories(data.memories); break;
+                case 'calendar': if (data.calendar) DB.saveCalendarEvents(data.calendar); break;
+            }
+        });
+        
+        alert(`✅ 已成功导入 ${selected.length} 项数据！`);
+        location.reload();
+    } catch (err) {
+        if (err.name === 'QuotaExceededError' || err.message.includes('quota')) {
+            alert("❌ 仍然超出存储限制。\n建议：\n1. 减少选择的数据项\n2. 清空当前数据后再试\n3. 清理聊天记录中的图片");
+        } else {
+            alert("导入失败：" + err.message);
+        }
+    }
+}
 loadSettings();
 let currentThemeType = 'color';
 function renderThemeSettings() { const theme = DB.getTheme(); currentThemeType = theme.wallpaperType; switchThemeType(currentThemeType); if (theme.wallpaperType === 'color') document.getElementById('theme-wallpaper-color').value = theme.wallpaperValue; document.getElementById('theme-case-color').value = theme.caseColor; document.getElementById('theme-font-url').value = theme.customFontUrl || ''; document.getElementById('theme-font-color').value = theme.fontColor || '#000000'; }
