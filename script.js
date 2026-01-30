@@ -1860,7 +1860,7 @@ async function triggerAIResponse() {
     const globalEntries = wb.entries.filter(e => e.type === 'global');
     if (globalEntries.length > 0) { systemContent += `\n\n[世界观设定]\n`; globalEntries.forEach(e => { systemContent += `【${e.title}】：${e.content}\n`; }); }
     const boundIds = currentChatContact.boundWorldBooks || [];
-    if (boundIds.length > 0) { systemContent += `\n\n[角色专属设定]\n`; boundIds.forEach(bid => { const entry = wb.entries.find(e => e.id == bid); if (entry) systemContent += `【${entry.title}】：${e.content}\n`; }); }
+    if (boundIds.length > 0) { systemContent += `\n\n[角色专属设定]\n`; boundIds.forEach(bid => { const entry = wb.entries.find(e => e.id == bid); if (entry) systemContent += `【${entry.title}】：${entry.content}\n`; }); }
 
     const aiStickerEnabled = document.getElementById('ai-sticker-toggle').checked;
     if (aiStickerEnabled) {
