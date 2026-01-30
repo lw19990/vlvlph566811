@@ -1,6 +1,6 @@
 {
-  "name": "TESTPhone",
-  "short_name": "TESTPhone",
+  "name": "VVPhone",
+  "short_name": "VVPhone",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",

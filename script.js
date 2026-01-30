@@ -1798,11 +1798,17 @@ async function triggerAIResponse() {
 
     let pendingTransferIndex = -1, pendingTransferAmount = 0, pendingTransferNote = '';
     let pendingInviteIndex = -1;
+    
+    // 检查是否已经绑定情侣空间
+    const coupleData = DB.getCoupleData();
+    const isAlreadyCoupled = coupleData.active && coupleData.partnerId == currentChatContact.id;
+    
     for (let i = limitedHistory.length - 1; i >= 0; i--) {
         if (limitedHistory[i].type === 'transfer' && limitedHistory[i].status === 'pending') {
             pendingTransferIndex = i; pendingTransferAmount = limitedHistory[i].amount; pendingTransferNote = limitedHistory[i].note;
         }
-        if (i === limitedHistory.length - 1 && limitedHistory[i].type === 'couple_invite_req') {
+        // 只有在未绑定情侣空间且最后一条消息是邀请时才处理
+        if (!isAlreadyCoupled && i === limitedHistory.length - 1 && limitedHistory[i].type === 'couple_invite_req') {
             pendingInviteIndex = i;
         }
         if (pendingTransferIndex !== -1 || pendingInviteIndex !== -1) break;
