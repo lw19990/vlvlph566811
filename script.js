@@ -2419,7 +2419,7 @@ async function callLoveLetterAPI(partner, type, userContent = '') {
         prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
                 
                 你的恋人（用户）刚给你写了一封情书：
-                “${userContent}”
+                "${userContent}"
                 
                 请给 TA 写一封回信。
                 
@@ -2448,3 +2448,247 @@ async function callLoveLetterAPI(partner, type, userContent = '') {
     }
     throw new Error("API 无响应");
 }
+
+// --- 提问箱功能 ---
+let currentQBoxContact = null;
+
+// 获取提问箱数据
+DB.getQuestionBox = () => JSON.parse(localStorage.getItem('iphone_question_box')) || {};
+DB.saveQuestionBox = (data) => localStorage.setItem('iphone_question_box', JSON.stringify(data));
+
+// 渲染提问箱联系人列表
+function renderQBoxContactList() {
+    const list = document.getElementById('qbox-contact-list');
+    list.innerHTML = '';
+    const contacts = DB.getContacts();
+    
+    if (contacts.length === 0) {
+        list.innerHTML = `
+            <div class="qbox-empty">
+                <div class="qbox-empty-icon">📮</div>
+                <div>暂无联系人</div>
+                <div style="font-size:12px; margin-top:5px;">请先在通讯录添加角色</div>
+            </div>
+        `;
+        return;
+    }
+    
+    contacts.forEach(c => {
+        const qbData = DB.getQuestionBox()[c.id] || [];
+        const qaCount = qbData.length;
+        
+        const div = document.createElement('div');
+        div.className = 'qbox-contact-item';
+        div.onclick = () => openQBoxAsk(c);
+        div.innerHTML = `
+            <img class="qbox-contact-avatar" src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}">
+            <div class="qbox-contact-info">
+                <div class="qbox-contact-name">${c.name}</div>
+                <div class="qbox-contact-desc">${qaCount > 0 ? `${qaCount} 条问答` : '点击进入提问箱'}</div>
+            </div>
+            <div class="qbox-contact-arrow">›</div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+// 打开提问界面
+function openQBoxAsk(contact) {
+    currentQBoxContact = contact;
+    openApp('app-question-box-ask');
+    document.getElementById('qbox-ask-title').innerText = contact.name + ' 的提问箱';
+    document.getElementById('qbox-question-input').value = '';
+    document.getElementById('qbox-anonymous-toggle').checked = false;
+    renderQBoxHistory();
+}
+
+// 渲染历史问答
+function renderQBoxHistory() {
+    const list = document.getElementById('qbox-history-list');
+    list.innerHTML = '';
+    
+    if (!currentQBoxContact) return;
+    
+    const qbData = DB.getQuestionBox()[currentQBoxContact.id] || [];
+    
+    if (qbData.length === 0) {
+        return; // 没有历史记录时不显示任何内容
+    }
+    
+    // 添加标题
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'qbox-history-title';
+    titleDiv.innerText = '历史问答';
+    list.appendChild(titleDiv);
+    
+    // 按时间倒序显示（最新的在最上面）
+    const sortedData = [...qbData].reverse();
+    
+    sortedData.forEach(qa => {
+        const card = document.createElement('div');
+        card.className = 'qbox-qa-card';
+        
+        // 问题区域
+        const questionArea = document.createElement('div');
+        questionArea.className = 'qbox-question-area';
+        
+        const fromText = qa.isAnonymous ? '匿名用户' : (currentQBoxContact.userSettings?.userName || '用户');
+        
+        questionArea.innerHTML = `
+            <div class="qbox-question-header">
+                <span class="qbox-question-from">来自：${fromText}</span>
+                ${qa.isAnonymous ? '<span class="qbox-question-anonymous">匿名</span>' : ''}
+            </div>
+            <div class="qbox-question-text">${qa.question}</div>
+        `;
+        
+        // 回答区域
+        const answerArea = document.createElement('div');
+        answerArea.className = 'qbox-answer-area';
+        answerArea.innerHTML = `
+            <div class="qbox-answer-header">
+                <img class="qbox-answer-avatar" src="${currentQBoxContact.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}">
+                <span class="qbox-answer-name">${currentQBoxContact.name}</span>
+            </div>
+            <div class="qbox-answer-text">${qa.answer}</div>
+        `;
+        
+        card.appendChild(questionArea);
+        card.appendChild(answerArea);
+        list.appendChild(card);
+    });
+}
+
+// 发送提问
+async function sendQuestion() {
+    if (!currentQBoxContact) return;
+    
+    const questionInput = document.getElementById('qbox-question-input');
+    const question = questionInput.value.trim();
+    
+    if (!question) {
+        alert('请输入问题');
+        return;
+    }
+    
+    const settings = DB.getSettings();
+    if (!settings.key) {
+        alert('请先在设置中配置 API Key');
+        return;
+    }
+    
+    const isAnonymous = document.getElementById('qbox-anonymous-toggle').checked;
+    
+    // 显示加载状态
+    document.getElementById('qbox-loading').classList.add('active');
+    
+    try {
+        const answer = await callQuestionBoxAPI(currentQBoxContact, question, isAnonymous);
+        
+        // 保存问答记录
+        const qbData = DB.getQuestionBox();
+        if (!qbData[currentQBoxContact.id]) {
+            qbData[currentQBoxContact.id] = [];
+        }
+        
+        qbData[currentQBoxContact.id].push({
+            id: Date.now(),
+            question: question,
+            answer: answer,
+            isAnonymous: isAnonymous,
+            timestamp: Date.now()
+        });
+        
+        DB.saveQuestionBox(qbData);
+        
+        // 清空输入框
+        questionInput.value = '';
+        
+        // 重新渲染历史记录
+        renderQBoxHistory();
+        
+    } catch (e) {
+        alert('获取回答失败：' + e.message);
+    } finally {
+        document.getElementById('qbox-loading').classList.remove('active');
+    }
+}
+
+// 调用 API 获取回答
+async function callQuestionBoxAPI(contact, question, isAnonymous) {
+    const settings = DB.getSettings();
+    if (!settings.key) throw new Error('请先配置 API Key');
+    
+    // 获取用户信息
+    const userSettings = contact.userSettings || {};
+    const userName = userSettings.userName || '用户';
+    const userPersona = userSettings.userPersona || '';
+    
+    // 构建提示词
+    let prompt = `你正在扮演 ${contact.name}。
+人设：${contact.persona}
+
+你正在回答提问箱中的问题。`;
+
+    if (isAnonymous) {
+        prompt += `
+
+有一位匿名用户向你提出了问题。你不知道对方是谁，请以你的人设和性格来回答这个问题。
+
+问题：${question}`;
+    } else {
+        prompt += `
+
+${userName} 向你提出了问题。
+${userPersona ? `关于 ${userName}：${userPersona}` : ''}
+
+请以你的人设和性格，结合你对 ${userName} 的了解来回答这个问题。
+
+问题：${question}`;
+    }
+
+    prompt += `
+
+回答要求：
+1. 以第一人称回答。
+2. 保持你的人设和性格特点。
+3. 回答要自然、真诚，像是真的在回答粉丝或朋友的提问。
+4. 字数控制在 50-200 字左右。
+5. 严禁返回 JSON 或 Markdown 格式，直接返回回答内容。`;
+
+    const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
+    
+    const res = await fetch(`${settings.url}/chat/completions`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${settings.key}` 
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: temp
+        })
+    });
+    
+    if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (data.choices && data.choices.length > 0) {
+        return data.choices[0].message.content.trim();
+    }
+    
+    throw new Error("API 无响应");
+}
+
+// 在 openApp 函数中添加提问箱的渲染
+const originalOpenApp = openApp;
+openApp = function(appId) {
+    originalOpenApp(appId);
+    if (appId === 'app-question-box') {
+        renderQBoxContactList();
+    }
+};

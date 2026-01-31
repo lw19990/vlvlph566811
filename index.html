@@ -136,7 +136,7 @@
 
             <!-- 底部固定应用栏 -->
             <div class="bottom-app-bar">
-                <div class="bottom-app-icon">
+                <div class="bottom-app-icon" onclick="openApp('app-question-box')">
                     <div class="bottom-app-icon-emoji">📮</div>
                     <div class="bottom-app-icon-label">提问箱</div>
                 </div>
@@ -995,7 +995,56 @@
             </div>
         </div>
 
-        <!-- 17. 情侣空间 (Couple Space) App -->
+        <!-- 17. 提问箱 (Question Box) App - 角色选择 -->
+        <div id="app-question-box" class="screen">
+            <div class="app-header qbox-header">
+                <div class="back-btn" onclick="goHome()">Home</div>
+                <div class="app-title">提问箱</div>
+                <div class="action-btn"></div>
+            </div>
+            <div class="qbox-content" id="qbox-contact-list">
+                <!-- 动态填充联系人列表 -->
+            </div>
+        </div>
+
+        <!-- 18. 提问箱 - 提问界面 -->
+        <div id="app-question-box-ask" class="screen">
+            <div class="app-header qbox-header">
+                <div class="back-btn" onclick="openApp('app-question-box')">Back</div>
+                <div class="app-title" id="qbox-ask-title">提问箱</div>
+                <div class="action-btn"></div>
+            </div>
+            <div class="qbox-content">
+                <!-- 提问输入区域 -->
+                <div class="qbox-input-wrapper">
+                    <div class="qbox-input-label">向TA提出问题...</div>
+                    <div class="qbox-input-box">
+                        <textarea id="qbox-question-input" placeholder="输入你想问的问题..."></textarea>
+                    </div>
+                    <div class="qbox-options">
+                        <label class="qbox-anonymous-option">
+                            <input type="checkbox" id="qbox-anonymous-toggle">
+                            <span class="qbox-checkbox"></span>
+                            <span>匿名提问</span>
+                        </label>
+                    </div>
+                    <button class="qbox-send-btn" onclick="sendQuestion()">发送提问</button>
+                </div>
+
+                <!-- 历史问答列表 -->
+                <div class="qbox-history" id="qbox-history-list">
+                    <!-- 动态填充历史问答 -->
+                </div>
+            </div>
+
+            <!-- 加载提示 -->
+            <div id="qbox-loading" class="qbox-loading">
+                <div class="qbox-loading-spinner"></div>
+                <div>正在等待回答...</div>
+            </div>
+        </div>
+
+        <!-- 19. 情侣空间 (Couple Space) App -->
         <div id="app-couple" class="screen">
             <div class="app-header">
                 <div class="back-btn" onclick="goHome()">Home</div>
