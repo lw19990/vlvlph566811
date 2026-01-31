@@ -1,4 +1,4 @@
-const DEFAULT_SYSTEM_PROMPT = `你是一个真实存在，有温度的人，现在在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，每条短消息之间必须用“|||”分隔，必须使用“|||”分隔每一条短消息。不要一次性发一大段话。你的回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以用emoji或颜文字，保持情绪稳定，禁止绝望崩溃暴怒，必须绝对尊重用户意愿，用户说不要即停止。`;
+const DEFAULT_SYSTEM_PROMPT = `你是一个真实存在，有温度的人，现在在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，**每条消息之间必须用 ||| 分隔，不要一次性发一大段话。**你的回复须口语化，生活化，严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。有时回一两个字，有时回一小段话。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”或“嗯/哦/行”等简短回复，偶尔可以有emoji或颜文字，保持情绪稳定，禁止绝望崩溃暴怒，必须绝对尊重用户意愿，用户说不要即停止。`;
 
 let currentCalDate = new Date();
 let currentCallStartTime = 0;
@@ -468,7 +468,7 @@ function toggleFullscreen() { const isChecked = document.getElementById('fullscr
 function applyFullscreen(isFull) { if (isFull) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode'); }
 async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
 function selectModel(sel) { if (sel.value) document.getElementById('model-name').value = sel.value; }
-function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
+function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importBackup(input) { 
     const file = input.files[0]; 
     if (!file) return; 
@@ -503,6 +503,8 @@ function importBackup(input) {
                 if (data.theme) DB.saveTheme(data.theme); 
                 if (data.memories) DB.saveMemories(data.memories); 
                 if (data.calendar) DB.saveCalendarEvents(data.calendar); 
+                if (data.coupleData) DB.saveCoupleData(data.coupleData);
+                if (data.stickers) DB.saveStickers(data.stickers);
                 
                 alert("备份导入成功！"); 
                 location.reload(); 
@@ -554,6 +556,8 @@ function handleQuotaExceeded(data, dataSizeMB) {
             if (data.theme) DB.saveTheme(data.theme); 
             if (data.memories) DB.saveMemories(data.memories); 
             if (data.calendar) DB.saveCalendarEvents(data.calendar); 
+            if (data.coupleData) DB.saveCoupleData(data.coupleData);
+            if (data.stickers) DB.saveStickers(data.stickers);
             
             alert("✅ 备份导入成功！"); 
             location.reload(); 
@@ -575,7 +579,9 @@ function openSelectiveImport(data) {
         spyData: { size: JSON.stringify(data.spyData || {}).length, label: '查岗数据' },
         theme: { size: JSON.stringify(data.theme || {}).length, label: '主题美化' },
         memories: { size: JSON.stringify(data.memories || {}).length, label: '记忆' },
-        calendar: { size: JSON.stringify(data.calendar || {}).length, label: '日历' }
+        calendar: { size: JSON.stringify(data.calendar || {}).length, label: '日历' },
+        coupleData: { size: JSON.stringify(data.coupleData || {}).length, label: '情侣空间' },
+        stickers: { size: JSON.stringify(data.stickers || []).length, label: '表情包' }
     };
     
     let message = "📦 选择性导入\n\n请选择要导入的数据（输入序号，用逗号分隔）：\n\n";
@@ -608,6 +614,8 @@ function openSelectiveImport(data) {
                 case 'theme': if (data.theme) DB.saveTheme(data.theme); break;
                 case 'memories': if (data.memories) DB.saveMemories(data.memories); break;
                 case 'calendar': if (data.calendar) DB.saveCalendarEvents(data.calendar); break;
+                case 'coupleData': if (data.coupleData) DB.saveCoupleData(data.coupleData); break;
+                case 'stickers': if (data.stickers) DB.saveStickers(data.stickers); break;
             }
         });
         
@@ -2031,7 +2039,7 @@ async function triggerAIResponse() {
         systemContent += `\n\n===== 【语音通话模式】 =====\n现在你正在和用户进行语音通话。\n**重要规则**：\n1. 请像打电话一样回复，保持口语化。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n4. 必须在回复前生成心声。\n格式：[THOUGHTS: 心声] ||| 回复内容`;
     } else if (isOfflineActive) {
         const offSet = currentChatContact.offlineSettings || { min: 500, max: 700, style: '' };
-        systemContent += `\n\n===== 【线下见面模式 - 强制字数要求】 =====\n现在你和用户正在线下见面，面对面交流。\n\n**🚨 字数限制（最高优先级，必须严格遵守）🚨**\n- 最小字数：${offSet.min} 字（不得少于此数）\n- 最大字数：${offSet.max} 字（不得超过此数）\n- ⚠️ 警告：如果你的回复字数不在 ${offSet.min}-${offSet.max} 字范围内，将被视为违规！\n- 📏 请在写完后自行检查字数，确保符合要求。\n\n**其他规则**：\n1. **严禁**使用 '|||' 分隔消息（线下模式不需要分段）。\n2. 请使用小说般的描写手法，包含详细的动作描写、神态描写、环境描写和心理描写。\n3. 文风要求：${offSet.style || '细腻、沉浸感强'}\n4. 必须在回复前生成心声。\n\n**回复格式**：\n[THOUGHTS: 心声内容，不超过100字] ||| [正文内容，严格控制在 ${offSet.min}-${offSet.max} 字之间]\n\n**示例**（假设设置为500-700字）：\n[THOUGHTS: 看到他走过来，我的心跳突然加快了...] ||| 我抬起头，目光不经意间与他对上。那一瞬间，周围的喧嚣仿佛都消失了...[此处省略，实际需要写满500-700字的详细描写]\n\n请务必遵守字数限制！`;
+        systemContent += `\n\n===== 【线下见面模式】 =====\n现在你和用户正在线下见面，面对面交流。\n**重要规则**：\n1. **严禁**使用 '|||' 分隔消息。\n2. 请使用小说般的描写手法，包含详细的动作描写、神态描写、环境描写和心理描写。\n3. 字数要求：${offSet.min} - ${offSet.max} 字。\n4. 文风要求：${offSet.style || '细腻、沉浸感强'}\n5. 必须在回复前生成心声。\n格式：[THOUGHTS: 心声] ||| 长篇描写回复内容`;
     } else {
         systemContent += `\n\n===== 【强制回复格式】 =====\n你必须在每次回复的**最开始**生成一段内心独白（心声），展示你此刻真实的心理活动、情绪或对用户的看法。心声必须包裹在 [THOUGHTS: ...] 中，且不超过100字。心声之后，使用 ||| 分隔，然后才是你对用户的实际回复。\n格式示例：\n[THOUGHTS: 他怎么突然问这个？有点害羞...] ||| 呃，这个嘛... ||| 其实我也不太清楚。`;
     }

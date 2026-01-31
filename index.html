@@ -13,7 +13,6 @@
 
     <!-- 引用外部 CSS 文件 -->
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="question-box.css">
 
     <!-- 这两个 style 标签由 JavaScript 动态填充，需要保留 -->
     <style id="custom-font-style"></style>
@@ -137,7 +136,7 @@
 
             <!-- 底部固定应用栏 -->
             <div class="bottom-app-bar">
-                <div class="bottom-app-icon" onclick="openQuestionBox()">
+                <div class="bottom-app-icon">
                     <div class="bottom-app-icon-emoji">📮</div>
                     <div class="bottom-app-icon-label">提问箱</div>
                 </div>
@@ -996,38 +995,7 @@
             </div>
         </div>
 
-        <!-- 17. 提问箱 App - 联系人列表 -->
-        <div id="app-question-box" class="screen">
-            <div class="app-header">
-                <div class="back-btn" onclick="goHome()">Home</div>
-                <div class="app-title">提问箱</div>
-                <div class="action-btn"></div>
-            </div>
-            <div class="app-content qb-contact-list" id="qb-contact-list"></div>
-        </div>
-
-        <!-- 18. 提问箱 App - 提问界面 -->
-        <div id="app-question-input" class="screen">
-            <div class="app-header">
-                <div class="back-btn" onclick="openQuestionBox()">Back</div>
-                <div class="app-title" id="qb-input-title">提问箱</div>
-                <div class="action-btn"></div>
-            </div>
-            <div class="qb-input-container">
-                <div class="qb-input-box">
-                    <div class="qb-input-label">向TA提出问题...</div>
-                    <textarea id="qb-textarea" class="qb-textarea" placeholder="在这里输入你的问题..."></textarea>
-                    <div class="qb-anonymous-option">
-                        <input type="checkbox" id="qb-anonymous-check">
-                        <label for="qb-anonymous-check">匿名提问</label>
-                    </div>
-                </div>
-                <button class="qb-send-btn" id="qb-send-btn" onclick="sendQuestion()">发送提问</button>
-                <div id="qb-history-list" class="qb-history-list"></div>
-            </div>
-        </div>
-
-        <!-- 19. 情侣空间 (Couple Space) App -->
+        <!-- 17. 情侣空间 (Couple Space) App -->
         <div id="app-couple" class="screen">
             <div class="app-header">
                 <div class="back-btn" onclick="goHome()">Home</div>
@@ -1135,6 +1103,5 @@
 
     <!-- 引用外部 JavaScript 文件 -->
     <script src="script.js"></script>
-    <script src="question-box.js"></script>
 </body>
 </html>
