@@ -1140,11 +1140,20 @@
                 <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255,240,243,0.95); backdrop-filter: blur(10px);">
                     <div class="back-btn" onclick="closeCoupleAlbum()" style="color:#ff6b8a;">Back</div>
                     <div class="app-title" style="color:#ff6b8a;">恋爱相册</div>
-                    <div class="action-btn" onclick="openAddPhotoModal()" style="color:#ff6b8a; font-size:24px;">+</div>
+                    <div class="action-btn" style="display:flex; gap:15px; align-items:center;">
+                        <span onclick="toggleAlbumDeleteMode()" style="color:#ff6b8a; font-size:18px;">🗑️</span>
+                        <span onclick="openAddPhotoModal()" style="color:#ff6b8a; font-size:24px;">+</span>
+                    </div>
                 </div>
 
                 <div id="album-photos-container" class="album-photos-container">
                     <!-- 照片将动态填充 -->
+                </div>
+
+                <!-- 删除模式底部栏 -->
+                <div id="album-delete-bar" class="album-delete-bar">
+                    <div class="album-delete-cancel" onclick="exitAlbumDeleteMode()">取消</div>
+                    <div class="album-delete-confirm" onclick="confirmDeletePhotos()">删除选中</div>
                 </div>
                 
                 <div id="album-empty" class="album-empty">

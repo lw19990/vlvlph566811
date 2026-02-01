@@ -2697,6 +2697,8 @@ openApp = function(appId) {
 let currentViewingPhotoIndex = -1;
 let currentUploadTab = 'file';
 let tempPhotoData = null;
+let isAlbumDeleteMode = false;
+let selectedPhotoIds = new Set();
 
 // 获取相册数据
 DB.getAlbumData = () => {
@@ -2714,6 +2716,7 @@ DB.saveAlbumData = (albumData) => {
 function openCoupleAlbum() {
     document.getElementById('couple-main-view').style.display = 'none';
     document.getElementById('couple-album-view').style.display = 'flex';
+    exitAlbumDeleteMode();
     renderAlbumPhotos();
 }
 
@@ -2721,6 +2724,55 @@ function openCoupleAlbum() {
 function closeCoupleAlbum() {
     document.getElementById('couple-album-view').style.display = 'none';
     document.getElementById('couple-main-view').style.display = 'flex';
+    exitAlbumDeleteMode();
+}
+
+// 切换删除模式
+function toggleAlbumDeleteMode() {
+    if (isAlbumDeleteMode) {
+        exitAlbumDeleteMode();
+    } else {
+        enterAlbumDeleteMode();
+    }
+}
+
+function enterAlbumDeleteMode() {
+    isAlbumDeleteMode = true;
+    selectedPhotoIds.clear();
+    document.getElementById('album-photos-container').classList.add('album-delete-mode');
+    document.getElementById('album-delete-bar').classList.add('active');
+    renderAlbumPhotos();
+}
+
+function exitAlbumDeleteMode() {
+    isAlbumDeleteMode = false;
+    selectedPhotoIds.clear();
+    document.getElementById('album-photos-container').classList.remove('album-delete-mode');
+    document.getElementById('album-delete-bar').classList.remove('active');
+    renderAlbumPhotos();
+}
+
+function togglePhotoSelection(photoId) {
+    if (selectedPhotoIds.has(photoId)) {
+        selectedPhotoIds.delete(photoId);
+    } else {
+        selectedPhotoIds.add(photoId);
+    }
+    renderAlbumPhotos();
+}
+
+function confirmDeletePhotos() {
+    if (selectedPhotoIds.size === 0) {
+        exitAlbumDeleteMode();
+        return;
+    }
+    
+    if (confirm(`确定要删除选中的 ${selectedPhotoIds.size} 张照片吗？`)) {
+        let albumData = DB.getAlbumData();
+        albumData = albumData.filter(p => !selectedPhotoIds.has(p.id));
+        DB.saveAlbumData(albumData);
+        exitAlbumDeleteMode();
+    }
 }
 
 // 渲染相册照片
@@ -2750,22 +2802,48 @@ function renderAlbumPhotos() {
         // 找到原始索引
         const originalIndex = albumData.findIndex(p => p.id === photo.id);
         
+        // 选择框
+        const checkbox = document.createElement('div');
+        checkbox.className = 'album-photo-checkbox';
+        if (selectedPhotoIds.has(photo.id)) {
+            checkbox.classList.add('checked');
+        }
+        item.appendChild(checkbox);
+        
         if (photo.imageUrl) {
             // 有真实图片
-            item.innerHTML = `<img src="${photo.imageUrl}" alt="照片">`;
+            const img = document.createElement('img');
+            img.src = photo.imageUrl;
+            img.alt = "照片";
+            item.appendChild(img);
+            
             if (photo.isCharPhoto) {
-                item.innerHTML += `<div class="album-photo-badge">TA拍的</div>`;
+                const badge = document.createElement('div');
+                badge.className = 'album-photo-badge';
+                badge.innerText = 'TA拍的';
+                item.appendChild(badge);
             }
         } else {
             // 只有描述（角色拍的照片）
             item.classList.add('text-photo');
-            item.innerHTML = `
-                <div class="album-photo-text">${photo.description}</div>
-                <div class="album-photo-badge">TA拍的</div>
-            `;
+            const textDiv = document.createElement('div');
+            textDiv.className = 'album-photo-text';
+            textDiv.innerText = photo.description;
+            item.appendChild(textDiv);
+            
+            const badge = document.createElement('div');
+            badge.className = 'album-photo-badge';
+            badge.innerText = 'TA拍的';
+            item.appendChild(badge);
         }
         
-        item.onclick = () => openViewPhotoModal(originalIndex);
+        item.onclick = () => {
+            if (isAlbumDeleteMode) {
+                togglePhotoSelection(photo.id);
+            } else {
+                openViewPhotoModal(originalIndex);
+            }
+        };
         container.appendChild(item);
     });
 }
