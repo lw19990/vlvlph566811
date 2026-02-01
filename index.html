@@ -1090,7 +1090,7 @@
                         <div class="couple-menu-icon">💌</div>
                         <div class="couple-menu-text">交换情书</div>
                     </div>
-                    <div class="couple-menu-item">
+                    <div class="couple-menu-item" onclick="openCoupleAlbum()">
                         <div class="couple-menu-icon">📸</div>
                         <div class="couple-menu-text">恋爱相册</div>
                     </div>
@@ -1133,6 +1133,98 @@
                     <div class="letter-decoration">❤️</div>
                 </div>
                 <button class="couple-invite-btn" style="margin-top: 20px; width: 100%;" onclick="sendLoveLetter()">向 TA 交换情书</button>
+            </div>
+
+            <!-- 恋爱相册界面 -->
+            <div class="couple-container" id="couple-album-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #fff0f3 0%, #ffe4ec 100%);">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255,240,243,0.95); backdrop-filter: blur(10px);">
+                    <div class="back-btn" onclick="closeCoupleAlbum()" style="color:#ff6b8a;">Back</div>
+                    <div class="app-title" style="color:#ff6b8a;">恋爱相册</div>
+                    <div class="action-btn" onclick="openAddPhotoModal()" style="color:#ff6b8a; font-size:24px;">+</div>
+                </div>
+
+                <div id="album-photos-container" class="album-photos-container">
+                    <!-- 照片将动态填充 -->
+                </div>
+                
+                <div id="album-empty" class="album-empty">
+                    <div class="album-empty-icon">📸</div>
+                    <div class="album-empty-text">还没有照片哦</div>
+                    <div class="album-empty-hint">点击右上角 + 添加第一张照片吧</div>
+                </div>
+            </div>
+
+            <!-- 添加照片弹窗 -->
+            <div id="add-photo-modal" class="album-modal">
+                <div class="album-modal-content">
+                    <div class="album-modal-header">
+                        <span onclick="closeAddPhotoModal()" style="color:#ff6b8a; cursor:pointer;">取消</span>
+                        <span style="font-weight:bold; color:#333;">添加照片</span>
+                        <span onclick="saveNewPhoto()" style="color:#ff6b8a; cursor:pointer;">保存</span>
+                    </div>
+                    
+                    <div class="album-form-group">
+                        <label class="album-label">上传方式</label>
+                        <div class="album-upload-tabs">
+                            <div class="album-upload-tab active" id="upload-tab-file" onclick="switchUploadTab('file')">本地上传</div>
+                            <div class="album-upload-tab" id="upload-tab-url" onclick="switchUploadTab('url')">URL上传</div>
+                        </div>
+                        
+                        <div id="upload-file-section" class="album-upload-section">
+                            <div class="album-file-preview" id="photo-file-preview">
+                                <span>点击选择图片</span>
+                            </div>
+                            <input type="file" id="photo-file-input" accept="image/*" style="display:none;" onchange="previewPhotoFile(this)">
+                        </div>
+                        
+                        <div id="upload-url-section" class="album-upload-section" style="display:none;">
+                            <input type="text" id="photo-url-input" class="album-input" placeholder="请输入图片URL" oninput="previewPhotoUrl(this.value)">
+                            <div class="album-url-preview" id="photo-url-preview"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="album-form-group">
+                        <label class="album-label">照片描述 <span style="color:#ff6b8a;">*必填</span></label>
+                        <textarea id="photo-description" class="album-textarea" placeholder="简单描述一下照片中的内容..."></textarea>
+                    </div>
+                    
+                    <div class="album-form-group">
+                        <label class="album-label">我的评论 <span style="color:#999;">(选填)</span></label>
+                        <textarea id="photo-user-comment" class="album-textarea" placeholder="写下你对这张照片的感想..."></textarea>
+                    </div>
+                    
+                    <div class="album-divider"></div>
+                    
+                    <button class="album-invite-btn" onclick="inviteAddPhotos()">
+                        <span>📸</span> 邀请TA来添加照片
+                    </button>
+                </div>
+            </div>
+
+            <!-- 照片查看弹窗 -->
+            <div id="view-photo-modal" class="album-modal">
+                <div class="album-view-content">
+                    <div class="album-view-close" onclick="closeViewPhotoModal()">✕</div>
+                    
+                    <div class="album-view-photo" id="view-photo-container">
+                        <!-- 照片或描述将动态填充 -->
+                    </div>
+                    
+                    <div class="album-view-info">
+                        <div class="album-view-description" id="view-photo-description"></div>
+                        <div class="album-view-user-comment" id="view-photo-user-comment"></div>
+                        <div class="album-view-char-comment" id="view-photo-char-comment"></div>
+                    </div>
+                    
+                    <button class="album-comment-btn" id="invite-comment-btn" onclick="invitePhotoComment()">
+                        <span>💬</span> 邀请TA来评论
+                    </button>
+                    
+                    <div class="album-comment-loading" id="comment-loading">
+                        <div class="album-loading-spinner"></div>
+                        <span>TA正在思考中...</span>
+                    </div>
+                </div>
             </div>
 
             <!-- 邀请弹窗 -->

@@ -1702,3 +1702,497 @@ input:checked + .slider:before { transform: translateX(22px); }
     margin-bottom: 15px;
     opacity: 0.3;
 }
+
+/* --- 恋爱相册样式 --- */
+.album-photos-container {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    padding: 15px 10px;
+    gap: 15px;
+    overflow-y: auto;
+    padding-bottom: 30px;
+}
+
+.album-photo-item {
+    width: 45%;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    border: 4px solid #ffb6c1;
+    background: #fff;
+    box-shadow: 0 4px 15px rgba(255, 182, 193, 0.4);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+}
+
+.album-photo-item:nth-child(odd) {
+    transform: rotate(-3deg);
+}
+
+.album-photo-item:nth-child(even) {
+    transform: rotate(3deg);
+}
+
+.album-photo-item:nth-child(3n) {
+    transform: rotate(-5deg);
+}
+
+.album-photo-item:nth-child(4n) {
+    transform: rotate(4deg);
+}
+
+.album-photo-item:active {
+    transform: scale(0.95) rotate(0deg);
+    box-shadow: 0 2px 8px rgba(255, 182, 193, 0.3);
+}
+
+.album-photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-photo-item.text-photo {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    background: linear-gradient(135deg, #fff0f3 0%, #ffe4ec 100%);
+}
+
+.album-photo-text {
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+}
+
+.album-photo-badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #ff6b8a;
+    color: #fff;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.album-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60%;
+    color: #ff6b8a;
+}
+
+.album-empty-icon {
+    font-size: 60px;
+    margin-bottom: 15px;
+    opacity: 0.6;
+}
+
+.album-empty-text {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.album-empty-hint {
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+/* 添加照片弹窗 */
+.album-modal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.album-modal.active {
+    display: flex;
+}
+
+.album-modal-content {
+    width: 90%;
+    max-height: 85%;
+    background: #fff0f3;
+    border-radius: 20px;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(255, 107, 138, 0.3);
+    animation: albumSlideUp 0.3s ease;
+}
+
+@keyframes albumSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.album-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #ffb6c1;
+}
+
+.album-form-group {
+    margin-bottom: 20px;
+}
+
+.album-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.album-upload-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.album-upload-tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    border: 2px solid #ffb6c1;
+    border-radius: 12px;
+    background: #fff;
+    color: #ff6b8a;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.album-upload-tab.active {
+    background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
+    color: #fff;
+    border-color: #ff6b8a;
+}
+
+.album-upload-section {
+    display: block;
+}
+
+.album-file-preview {
+    width: 100%;
+    height: 120px;
+    border: 2px dashed #ffb6c1;
+    border-radius: 12px;
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+.album-file-preview:hover {
+    border-color: #ff6b8a;
+}
+
+.album-file-preview span {
+    color: #ff6b8a;
+    font-size: 14px;
+}
+
+.album-file-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-file-preview.has-image span {
+    display: none;
+}
+
+.album-input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #ffb6c1;
+    border-radius: 12px;
+    font-size: 14px;
+    outline: none;
+    background: #fff;
+    color: #333;
+    transition: border-color 0.2s;
+}
+
+.album-input:focus {
+    border-color: #ff6b8a;
+}
+
+.album-url-preview {
+    margin-top: 10px;
+    height: 100px;
+    border-radius: 12px;
+    overflow: hidden;
+    display: none;
+}
+
+.album-url-preview.has-image {
+    display: block;
+}
+
+.album-url-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-textarea {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #ffb6c1;
+    border-radius: 12px;
+    font-size: 14px;
+    outline: none;
+    background: #fff;
+    color: #333;
+    resize: none;
+    height: 80px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.album-textarea:focus {
+    border-color: #ff6b8a;
+}
+
+.album-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #ffb6c1, transparent);
+    margin: 20px 0;
+}
+
+.album-invite-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(255, 107, 138, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.album-invite-btn:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px rgba(255, 107, 138, 0.3);
+}
+
+/* 照片查看弹窗 */
+.album-view-content {
+    width: 90%;
+    max-height: 90%;
+    background: #fff;
+    border-radius: 20px;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    position: relative;
+    animation: albumSlideUp 0.3s ease;
+}
+
+.album-view-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 30px;
+    height: 30px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 16px;
+    color: #666;
+    z-index: 10;
+}
+
+.album-view-photo {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 16px;
+    border: 4px solid #ffb6c1;
+    overflow: hidden;
+    background: linear-gradient(135deg, #fff0f3 0%, #ffe4ec 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.album-view-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-view-photo-text {
+    padding: 20px;
+    font-size: 14px;
+    color: #555;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.album-view-info {
+    margin-bottom: 15px;
+}
+
+.album-view-description {
+    background: #fff0f3;
+    padding: 12px 15px;
+    border-radius: 12px;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    border-left: 4px solid #ff6b8a;
+}
+
+.album-view-description::before {
+    content: '📷 ';
+}
+
+.album-view-user-comment {
+    background: #e8f4fd;
+    padding: 12px 15px;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #333;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    border-left: 4px solid #007aff;
+    display: none;
+}
+
+.album-view-user-comment.has-content {
+    display: block;
+}
+
+.album-view-user-comment::before {
+    content: '💭 我的评论：';
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px;
+    color: #007aff;
+}
+
+.album-view-char-comment {
+    background: linear-gradient(135deg, #fff0f3 0%, #ffe4ec 100%);
+    padding: 12px 15px;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #333;
+    line-height: 1.5;
+    border-left: 4px solid #ff6b8a;
+    display: none;
+}
+
+.album-view-char-comment.has-content {
+    display: block;
+}
+
+.album-view-char-comment::before {
+    content: '💕 TA的评论：';
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px;
+    color: #ff6b8a;
+}
+
+.album-comment-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(255, 107, 138, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.album-comment-btn:active {
+    transform: scale(0.98);
+}
+
+.album-comment-btn:disabled {
+    background: #ccc;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.album-comment-loading {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    color: #ff6b8a;
+    font-size: 14px;
+}
+
+.album-comment-loading.active {
+    display: flex;
+}
+
+.album-loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #ffe4ec;
+    border-top-color: #ff6b8a;
+    border-radius: 50%;
+    animation: albumSpin 1s linear infinite;
+}
+
+@keyframes albumSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}

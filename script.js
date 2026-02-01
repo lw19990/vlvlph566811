@@ -2692,3 +2692,486 @@ openApp = function(appId) {
         renderQBoxContactList();
     }
 };
+
+// --- 恋爱相册功能 ---
+let currentViewingPhotoIndex = -1;
+let currentUploadTab = 'file';
+let tempPhotoData = null;
+
+// 获取相册数据
+DB.getAlbumData = () => {
+    const cd = DB.getCoupleData();
+    return cd.album || [];
+};
+
+DB.saveAlbumData = (albumData) => {
+    const cd = DB.getCoupleData();
+    cd.album = albumData;
+    DB.saveCoupleData(cd);
+};
+
+// 打开恋爱相册
+function openCoupleAlbum() {
+    document.getElementById('couple-main-view').style.display = 'none';
+    document.getElementById('couple-album-view').style.display = 'flex';
+    renderAlbumPhotos();
+}
+
+// 关闭恋爱相册
+function closeCoupleAlbum() {
+    document.getElementById('couple-album-view').style.display = 'none';
+    document.getElementById('couple-main-view').style.display = 'flex';
+}
+
+// 渲染相册照片
+function renderAlbumPhotos() {
+    const container = document.getElementById('album-photos-container');
+    const emptyState = document.getElementById('album-empty');
+    const albumData = DB.getAlbumData();
+    
+    container.innerHTML = '';
+    
+    if (albumData.length === 0) {
+        emptyState.style.display = 'flex';
+        container.style.display = 'none';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.style.display = 'flex';
+    
+    // 按时间倒序排列（最新的在最上面）
+    const sortedPhotos = [...albumData].sort((a, b) => b.timestamp - a.timestamp);
+    
+    sortedPhotos.forEach((photo, index) => {
+        const item = document.createElement('div');
+        item.className = 'album-photo-item';
+        
+        // 找到原始索引
+        const originalIndex = albumData.findIndex(p => p.id === photo.id);
+        
+        if (photo.imageUrl) {
+            // 有真实图片
+            item.innerHTML = `<img src="${photo.imageUrl}" alt="照片">`;
+            if (photo.isCharPhoto) {
+                item.innerHTML += `<div class="album-photo-badge">TA拍的</div>`;
+            }
+        } else {
+            // 只有描述（角色拍的照片）
+            item.classList.add('text-photo');
+            item.innerHTML = `
+                <div class="album-photo-text">${photo.description}</div>
+                <div class="album-photo-badge">TA拍的</div>
+            `;
+        }
+        
+        item.onclick = () => openViewPhotoModal(originalIndex);
+        container.appendChild(item);
+    });
+}
+
+// 打开添加照片弹窗
+function openAddPhotoModal() {
+    document.getElementById('add-photo-modal').classList.add('active');
+    resetAddPhotoForm();
+}
+
+// 关闭添加照片弹窗
+function closeAddPhotoModal() {
+    document.getElementById('add-photo-modal').classList.remove('active');
+    resetAddPhotoForm();
+}
+
+// 重置添加照片表单
+function resetAddPhotoForm() {
+    currentUploadTab = 'file';
+    tempPhotoData = null;
+    
+    document.getElementById('upload-tab-file').classList.add('active');
+    document.getElementById('upload-tab-url').classList.remove('active');
+    document.getElementById('upload-file-section').style.display = 'block';
+    document.getElementById('upload-url-section').style.display = 'none';
+    
+    document.getElementById('photo-file-input').value = '';
+    document.getElementById('photo-url-input').value = '';
+    document.getElementById('photo-description').value = '';
+    document.getElementById('photo-user-comment').value = '';
+    
+    const filePreview = document.getElementById('photo-file-preview');
+    filePreview.innerHTML = '<span>点击选择图片</span>';
+    filePreview.classList.remove('has-image');
+    
+    const urlPreview = document.getElementById('photo-url-preview');
+    urlPreview.innerHTML = '';
+    urlPreview.classList.remove('has-image');
+}
+
+// 切换上传方式
+function switchUploadTab(tab) {
+    currentUploadTab = tab;
+    
+    document.getElementById('upload-tab-file').classList.toggle('active', tab === 'file');
+    document.getElementById('upload-tab-url').classList.toggle('active', tab === 'url');
+    document.getElementById('upload-file-section').style.display = tab === 'file' ? 'block' : 'none';
+    document.getElementById('upload-url-section').style.display = tab === 'url' ? 'block' : 'none';
+}
+
+// 预览本地文件
+function previewPhotoFile(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            tempPhotoData = e.target.result;
+            const preview = document.getElementById('photo-file-preview');
+            preview.innerHTML = `<img src="${e.target.result}">`;
+            preview.classList.add('has-image');
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// 点击文件预览区域
+document.addEventListener('DOMContentLoaded', function() {
+    const filePreview = document.getElementById('photo-file-preview');
+    if (filePreview) {
+        filePreview.onclick = () => {
+            document.getElementById('photo-file-input').click();
+        };
+    }
+});
+
+// 预览URL图片
+function previewPhotoUrl(url) {
+    const preview = document.getElementById('photo-url-preview');
+    if (url && url.trim()) {
+        tempPhotoData = url.trim();
+        preview.innerHTML = `<img src="${url}" onerror="this.parentElement.classList.remove('has-image')">`;
+        preview.classList.add('has-image');
+    } else {
+        preview.innerHTML = '';
+        preview.classList.remove('has-image');
+        tempPhotoData = null;
+    }
+}
+
+// 保存新照片
+function saveNewPhoto() {
+    const description = document.getElementById('photo-description').value.trim();
+    const userComment = document.getElementById('photo-user-comment').value.trim();
+    
+    if (!description) {
+        alert('请填写照片描述');
+        return;
+    }
+    
+    // 获取图片数据
+    let imageUrl = null;
+    if (currentUploadTab === 'file' && tempPhotoData) {
+        imageUrl = tempPhotoData;
+    } else if (currentUploadTab === 'url') {
+        const urlInput = document.getElementById('photo-url-input').value.trim();
+        if (urlInput) {
+            imageUrl = urlInput;
+        }
+    }
+    
+    // 创建照片对象
+    const newPhoto = {
+        id: Date.now(),
+        imageUrl: imageUrl,
+        description: description,
+        userComment: userComment || null,
+        charComment: null,
+        isCharPhoto: false,
+        timestamp: Date.now()
+    };
+    
+    // 保存到数据库
+    const albumData = DB.getAlbumData();
+    albumData.push(newPhoto);
+    DB.saveAlbumData(albumData);
+    
+    // 关闭弹窗并刷新
+    closeAddPhotoModal();
+    renderAlbumPhotos();
+}
+
+// 打开照片查看弹窗
+function openViewPhotoModal(index) {
+    currentViewingPhotoIndex = index;
+    const albumData = DB.getAlbumData();
+    const photo = albumData[index];
+    
+    if (!photo) return;
+    
+    document.getElementById('view-photo-modal').classList.add('active');
+    
+    // 显示照片或描述
+    const photoContainer = document.getElementById('view-photo-container');
+    if (photo.imageUrl) {
+        photoContainer.innerHTML = `<img src="${photo.imageUrl}">`;
+    } else {
+        photoContainer.innerHTML = `<div class="album-view-photo-text">${photo.description}</div>`;
+    }
+    
+    // 显示描述
+    document.getElementById('view-photo-description').innerText = photo.description;
+    
+    // 显示用户评论
+    const userCommentEl = document.getElementById('view-photo-user-comment');
+    if (photo.userComment) {
+        userCommentEl.innerText = photo.userComment;
+        userCommentEl.classList.add('has-content');
+    } else {
+        userCommentEl.innerText = '';
+        userCommentEl.classList.remove('has-content');
+    }
+    
+    // 显示角色评论
+    const charCommentEl = document.getElementById('view-photo-char-comment');
+    if (photo.charComment) {
+        charCommentEl.innerText = photo.charComment;
+        charCommentEl.classList.add('has-content');
+    } else {
+        charCommentEl.innerText = '';
+        charCommentEl.classList.remove('has-content');
+    }
+    
+    // 更新按钮状态
+    const commentBtn = document.getElementById('invite-comment-btn');
+    const loadingEl = document.getElementById('comment-loading');
+    
+    if (photo.charComment) {
+        commentBtn.style.display = 'none';
+    } else {
+        commentBtn.style.display = 'flex';
+    }
+    loadingEl.classList.remove('active');
+}
+
+// 关闭照片查看弹窗
+function closeViewPhotoModal() {
+    document.getElementById('view-photo-modal').classList.remove('active');
+    currentViewingPhotoIndex = -1;
+}
+
+// 邀请TA来评论
+async function invitePhotoComment() {
+    if (currentViewingPhotoIndex === -1) return;
+    
+    const cd = DB.getCoupleData();
+    const contacts = DB.getContacts();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    
+    if (!partner) {
+        alert('找不到伴侣信息');
+        return;
+    }
+    
+    const settings = DB.getSettings();
+    if (!settings.key) {
+        alert('请先在设置中配置 API Key');
+        return;
+    }
+    
+    const albumData = DB.getAlbumData();
+    const photo = albumData[currentViewingPhotoIndex];
+    
+    // 显示加载状态
+    document.getElementById('invite-comment-btn').style.display = 'none';
+    document.getElementById('comment-loading').classList.add('active');
+    
+    try {
+        const comment = await callPhotoCommentAPI(partner, photo);
+        
+        if (comment) {
+            // 保存评论
+            albumData[currentViewingPhotoIndex].charComment = comment;
+            DB.saveAlbumData(albumData);
+            
+            // 更新显示
+            const charCommentEl = document.getElementById('view-photo-char-comment');
+            charCommentEl.innerText = comment;
+            charCommentEl.classList.add('has-content');
+        }
+    } catch (e) {
+        alert('获取评论失败：' + e.message);
+        document.getElementById('invite-comment-btn').style.display = 'flex';
+    } finally {
+        document.getElementById('comment-loading').classList.remove('active');
+    }
+}
+
+// 调用API获取照片评论
+async function callPhotoCommentAPI(partner, photo) {
+    const settings = DB.getSettings();
+    
+    let prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
+
+你和恋人正在一起看恋爱相册中的一张照片。
+
+照片描述：${photo.description}`;
+
+    if (photo.userComment) {
+        prompt += `
+
+恋人对这张照片的评论：${photo.userComment}`;
+    }
+
+    prompt += `
+
+请根据照片描述${photo.userComment ? '和恋人的评论' : ''}，以第一人称发表你对这张照片的看法和评论。
+
+要求：
+1. 保持你的人设和性格特点
+2. 评论要真诚、有感情
+3. 可以回忆相关的甜蜜时刻
+4. 最多不超过100字
+5. 直接返回评论内容，不要加任何格式`;
+
+    const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+    
+    const res = await fetch(`${settings.url}/chat/completions`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${settings.key}` 
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: temp
+        })
+    });
+    
+    if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (data.choices && data.choices.length > 0) {
+        return data.choices[0].message.content.trim();
+    }
+    
+    throw new Error("API 无响应");
+}
+
+// 邀请TA来添加照片
+async function inviteAddPhotos() {
+    const cd = DB.getCoupleData();
+    const contacts = DB.getContacts();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    
+    if (!partner) {
+        alert('找不到伴侣信息');
+        return;
+    }
+    
+    const settings = DB.getSettings();
+    if (!settings.key) {
+        alert('请先在设置中配置 API Key');
+        return;
+    }
+    
+    if (!confirm('邀请TA添加2-5张照片到相册？')) return;
+    
+    // 关闭添加照片弹窗
+    closeAddPhotoModal();
+    
+    // 显示加载提示
+    alert('TA正在拍照中，请稍候...');
+    
+    try {
+        const photos = await callAddPhotosAPI(partner);
+        
+        if (photos && photos.length > 0) {
+            // 保存照片
+            const albumData = DB.getAlbumData();
+            photos.forEach(photoDesc => {
+                albumData.push({
+                    id: Date.now() + Math.random(),
+                    imageUrl: null, // 角色拍的照片没有真实图片
+                    description: photoDesc,
+                    userComment: null,
+                    charComment: null,
+                    isCharPhoto: true,
+                    timestamp: Date.now()
+                });
+            });
+            DB.saveAlbumData(albumData);
+            
+            // 刷新相册
+            renderAlbumPhotos();
+            
+            alert(`TA添加了 ${photos.length} 张照片到相册！`);
+        }
+    } catch (e) {
+        alert('添加照片失败：' + e.message);
+    }
+}
+
+// 调用API生成角色拍摄的照片
+async function callAddPhotosAPI(partner) {
+    const settings = DB.getSettings();
+    
+    // 获取聊天记录作为参考
+    const chatHistory = (DB.getChats()[partner.id] || []).slice(-20).map(m => {
+        return `${m.role === 'user' ? 'User' : partner.name}: ${m.content}`;
+    }).join('\n');
+    
+    const prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
+
+你和恋人正在使用情侣空间的"恋爱相册"功能。现在恋人邀请你添加一些照片到相册。
+
+请生成 2-5 张你"拍摄"的照片。注意：这不是真实照片，而是你对照片内容的描述。
+
+参考你们最近的聊天记录：
+${chatHistory || '（暂无聊天记录）'}
+
+要求：
+1. 每张照片描述要生动、有画面感
+2. 可以是你们一起的合照、你拍的风景、你的自拍、你拍的美食等
+3. 内容要符合你的人设和性格
+4. 每张照片描述不超过100字
+5. 严格返回JSON数组格式：["照片1描述", "照片2描述", ...]`;
+
+    const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+    
+    const res = await fetch(`${settings.url}/chat/completions`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${settings.key}` 
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: temp
+        })
+    });
+    
+    if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (data.choices && data.choices.length > 0) {
+        let content = data.choices[0].message.content.trim();
+        // 清理可能的markdown格式
+        content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        try {
+            const photos = JSON.parse(content);
+            if (Array.isArray(photos)) {
+                return photos.slice(0, 5); // 最多5张
+            }
+        } catch (e) {
+            console.error('JSON parse failed:', e);
+            throw new Error('解析照片数据失败');
+        }
+    }
+    
+    throw new Error("API 无响应");
+}
