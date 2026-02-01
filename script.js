@@ -1,4 +1,4 @@
-const DEFAULT_SYSTEM_PROMPT = `你是一个真实存在，说人话，有温度的人，现在在聊天APP上进行线上聊天，请根据你的人设回复，请将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。结尾禁止带句号，禁止使用括号内动作描写。允许只使用纯符号“？/！！/……”回复，偶尔可以有emoji或颜文字。你有自己的生活，可以给用户分享你的日常琐事，严禁每天无所事事只围着用户转。你必须保持情绪稳定，严禁绝望崩溃暴怒，****你必须绝对尊重用户意愿，尊重用户的主体性，**你必须绝对照顾用户感受**，严禁使用爹味，压迫，粗俗，轻视，讽刺的说话方式来压制用户的表达。**** ****聊天中**必须严格禁用以下黑名单词汇**：小妖精，管家婆，小祖宗，笨蛋，傻瓜，蠢货，小笨蛋，小傻瓜，小丫头，丫头，小公主，小东西，共犯，你是我的，这就对了，赶紧，少来，闭嘴，别闹了，揉进，揉进骨血，揉进身体，骚，骚货。****`;
+const DEFAULT_SYSTEM_PROMPT = `你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。结尾禁止带句号，禁止使用括号内动作描写。`;
 
 let currentCalDate = new Date();
 let currentCallStartTime = 0;
@@ -2681,6 +2681,409 @@ ${userPersona ? `关于 ${userName}：${userPersona}` : ''}
         return data.choices[0].message.content.trim();
     }
     
+    throw new Error("API 无响应");
+}
+
+// --- 留言板功能 ---
+let isMessageBoardDeleteMode = false;
+let selectedMessageIds = new Set();
+let currentReplyMessageId = null;
+
+// 获取留言板数据
+DB.getCoupleMessages = () => {
+    const cd = DB.getCoupleData();
+    return cd.messages || [];
+};
+
+DB.saveCoupleMessages = (messages) => {
+    const cd = DB.getCoupleData();
+    cd.messages = messages;
+    DB.saveCoupleData(cd);
+};
+
+// 打开留言板
+function openCoupleMessageBoard() {
+    document.getElementById('couple-main-view').style.display = 'none';
+    document.getElementById('couple-message-board-view').style.display = 'flex';
+    exitMessageBoardDeleteMode();
+    renderCoupleMessages();
+}
+
+// 关闭留言板
+function closeCoupleMessageBoard() {
+    document.getElementById('couple-message-board-view').style.display = 'none';
+    document.getElementById('couple-main-view').style.display = 'flex';
+    exitMessageBoardDeleteMode();
+}
+
+// 切换删除模式
+function toggleMessageBoardDeleteMode() {
+    if (isMessageBoardDeleteMode) {
+        exitMessageBoardDeleteMode();
+    } else {
+        enterMessageBoardDeleteMode();
+    }
+}
+
+function enterMessageBoardDeleteMode() {
+    isMessageBoardDeleteMode = true;
+    selectedMessageIds.clear();
+    document.getElementById('message-board-list').classList.add('message-board-delete-mode');
+    document.getElementById('message-board-delete-bar').classList.add('active');
+    renderCoupleMessages();
+}
+
+function exitMessageBoardDeleteMode() {
+    isMessageBoardDeleteMode = false;
+    selectedMessageIds.clear();
+    document.getElementById('message-board-list').classList.remove('message-board-delete-mode');
+    document.getElementById('message-board-delete-bar').classList.remove('active');
+    renderCoupleMessages();
+}
+
+function toggleMessageSelection(msgId) {
+    if (selectedMessageIds.has(msgId)) {
+        selectedMessageIds.delete(msgId);
+    } else {
+        selectedMessageIds.add(msgId);
+    }
+    renderCoupleMessages();
+}
+
+function confirmDeleteMessagesBoard() {
+    if (selectedMessageIds.size === 0) {
+        exitMessageBoardDeleteMode();
+        return;
+    }
+    
+    if (confirm(`确定要删除选中的 ${selectedMessageIds.size} 条留言吗？`)) {
+        let messages = DB.getCoupleMessages();
+        messages = messages.filter(m => !selectedMessageIds.has(m.id));
+        DB.saveCoupleMessages(messages);
+        exitMessageBoardDeleteMode();
+    }
+}
+
+// 渲染留言板
+function renderCoupleMessages() {
+    const list = document.getElementById('message-board-list');
+    const messages = DB.getCoupleMessages();
+    
+    list.innerHTML = '';
+    
+    // 按时间排序：越旧的留言位置越下 -> 新的在上面，旧的在下面 -> 时间戳从大到小
+    // 等等，通常 "越旧的在下面" 意味着是一个堆栈，新的堆在上面？
+    // 或者是指像普通列表一样，往下滚是旧的？
+    // 让我们再读一遍："越旧的留言位置越下"。
+    // 如果屏幕上方是 Top，下方是 Bottom。
+    // Old -> Bottom. New -> Top.
+    // 所以排序应该是：Newest (Top) -> Oldest (Bottom).
+    // timestamp: Big (New) -> Small (Old).
+    const sortedMessages = [...messages].sort((a, b) => b.timestamp - a.timestamp);
+    
+    const contacts = DB.getContacts();
+    const cd = DB.getCoupleData();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    
+    // 获取用户头像
+    let userAvatar = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23007aff%22 width=%22100%22 height=%22100%22/></svg>';
+    if (partner && partner.userSettings && partner.userSettings.userAvatar) {
+        userAvatar = partner.userSettings.userAvatar;
+    }
+    
+    // 获取TA头像
+    let partnerAvatar = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>';
+    if (partner && partner.avatar) {
+        partnerAvatar = partner.avatar;
+    }
+
+    sortedMessages.forEach(msg => {
+        const item = document.createElement('div');
+        item.className = 'message-board-item';
+        
+        // 删除复选框
+        const checkbox = document.createElement('div');
+        checkbox.className = 'message-board-checkbox';
+        if (selectedMessageIds.has(msg.id)) {
+            checkbox.classList.add('checked');
+        }
+        item.appendChild(checkbox);
+        
+        const date = new Date(msg.timestamp);
+        const dateStr = `${date.getMonth() + 1}月${date.getDate()}日`;
+        const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        
+        const avatarSrc = msg.isTaMessage ? partnerAvatar : userAvatar;
+        
+        let html = `
+            <div class="message-board-header">
+                <img src="${avatarSrc}" class="message-board-avatar">
+                <div class="message-board-info">
+                    <span class="message-board-date">${dateStr}</span>
+                    <span class="message-board-time">${timeStr}</span>
+                </div>
+            </div>
+            <div class="message-board-content">${msg.content}</div>
+        `;
+        
+        // 显示TA的回复 (如果不是TA发的留言)
+        if (!msg.isTaMessage && msg.taReply) {
+            html += `<div class="message-board-reply-area">${msg.taReply}</div>`;
+        }
+        
+        // 如果是TA发的留言，显示回复按钮或用户的回复
+        if (msg.isTaMessage) {
+            if (msg.userReply) {
+                html += `<div class="message-board-user-reply">${msg.userReply}</div>`;
+                if (msg.taReplyToUser) {
+                    html += `<div class="message-board-reply-area">${msg.taReplyToUser}</div>`;
+                }
+            } else {
+                html += `<div class="message-board-reply-btn" onclick="openReplyMessageModal(${msg.id})">回复TA</div>`;
+            }
+        }
+        
+        item.innerHTML += html;
+        
+        item.onclick = (e) => {
+            if (isMessageBoardDeleteMode) {
+                toggleMessageSelection(msg.id);
+            } else {
+                // 如果点击的是回复按钮，阻止冒泡
+                if (e.target.classList.contains('message-board-reply-btn')) {
+                    e.stopPropagation();
+                }
+            }
+        };
+        
+        list.appendChild(item);
+    });
+    
+    // 自动滚动到底部
+    list.scrollTop = list.scrollHeight;
+}
+
+// 打开添加留言弹窗
+function openAddMessageModal() {
+    document.getElementById('add-message-modal').classList.add('active');
+    document.getElementById('message-board-input').value = '';
+}
+
+// 关闭添加留言弹窗
+function closeAddMessageModal() {
+    document.getElementById('add-message-modal').classList.remove('active');
+}
+
+// 保存新留言
+async function saveNewMessage() {
+    const content = document.getElementById('message-board-input').value.trim();
+    if (!content) return alert("请输入留言内容");
+    
+    const messages = DB.getCoupleMessages();
+    const newMessage = {
+        id: Date.now(),
+        content: content,
+        timestamp: Date.now(),
+        isTaMessage: false,
+        taReply: null
+    };
+    
+    messages.push(newMessage);
+    DB.saveCoupleMessages(messages);
+    
+    closeAddMessageModal();
+    renderCoupleMessages();
+    
+    // 触发API生成回复
+    const cd = DB.getCoupleData();
+    const contacts = DB.getContacts();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    
+    if (partner) {
+        try {
+            const reply = await callMessageBoardAPI(partner, 'reply_to_user', content);
+            if (reply) {
+                const msgs = DB.getCoupleMessages();
+                const target = msgs.find(m => m.id === newMessage.id);
+                if (target) {
+                    target.taReply = reply;
+                    DB.saveCoupleMessages(msgs);
+                    renderCoupleMessages();
+                }
+            }
+        } catch (e) {
+            console.error("生成回复失败", e);
+        }
+    }
+}
+
+// 打开回复弹窗
+function openReplyMessageModal(msgId) {
+    currentReplyMessageId = msgId;
+    const messages = DB.getCoupleMessages();
+    const msg = messages.find(m => m.id === msgId);
+    
+    if (!msg) return;
+    
+    document.getElementById('reply-target-content').innerText = "回复TA：" + msg.content;
+    document.getElementById('reply-message-modal').classList.add('active');
+    document.getElementById('reply-message-input').value = '';
+}
+
+// 关闭回复弹窗
+function closeReplyMessageModal() {
+    document.getElementById('reply-message-modal').classList.remove('active');
+    currentReplyMessageId = null;
+}
+
+// 保存回复
+async function saveReplyMessage() {
+    if (!currentReplyMessageId) return;
+    
+    const content = document.getElementById('reply-message-input').value.trim();
+    if (!content) return alert("请输入回复内容");
+    
+    const messages = DB.getCoupleMessages();
+    const msgIndex = messages.findIndex(m => m.id === currentReplyMessageId);
+    
+    if (msgIndex !== -1) {
+        messages[msgIndex].userReply = content;
+        DB.saveCoupleMessages(messages);
+        
+        closeReplyMessageModal();
+        renderCoupleMessages();
+        
+        // 触发API生成TA对用户回复的回复
+        const cd = DB.getCoupleData();
+        const contacts = DB.getContacts();
+        const partner = contacts.find(c => c.id == cd.partnerId);
+        
+        if (partner) {
+            try {
+                const reply = await callMessageBoardAPI(partner, 'reply_to_reply', content, messages[msgIndex].content);
+                if (reply) {
+                    const msgs = DB.getCoupleMessages();
+                    const target = msgs.find(m => m.id === currentReplyMessageId);
+                    if (target) {
+                        target.taReplyToUser = reply;
+                        DB.saveCoupleMessages(msgs);
+                        renderCoupleMessages();
+                    }
+                }
+            } catch (e) {
+                console.error("生成回复失败", e);
+            }
+        }
+    }
+}
+
+// 邀请TA留言
+async function inviteTAMessage() {
+    const cd = DB.getCoupleData();
+    const contacts = DB.getContacts();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    
+    if (!partner) return alert("找不到伴侣信息");
+    
+    const settings = DB.getSettings();
+    if (!settings.key) return alert("请先配置 API Key");
+    
+    if (!confirm("邀请TA来留言板写几句？")) return;
+    
+    alert("TA正在思考中...");
+    
+    try {
+        const result = await callMessageBoardAPI(partner, 'invite');
+        if (result && Array.isArray(result)) {
+            const messages = DB.getCoupleMessages();
+            result.forEach(content => {
+                messages.push({
+                    id: Date.now() + Math.random(),
+                    content: content,
+                    timestamp: Date.now(),
+                    isTaMessage: true,
+                    userReply: null,
+                    taReplyToUser: null
+                });
+            });
+            DB.saveCoupleMessages(messages);
+            renderCoupleMessages();
+            alert("TA留下了新的留言！");
+        }
+    } catch (e) {
+        alert("邀请失败：" + e.message);
+    }
+}
+
+// 留言板 API 调用
+async function callMessageBoardAPI(partner, type, userContent = '', contextContent = '') {
+    const settings = DB.getSettings();
+    let prompt = "";
+    
+    if (type === 'reply_to_user') {
+        prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
+        
+        你的恋人（用户）在情侣空间留言板上写了一条留言：
+        "${userContent}"
+        
+        请给这条留言写一条回复（评论）。
+        
+        要求：
+        1. 50字以内。
+        2. 语气自然、符合人设。
+        3. 直接返回内容，不要JSON。`;
+    } else if (type === 'invite') {
+        prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
+        
+        恋人邀请你在情侣空间留言板上写几句留言。
+        
+        请生成 1 到 3 条留言。
+        
+        要求：
+        1. 每条留言 50 字以内。
+        2. 内容可以是日常分享、情话、碎碎念等。
+        3. 严格返回 JSON 字符串数组格式：["留言1", "留言2"]`;
+    } else if (type === 'reply_to_reply') {
+        prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
+        
+        你在留言板上写了："${contextContent}"
+        你的恋人回复了你："${userContent}"
+        
+        请对恋人的回复进行回应。
+        
+        要求：
+        1. 50字以内。
+        2. 语气自然、符合人设。
+        3. 直接返回内容，不要JSON。`;
+    }
+    
+    const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+    const res = await fetch(`${settings.url}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: temp
+        })
+    });
+    
+    const data = await res.json();
+    if (data.choices && data.choices.length > 0) {
+        let content = data.choices[0].message.content.trim();
+        
+        if (type === 'invite') {
+            content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            try {
+                return JSON.parse(content);
+            } catch (e) {
+                console.error("JSON parse failed", e);
+                return [content]; // Fallback
+            }
+        }
+        
+        return content;
+    }
     throw new Error("API 无响应");
 }
 

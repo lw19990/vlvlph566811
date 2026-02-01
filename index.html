@@ -1094,10 +1094,61 @@
                         <div class="couple-menu-icon">📸</div>
                         <div class="couple-menu-text">恋爱相册</div>
                     </div>
-                    <div class="couple-menu-item">
+                    <div class="couple-menu-item" onclick="openCoupleMessageBoard()">
                         <div class="couple-menu-icon">📝</div>
                         <div class="couple-menu-text">留言板</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 留言板界面 -->
+            <div class="couple-container" id="couple-message-board-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: #ffe4e1;">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255, 228, 225, 0.95); backdrop-filter: blur(10px);">
+                    <div class="back-btn" onclick="closeCoupleMessageBoard()" style="color:#ff6b8a;">Back</div>
+                    <div class="app-title" style="color:#ff6b8a;">留言板</div>
+                    <div class="action-btn" style="display:flex; gap:15px; align-items:center;">
+                        <span onclick="toggleMessageBoardDeleteMode()" style="color:#ff6b8a; font-size:18px;">🗑️</span>
+                        <span onclick="openAddMessageModal()" style="color:#ff6b8a; font-size:24px;">+</span>
+                    </div>
+                </div>
+
+                <div id="message-board-list" class="message-board-list">
+                    <!-- 留言将动态填充 -->
+                </div>
+
+                <div class="message-board-footer">
+                    <button class="couple-invite-btn" style="width:100%; background:#fffacd; color:#ff6b8a; border:1px solid #ffb6c1;" onclick="inviteTAMessage()">邀请TA来留言</button>
+                </div>
+
+                <!-- 删除模式底部栏 -->
+                <div id="message-board-delete-bar" class="album-delete-bar">
+                    <div class="album-delete-cancel" onclick="exitMessageBoardDeleteMode()">取消</div>
+                    <div class="album-delete-confirm" onclick="confirmDeleteMessagesBoard()">删除选中</div>
+                </div>
+            </div>
+
+            <!-- 添加留言弹窗 -->
+            <div id="add-message-modal" class="album-modal">
+                <div class="album-modal-content" style="background: #fffacd;">
+                    <div class="album-modal-header" style="border-bottom: 1px dashed #ff6b8a;">
+                        <span onclick="closeAddMessageModal()" style="color:#ff6b8a; cursor:pointer;">取消</span>
+                        <span style="font-weight:bold; color:#5d4037;">写留言</span>
+                        <span onclick="saveNewMessage()" style="color:#ff6b8a; cursor:pointer;">发布</span>
+                    </div>
+                    <textarea id="message-board-input" class="album-textarea" style="background: rgba(255,255,255,0.5); height: 150px;" placeholder="写下你想说的话..."></textarea>
+                </div>
+            </div>
+
+            <!-- 回复留言弹窗 -->
+            <div id="reply-message-modal" class="album-modal">
+                <div class="album-modal-content" style="background: #fffacd;">
+                    <div class="album-modal-header" style="border-bottom: 1px dashed #ff6b8a;">
+                        <span onclick="closeReplyMessageModal()" style="color:#ff6b8a; cursor:pointer;">取消</span>
+                        <span style="font-weight:bold; color:#5d4037;">回复TA</span>
+                        <span onclick="saveReplyMessage()" style="color:#ff6b8a; cursor:pointer;">回复</span>
+                    </div>
+                    <div id="reply-target-content" style="font-size: 14px; color: #666; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.3); border-radius: 8px;"></div>
+                    <textarea id="reply-message-input" class="album-textarea" style="background: rgba(255,255,255,0.5); height: 150px;" placeholder="回复TA的留言..."></textarea>
                 </div>
             </div>
 
