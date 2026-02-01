@@ -2349,8 +2349,7 @@ input:checked + .slider:before { transform: translateX(22px); }
     position: relative;
 }
 
-.message-board-reply-area::before {
-    content: '❤️ TA的回复：';
+.message-board-reply-label {
     display: block;
     font-size: 12px;
     color: #ff6b8a;

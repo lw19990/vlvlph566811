@@ -1254,7 +1254,7 @@ setInterval(() => {
 }, 60000);
 
 let currentSpyContact = null, currentSpyNPC = null;
-function renderSpyContactList() { const list = document.getElementById('spy-contact-list'); list.innerHTML = ''; DB.getContacts().forEach(c => { const d = document.createElement('div'); d.className = 'chat-list-item'; d.onclick = () => { currentSpyContact = c; openApp('app-spy-home'); document.getElementById('spy-home-title').innerText = c.name + "'s Phone"; }; d.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">点击查看手机</div></div>`; list.appendChild(d); }); }
+function renderSpyContactList() { const list = document.getElementById('spy-contact-list'); list.innerHTML = ''; DB.getContacts().forEach(c => { const d = document.createElement('div'); d.className = 'chat-list-item'; d.onclick = () => { currentSpyContact = c; openApp('app-spy-home'); document.getElementById('spy-home-title').innerText = c.name + "'s Phone"; applySpyTheme(); }; d.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">点击查看手机</div></div>`; list.appendChild(d); }); }
 function openSpyVK() { openApp('app-spy-vk'); renderSpyVKContacts(); }
 function openSpyMemos() { openApp('app-spy-memos'); renderSpyMemos(); }
 function renderSpyVKContacts() { const c = document.getElementById('spy-vk-contacts'); c.innerHTML = ''; const sd = DB.getSpyData(); const cs = (sd[currentSpyContact.id]?.vk_contacts) || []; if (cs.length === 0) { c.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">暂无，点击 + 生成</div>'; return; } cs.forEach((npc,i) => { const d = document.createElement('div'); d.className = 'chat-list-item'; d.onclick = () => { currentSpyNPC = npc; openApp('app-spy-vk-chat'); document.getElementById('spy-vk-chat-title').innerText = npc.name; renderSpyVKMessages(); }; d.innerHTML = `<div class="avatar-preview" style="background:#${Math.floor(Math.random()*16777215).toString(16)};display:flex;justify-content:center;align-items:center;color:#fff;font-weight:bold;">${npc.name[0]}</div><div class="contact-info"><div class="contact-name">${npc.name}</div><div class="contact-persona">点击查看</div></div>`; c.appendChild(d); }); }
@@ -2796,6 +2796,9 @@ function renderCoupleMessages() {
     if (partner && partner.avatar) {
         partnerAvatar = partner.avatar;
     }
+    
+    // 获取TA名字
+    const partnerName = partner ? partner.name : "TA";
 
     sortedMessages.forEach(msg => {
         const item = document.createElement('div');
@@ -2828,7 +2831,7 @@ function renderCoupleMessages() {
         
         // 显示TA的回复 (如果不是TA发的留言)
         if (!msg.isTaMessage && msg.taReply) {
-            html += `<div class="message-board-reply-area">${msg.taReply}</div>`;
+            html += `<div class="message-board-reply-area"><div class="message-board-reply-label">❤️ ${partnerName}的回复：</div>${msg.taReply}</div>`;
         }
         
         // 如果是TA发的留言，显示回复按钮或用户的回复
@@ -2836,7 +2839,7 @@ function renderCoupleMessages() {
             if (msg.userReply) {
                 html += `<div class="message-board-user-reply">${msg.userReply}</div>`;
                 if (msg.taReplyToUser) {
-                    html += `<div class="message-board-reply-area">${msg.taReplyToUser}</div>`;
+                    html += `<div class="message-board-reply-area"><div class="message-board-reply-label">❤️ ${partnerName}的回复：</div>${msg.taReplyToUser}</div>`;
                 }
             } else {
                 html += `<div class="message-board-reply-btn" onclick="openReplyMessageModal(${msg.id})">回复TA</div>`;
@@ -3095,6 +3098,168 @@ openApp = function(appId) {
         renderQBoxContactList();
     }
 };
+
+// --- 角色手机美化功能 ---
+let currentSpyThemeType = 'color';
+
+function switchSpyThemeType(type) {
+    currentSpyThemeType = type;
+    document.getElementById('spy-theme-type-color').classList.toggle('active', type === 'color');
+    document.getElementById('spy-theme-type-image').classList.toggle('active', type === 'image');
+    document.getElementById('spy-theme-input-color').style.display = type === 'color' ? 'block' : 'none';
+    document.getElementById('spy-theme-input-image').style.display = type === 'image' ? 'block' : 'none';
+}
+
+function saveSpyWallpaper() {
+    if (!currentSpyContact) return;
+    const sd = DB.getSpyData();
+    if (!sd[currentSpyContact.id]) sd[currentSpyContact.id] = {};
+    if (!sd[currentSpyContact.id].theme) sd[currentSpyContact.id].theme = {};
+
+    const processSave = (val) => {
+        sd[currentSpyContact.id].theme.wallpaperType = currentSpyThemeType;
+        sd[currentSpyContact.id].theme.wallpaperValue = val;
+        DB.saveSpyData(sd);
+        applySpyTheme();
+        alert('壁纸已保存');
+    };
+
+    if (currentSpyThemeType === 'color') {
+        processSave(document.getElementById('spy-theme-wallpaper-color').value);
+    } else {
+        const urlInput = document.getElementById('spy-theme-wallpaper-url').value;
+        const fileInput = document.getElementById('spy-theme-wallpaper-image');
+        if (urlInput) {
+            processSave(urlInput);
+        } else if (fileInput.files && fileInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => processSave(e.target.result);
+            reader.readAsDataURL(fileInput.files[0]);
+        } else {
+            if (sd[currentSpyContact.id].theme.wallpaperType === 'image' && sd[currentSpyContact.id].theme.wallpaperValue) {
+                processSave(sd[currentSpyContact.id].theme.wallpaperValue);
+            } else {
+                alert('请选择图片');
+            }
+        }
+    }
+}
+
+function saveSpyAppIcon() {
+    if (!currentSpyContact) return;
+    const appId = document.getElementById('spy-theme-app-select').value;
+    const urlInput = document.getElementById('spy-theme-icon-url').value;
+    const fileInput = document.getElementById('spy-theme-icon-file');
+
+    const processIconSave = (imgData) => {
+        const sd = DB.getSpyData();
+        if (!sd[currentSpyContact.id]) sd[currentSpyContact.id] = {};
+        if (!sd[currentSpyContact.id].theme) sd[currentSpyContact.id].theme = {};
+        if (!sd[currentSpyContact.id].theme.appIcons) sd[currentSpyContact.id].theme.appIcons = {};
+        
+        sd[currentSpyContact.id].theme.appIcons[appId] = imgData;
+        DB.saveSpyData(sd);
+        applySpyTheme();
+        alert('图标已更新');
+    };
+
+    if (urlInput) {
+        processIconSave(urlInput);
+    } else if (fileInput.files && fileInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => processIconSave(e.target.result);
+        reader.readAsDataURL(fileInput.files[0]);
+    } else {
+        alert('请选择图片或输入URL');
+    }
+}
+
+function resetSpyTheme() {
+    if (!currentSpyContact) return;
+    if (!confirm("确定要重置此角色的手机美化吗？")) return;
+    
+    const sd = DB.getSpyData();
+    if (sd[currentSpyContact.id]) {
+        delete sd[currentSpyContact.id].theme;
+        DB.saveSpyData(sd);
+    }
+    applySpyTheme();
+    alert("角色手机美化已重置");
+}
+
+function applySpyTheme() {
+    if (!currentSpyContact) return;
+    const sd = DB.getSpyData();
+    const theme = (sd[currentSpyContact.id] && sd[currentSpyContact.id].theme) || { wallpaperType: 'color', wallpaperValue: '#ffffff' };
+    
+    currentSpyThemeType = theme.wallpaperType || 'color';
+    switchSpyThemeType(currentSpyThemeType);
+    
+    if (theme.wallpaperType === 'color') {
+        document.getElementById('spy-theme-wallpaper-color').value = theme.wallpaperValue || '#ffffff';
+    } else {
+        if (theme.wallpaperValue && theme.wallpaperValue.startsWith('http')) {
+            document.getElementById('spy-theme-wallpaper-url').value = theme.wallpaperValue;
+        } else {
+             document.getElementById('spy-theme-wallpaper-url').value = '';
+        }
+    }
+
+    const spyHome = document.getElementById('app-spy-home');
+    if (theme.wallpaperType === 'image' && theme.wallpaperValue) {
+        spyHome.style.backgroundImage = `url(${theme.wallpaperValue})`;
+        spyHome.style.backgroundSize = 'cover';
+        spyHome.style.backgroundPosition = 'center';
+        spyHome.style.backgroundColor = 'transparent';
+    } else {
+        spyHome.style.backgroundImage = 'none';
+        spyHome.style.backgroundColor = theme.wallpaperValue || '#ffffff';
+    }
+    
+    const spyAppIds = ['spy-icon-vk', 'spy-icon-memos', 'spy-icon-browser', 'spy-icon-diary', 'spy-icon-settings'];
+    const spyAppNames = {'spy-icon-vk': 'Vkontakte', 'spy-icon-memos': '备忘录', 'spy-icon-browser': '浏览器', 'spy-icon-diary': '日记', 'spy-icon-settings': '设置'};
+    
+    spyAppIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.style.background = '';
+            el.style.backgroundColor = '';
+            el.style.backgroundImage = '';
+            el.innerHTML = '';
+            
+            if (theme.appIcons && theme.appIcons[id]) {
+                el.style.background = 'none';
+                el.style.backgroundColor = 'transparent';
+                el.style.backgroundImage = `url(${theme.appIcons[id]})`;
+                el.style.backgroundSize = 'cover';
+                el.style.backgroundPosition = 'center';
+                el.innerHTML = `<div class="app-label">${spyAppNames[id]}</div>`;
+            } else {
+                let emoji = '';
+                let bgColor = '';
+                let color = '#fff';
+                let label = spyAppNames[id];
+                
+                switch(id) {
+                    case 'spy-icon-vk': emoji = 'VK'; bgColor = ''; color = ''; break;
+                    case 'spy-icon-memos': emoji = '📝'; bgColor = '#f1c40f'; color = '#000'; break;
+                    case 'spy-icon-browser': emoji = '🌐'; bgColor = '#007aff'; color = '#fff'; break;
+                    case 'spy-icon-diary': emoji = '📔'; bgColor = '#8e44ad'; color = '#fff'; break;
+                    case 'spy-icon-settings': emoji = '⚙️'; bgColor = '#8e8e93'; color = '#fff'; break;
+                }
+                
+                if (id === 'spy-icon-vk') {
+                    el.removeAttribute('style');
+                    el.innerHTML = `VK<div class="app-label">Vkontakte</div>`;
+                } else {
+                    el.style.backgroundColor = bgColor;
+                    el.style.color = color;
+                    el.innerHTML = `${emoji}<div class="app-label">${label}</div>`;
+                }
+            }
+        }
+    });
+}
 
 // --- 恋爱相册功能 ---
 let currentViewingPhotoIndex = -1;
