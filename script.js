@@ -1,4 +1,144 @@
-const DEFAULT_SYSTEM_PROMPT = `你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。结尾禁止带句号，禁止使用括号内动作描写。`;
+const DEFAULT_SYSTEM_PROMPT = `你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请严格根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。结尾禁止带句号，禁止使用括号内动作描写。`;
+
+// --- IndexedDB 存储系统 ---
+const IDB_NAME = 'VVPhoneDB';
+const IDB_VERSION = 1;
+const IDB_STORE_NAME = 'kv_store';
+let dbInstance = null;
+
+// 内存缓存，保持同步读取的高性能
+const MEMORY_CACHE = {
+    iphone_settings: null,
+    iphone_contacts: null,
+    iphone_chats: null,
+    iphone_worldbook: null,
+    iphone_spy_data: null,
+    iphone_theme: null,
+    iphone_memories: null,
+    iphone_calendar_events: null,
+    iphone_stickers: null,
+    iphone_couple_data: null,
+    iphone_question_box: null
+};
+
+// 初始化数据库
+function initDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+
+        request.onerror = (event) => {
+            console.error("IndexedDB error:", event.target.error);
+            alert("数据库打开失败，应用可能无法正常工作。");
+            reject(event.target.error);
+        };
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+                db.createObjectStore(IDB_STORE_NAME, { keyPath: 'key' });
+            }
+        };
+
+        request.onsuccess = async (event) => {
+            dbInstance = event.target.result;
+            console.log("IndexedDB opened successfully");
+            await loadAllDataToCache();
+            resolve();
+        };
+    });
+}
+
+// 加载所有数据到内存缓存
+async function loadAllDataToCache() {
+    return new Promise((resolve, reject) => {
+        const transaction = dbInstance.transaction([IDB_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(IDB_STORE_NAME);
+        const request = store.getAll();
+
+        request.onsuccess = (event) => {
+            const result = event.target.result;
+            let hasDataInDB = false;
+
+            // 填充缓存
+            result.forEach(item => {
+                if (MEMORY_CACHE.hasOwnProperty(item.key)) {
+                    MEMORY_CACHE[item.key] = item.value;
+                    hasDataInDB = true;
+                }
+            });
+
+            // 如果数据库为空，尝试从 localStorage 迁移
+            if (!hasDataInDB) {
+                console.log("Detecting empty IndexedDB, checking localStorage for migration...");
+                migrateFromLocalStorage();
+            }
+
+            // 数据加载完成，执行初始化逻辑
+            if (typeof loadSettings === 'function') loadSettings();
+            if (typeof applyTheme === 'function') applyTheme();
+            if (typeof applyPage2Images === 'function') applyPage2Images();
+
+            // 移除加载遮罩
+            const loader = document.getElementById('app-loading');
+            if (loader) loader.style.display = 'none';
+            
+            resolve();
+        };
+
+        request.onerror = (event) => {
+            console.error("Failed to load data from DB", event.target.error);
+            reject(event.target.error);
+        };
+    });
+}
+
+// 从 localStorage 迁移数据
+function migrateFromLocalStorage() {
+    let migrationCount = 0;
+    for (const key in MEMORY_CACHE) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+            try {
+                const data = JSON.parse(raw);
+                MEMORY_CACHE[key] = data; // 更新缓存
+                saveToIndexedDB(key, data); // 异步保存到 DB
+                migrationCount++;
+            } catch (e) {
+                console.error(`Migration failed for ${key}`, e);
+            }
+        }
+    }
+    if (migrationCount > 0) {
+        console.log(`Migrated ${migrationCount} items from localStorage to IndexedDB.`);
+        // 可选：迁移后清空 localStorage，或者保留作为备份
+        // localStorage.clear(); 
+    }
+}
+
+// 保存数据到 IndexedDB
+function saveToIndexedDB(key, value) {
+    if (!dbInstance) return;
+    
+    // 使用 requestIdleCallback 在浏览器空闲时保存，避免阻塞主线程
+    const saveTask = () => {
+        const transaction = dbInstance.transaction([IDB_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(IDB_STORE_NAME);
+        store.put({ key: key, value: value });
+        
+        transaction.onerror = (event) => {
+            console.error(`Failed to save ${key} to IndexedDB`, event.target.error);
+        };
+    };
+
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(saveTask);
+    } else {
+        setTimeout(saveTask, 0);
+    }
+}
+
+// 启动数据库初始化
+initDatabase();
 
 let currentCalDate = new Date();
 let currentCallStartTime = 0;
@@ -84,26 +224,45 @@ function closeAllOverlays() {
 
 const DB = {
     getSettings: () => {
-        const saved = JSON.parse(localStorage.getItem('iphone_settings'));
+        const saved = MEMORY_CACHE['iphone_settings'];
         const defaultSettings = { url: 'https://api.openai.com/v1', key: '', model: 'gpt-3.5-turbo', prompt: DEFAULT_SYSTEM_PROMPT, fullscreen: false, temperature: 0.7 };
         if (!saved) return defaultSettings;
         if (!saved.prompt || saved.prompt.length < 50) saved.prompt = DEFAULT_SYSTEM_PROMPT;
         if (saved.temperature === undefined) saved.temperature = 0.7;
         return saved;
     },
-    saveSettings: (data) => localStorage.setItem('iphone_settings', JSON.stringify(data)),
-    getContacts: () => JSON.parse(localStorage.getItem('iphone_contacts')) || [],
-    saveContacts: (data) => localStorage.setItem('iphone_contacts', JSON.stringify(data)),
-    getChats: () => JSON.parse(localStorage.getItem('iphone_chats')) || {}, 
-    saveChats: (data) => localStorage.setItem('iphone_chats', JSON.stringify(data)),
-    getWorldBook: () => JSON.parse(localStorage.getItem('iphone_worldbook')) || { categories: [{id: 'default', name: '默认分类'}], entries: [] },
-    saveWorldBook: (data) => localStorage.setItem('iphone_worldbook', JSON.stringify(data)),
-    getSpyData: () => JSON.parse(localStorage.getItem('iphone_spy_data')) || {},
-    saveSpyData: (data) => localStorage.setItem('iphone_spy_data', JSON.stringify(data)),
-    getTheme: () => JSON.parse(localStorage.getItem('iphone_theme')) || { wallpaperType: 'color', wallpaperValue: '#ffffff', caseColor: '#1a1a1a', widgetImage: '', appIcons: {}, customFontUrl: '', fontColor: '#000000' },
-    saveTheme: (data) => localStorage.setItem('iphone_theme', JSON.stringify(data)),
+    saveSettings: (data) => {
+        MEMORY_CACHE['iphone_settings'] = data;
+        saveToIndexedDB('iphone_settings', data);
+    },
+    getContacts: () => MEMORY_CACHE['iphone_contacts'] || [],
+    saveContacts: (data) => {
+        MEMORY_CACHE['iphone_contacts'] = data;
+        saveToIndexedDB('iphone_contacts', data);
+    },
+    getChats: () => MEMORY_CACHE['iphone_chats'] || {}, 
+    saveChats: (data) => {
+        MEMORY_CACHE['iphone_chats'] = data;
+        saveToIndexedDB('iphone_chats', data);
+    },
+    getWorldBook: () => MEMORY_CACHE['iphone_worldbook'] || { categories: [{id: 'default', name: '默认分类'}], entries: [] },
+    saveWorldBook: (data) => {
+        MEMORY_CACHE['iphone_worldbook'] = data;
+        saveToIndexedDB('iphone_worldbook', data);
+    },
+    getSpyData: () => MEMORY_CACHE['iphone_spy_data'] || {},
+    saveSpyData: (data) => {
+        MEMORY_CACHE['iphone_spy_data'] = data;
+        saveToIndexedDB('iphone_spy_data', data);
+    },
+    getTheme: () => MEMORY_CACHE['iphone_theme'] || { wallpaperType: 'color', wallpaperValue: '#ffffff', caseColor: '#1a1a1a', widgetImage: '', appIcons: {}, customFontUrl: '', fontColor: '#000000' },
+    saveTheme: (data) => {
+        MEMORY_CACHE['iphone_theme'] = data;
+        saveToIndexedDB('iphone_theme', data);
+    },
     getMemories: () => {
-        let mems = JSON.parse(localStorage.getItem('iphone_memories')) || {};
+        let mems = MEMORY_CACHE['iphone_memories'] || {};
+        // 数据结构迁移逻辑
         for (let id in mems) {
             if (Array.isArray(mems[id])) {
                 const oldArr = mems[id];
@@ -112,13 +271,31 @@ const DB = {
         }
         return mems;
     },
-    saveMemories: (data) => localStorage.setItem('iphone_memories', JSON.stringify(data)),
-    getCalendarEvents: () => JSON.parse(localStorage.getItem('iphone_calendar_events')) || {},
-    saveCalendarEvents: (data) => localStorage.setItem('iphone_calendar_events', JSON.stringify(data)),
-    getStickers: () => JSON.parse(localStorage.getItem('iphone_stickers')) || [],
-    saveStickers: (data) => localStorage.setItem('iphone_stickers', JSON.stringify(data)),
-    getCoupleData: () => JSON.parse(localStorage.getItem('iphone_couple_data')) || { active: false, partnerId: null, startTime: 0, lastWaterTime: 0, treeLevel: 0, letters: [] },
-    saveCoupleData: (data) => localStorage.setItem('iphone_couple_data', JSON.stringify(data))
+    saveMemories: (data) => {
+        MEMORY_CACHE['iphone_memories'] = data;
+        saveToIndexedDB('iphone_memories', data);
+    },
+    getCalendarEvents: () => MEMORY_CACHE['iphone_calendar_events'] || {},
+    saveCalendarEvents: (data) => {
+        MEMORY_CACHE['iphone_calendar_events'] = data;
+        saveToIndexedDB('iphone_calendar_events', data);
+    },
+    getStickers: () => MEMORY_CACHE['iphone_stickers'] || [],
+    saveStickers: (data) => {
+        MEMORY_CACHE['iphone_stickers'] = data;
+        saveToIndexedDB('iphone_stickers', data);
+    },
+    getCoupleData: () => MEMORY_CACHE['iphone_couple_data'] || { active: false, partnerId: null, startTime: 0, lastWaterTime: 0, treeLevel: 0, letters: [] },
+    saveCoupleData: (data) => {
+        MEMORY_CACHE['iphone_couple_data'] = data;
+        saveToIndexedDB('iphone_couple_data', data);
+    },
+    // 提问箱数据
+    getQuestionBox: () => MEMORY_CACHE['iphone_question_box'] || {},
+    saveQuestionBox: (data) => {
+        MEMORY_CACHE['iphone_question_box'] = data;
+        saveToIndexedDB('iphone_question_box', data);
+    }
 };
 
 // --- 情侣空间逻辑 ---
@@ -1487,8 +1664,19 @@ async function callSpyAPI(type) {
 }
 
 let currentChatContact = null, longPressTimer, selectedMessageIndex = -1, isSelectionMode = false, selectedIndices = new Set(), pendingQuoteContent = null;
+let displayedMessageCount = 20; // 初始显示的消息数量
+const MESSAGES_PER_PAGE = 20; // 每次加载的消息数量
 function renderVKList() { const l = document.getElementById('vk-chat-list'); l.innerHTML = ''; DB.getContacts().forEach(c => { const d = document.createElement('div'); d.className = 'chat-list-item'; d.onclick = () => openChat(c); d.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">点击开始聊天</div></div>`; l.appendChild(d); }); }
-function openChat(c) { currentChatContact = c; document.getElementById('chat-interface').style.display = 'flex'; document.getElementById('chat-title').innerText = c.name; exitDeleteMode(); cancelQuote(); applyChatTheme(c); renderChatHistory(); }
+function openChat(c) { 
+    currentChatContact = c; 
+    displayedMessageCount = MESSAGES_PER_PAGE; // 重置显示的消息数量
+    document.getElementById('chat-interface').style.display = 'flex'; 
+    document.getElementById('chat-title').innerText = c.name; 
+    exitDeleteMode(); 
+    cancelQuote(); 
+    applyChatTheme(c); 
+    renderChatHistory(); 
+}
 function applyChatTheme(contact) { const theme = contact.chatTheme || {}; const styleTag = document.getElementById('dynamic-chat-theme'); const chatInterface = document.getElementById('chat-interface'); if (theme.bgType === 'image' && theme.bgValue) { chatInterface.style.backgroundImage = `url(${theme.bgValue})`; chatInterface.style.backgroundColor = 'transparent'; } else { chatInterface.style.backgroundImage = 'none'; chatInterface.style.backgroundColor = theme.bgValue || '#f5f5f5'; } let css = ''; if (theme.userBubbleColor) css += `.message-bubble.user { background-color: ${theme.userBubbleColor} !important; color: #fff; } `; if (theme.userBubbleCSS) css += `.message-bubble.user { ${theme.userBubbleCSS} } `; if (theme.aiBubbleColor) css += `.message-bubble.ai { background-color: ${theme.aiBubbleColor} !important; } `; if (theme.aiBubbleCSS) css += `.message-bubble.ai { ${theme.aiBubbleCSS} } `; styleTag.innerHTML = css; }
 function closeChat() { document.getElementById('chat-interface').style.display = 'none'; currentChatContact = null; }
 let currentChatBgType = 'color';
@@ -1519,22 +1707,55 @@ function formatChatTime(timestamp) {
     return `${date.getMonth() + 1}月${date.getDate()}日 ${timeStr}`;
 }
 
-function renderChatHistory() { 
+function loadMoreMessages() {
+    displayedMessageCount += MESSAGES_PER_PAGE;
+    renderChatHistory(true); // true 表示保持滚动位置
+}
+
+function renderChatHistory(maintainScroll = false) { 
     const fullChat = DB.getChats()[currentChatContact.id] || []; 
     const h = document.getElementById('chat-history'); 
     const callHistory = document.getElementById('call-history');
     const isCallActive = document.getElementById('call-screen').classList.contains('active');
 
+    // 保存当前的滚动高度和位置，用于加载更多消息后恢复位置
+    let oldScrollHeight = 0;
+    let oldScrollTop = 0;
+    if (h && maintainScroll) {
+        oldScrollHeight = h.scrollHeight;
+        oldScrollTop = h.scrollTop;
+    }
+
     if (h) h.innerHTML = '';
     if (isCallActive && callHistory) callHistory.innerHTML = '';
 
     const onlineMsgs = fullChat.map((msg, originalIndex) => ({ msg, originalIndex })).filter(item => item.msg.mode !== 'offline'); 
+    
+    // 分页逻辑：只取最后 displayedMessageCount 条消息
+    const totalOnlineMsgs = onlineMsgs.length;
+    const startIndex = Math.max(0, totalOnlineMsgs - displayedMessageCount);
+    const visibleMsgs = onlineMsgs.slice(startIndex);
+    
+    // 如果还有更多消息，显示"加载更早的消息"按钮
+    if (startIndex > 0 && h && document.getElementById('chat-interface').style.display !== 'none') {
+        const loadMoreBtn = document.createElement('div');
+        loadMoreBtn.className = 'load-more-btn';
+        loadMoreBtn.innerText = '加载更早的消息';
+        loadMoreBtn.onclick = loadMoreMessages;
+        loadMoreBtn.style.textAlign = 'center';
+        loadMoreBtn.style.padding = '10px';
+        loadMoreBtn.style.color = '#007aff';
+        loadMoreBtn.style.fontSize = '12px';
+        loadMoreBtn.style.cursor = 'pointer';
+        h.appendChild(loadMoreBtn);
+    }
+
     const aiAv = currentChatContact.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'; 
     const userAv = currentChatContact.userSettings?.userAvatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23007aff%22 width=%22100%22 height=%22100%22/></svg>'; 
     
     let lastMsgTime = 0; 
 
-    onlineMsgs.forEach((item, i) => { 
+    visibleMsgs.forEach((item, i) => { 
         const msg = item.msg;
         const originalIndex = item.originalIndex;
         if (msg.timestamp) {
@@ -1659,7 +1880,16 @@ function renderChatHistory() {
         if (isCallActive && callHistory && msg.timestamp >= currentCallStartTime) callHistory.appendChild(row.cloneNode(true));
     }); 
     
-    if (h && !isSelectionMode) h.scrollTop = h.scrollHeight; 
+    if (h && !isSelectionMode) {
+        if (maintainScroll) {
+            // 恢复滚动位置：新的滚动高度 - 旧的滚动高度 + 旧的滚动位置
+            // 实际上，当在顶部加载内容时，我们需要保持视口相对于底部内容的相对位置
+            // 或者简单地：滚动到 (新高度 - 旧高度) 的位置
+            h.scrollTop = h.scrollHeight - oldScrollHeight;
+        } else {
+            h.scrollTop = h.scrollHeight; 
+        }
+    }
     if (isCallActive && callHistory) callHistory.scrollTop = callHistory.scrollHeight;
 
     const offlineHistory = document.getElementById('offline-history'); 
@@ -2452,9 +2682,7 @@ async function callLoveLetterAPI(partner, type, userContent = '') {
 // --- 提问箱功能 ---
 let currentQBoxContact = null;
 
-// 获取提问箱数据
-DB.getQuestionBox = () => JSON.parse(localStorage.getItem('iphone_question_box')) || {};
-DB.saveQuestionBox = (data) => localStorage.setItem('iphone_question_box', JSON.stringify(data));
+// 提问箱数据方法已移至 DB 对象定义中
 
 // 渲染提问箱联系人列表
 function renderQBoxContactList() {

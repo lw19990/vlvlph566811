@@ -19,6 +19,12 @@
     <style id="dynamic-chat-theme"></style>
 </head>
 <body>
+    <!-- 数据加载遮罩 -->
+    <div id="app-loading" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#fff;">
+        <div style="font-size:24px; margin-bottom:20px;">VVPhone</div>
+        <div style="color:#888;">正在升级数据库...</div>
+    </div>
+
     <div class="phone-case">
         <div class="notch"></div>
         <div class="status-bar">
