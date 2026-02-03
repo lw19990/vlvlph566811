@@ -1159,22 +1159,22 @@
             </div>
 
             <!-- 情书列表界面 -->
-            <div class="couple-container" id="couple-letters-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);">
-                <div class="app-header" style="position:absolute; top:0; left:0; width:100%;">
+            <div class="couple-container" id="couple-letters-view" style="display:none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%); overflow: hidden; padding: 0; flex-direction: column; align-items: stretch; justify-content: flex-start;">
+                <div class="app-header" style="position: relative; flex-shrink: 0; width: 100%; height: 88px; z-index: 60; background: rgba(255, 154, 158, 0.95); backdrop-filter: blur(10px); border-bottom: none;">
                     <div class="back-btn" onclick="closeCoupleLetters()">Back</div>
                     <div class="app-title">交换情书</div>
                     <div class="action-btn"></div>
                 </div>
 
-                <div id="couple-letters-list" style="width: 100%; display: flex; flex-direction: column; gap: 20px; padding-bottom: 20px;"></div>
+                <div id="couple-letters-list" style="flex: 1; width: 100%; overflow-y: auto; padding: 20px 20px 100px 20px; display: flex; flex-direction: column; gap: 20px; z-index: 1;"></div>
                 
-                <div id="couple-letters-empty" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 50%; margin-top: 50px;">
+                <div id="couple-letters-empty" style="display: none; flex: 1; width: 100%; flex-direction: column; align-items: center; justify-content: center;">
                     <div style="font-size: 60px; margin-bottom: 20px;">💌</div>
                     <div style="font-size: 16px; opacity: 0.9; margin-bottom: 30px; text-align: center; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">还没有情书哦<br>快去邀请 TA 写一封吧</div>
                     <button class="couple-invite-btn" onclick="inviteLoveLetter()">邀请 TA 写情书</button>
                 </div>
                 
-                <div id="couple-letter-loading" class="letter-loading" style="display:none;">正在飞鸽传书中...</div>
+                <div id="couple-letter-loading" class="letter-loading" style="display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; text-align: center;">正在飞鸽传书中...</div>
             </div>
 
             <!-- 写情书界面 -->
