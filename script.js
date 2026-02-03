@@ -207,6 +207,8 @@ function goHome() {
     closeCalendarModal();
     closeOfflineEditModal();
     closeSpyDiaryEdit();
+    exitMusicDeleteMode();
+    closeMusicPlayer();
 }
 
 function closeAllOverlays() {
@@ -2720,6 +2722,771 @@ ${userPersona ? `关于 ${userName}：${userPersona}` : ''}
     
     throw new Error("API 无响应");
 }
+
+// --- 音乐 App 功能 ---
+let musicList = [];
+let currentMusicIndex = -1;
+let isPlaying = false;
+let playMode = 'single'; // 'single' 单曲循环, 'list' 列表播放
+let parsedLyrics = [];
+let currentLyricIndex = -1;
+let isMiniPlayerDragging = false;
+let miniPlayerOffset = { x: 0, y: 0 };
+
+// 获取音乐数据
+DB.getMusicList = () => {
+    const theme = DB.getTheme();
+    return theme.musicList || [];
+};
+
+DB.saveMusicList = (list) => {
+    const theme = DB.getTheme();
+    theme.musicList = list;
+    DB.saveTheme(theme);
+};
+
+// 音乐删除模式变量（必须在renderMusicList之前定义）
+let isMusicDeleteMode = false;
+let selectedMusicIds = new Set();
+
+// 渲染音乐列表
+function renderMusicList() {
+    musicList = DB.getMusicList();
+    const container = document.getElementById('music-list');
+    const emptyState = document.getElementById('music-empty');
+    
+    container.innerHTML = '';
+    
+    if (musicList.length === 0) {
+        emptyState.style.display = 'block';
+        container.style.display = 'none';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.style.display = 'block';
+    
+    // 按添加时间排序：越早添加的在越下面（时间戳从大到小）
+    const sortedList = [...musicList].sort((a, b) => b.timestamp - a.timestamp);
+    
+    sortedList.forEach((music, index) => {
+        // 找到原始索引
+        const originalIndex = musicList.findIndex(m => m.id === music.id);
+        
+        const item = document.createElement('div');
+        item.className = 'music-list-item';
+        
+        // 删除模式下的复选框
+        if (isMusicDeleteMode) {
+            const checkbox = document.createElement('div');
+            checkbox.className = 'music-list-checkbox';
+            if (selectedMusicIds.has(music.id)) {
+                checkbox.classList.add('checked');
+            }
+            item.appendChild(checkbox);
+            
+            item.onclick = () => toggleMusicSelection(music.id);
+        } else {
+            item.onclick = () => openMusicPlayer(originalIndex);
+        }
+        
+        let coverHtml = '';
+        if (music.cover) {
+            coverHtml = `<div class="music-list-cover"><img src="${music.cover}" alt="封面"></div>`;
+        } else {
+            coverHtml = `<div class="music-list-cover">🎵</div>`;
+        }
+        
+        let styleHtml = '';
+        if (music.style) {
+            styleHtml = `<div class="music-list-style">${music.style}</div>`;
+        }
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.innerHTML = `
+            ${coverHtml}
+            <div class="music-list-info">
+                <div class="music-list-title">${music.title}</div>
+                <div class="music-list-artist">${music.artist}</div>
+                ${styleHtml}
+            </div>
+        `;
+        item.innerHTML += infoDiv.innerHTML;
+        
+        container.appendChild(item);
+    });
+}
+
+// 打开添加音乐弹窗
+function openAddMusicModal() {
+    document.getElementById('add-music-modal').classList.add('active');
+    resetAddMusicForm();
+}
+
+// 关闭添加音乐弹窗
+function closeAddMusicModal() {
+    document.getElementById('add-music-modal').classList.remove('active');
+}
+
+// 重置添加音乐表单
+function resetAddMusicForm() {
+    document.getElementById('music-title-input').value = '';
+    document.getElementById('music-artist-input').value = '';
+    document.getElementById('music-url-input').value = '';
+    document.getElementById('music-style-input').value = '';
+    document.getElementById('music-cover-url').value = '';
+    document.getElementById('music-cover-file').value = '';
+    document.getElementById('music-lyrics-input').value = '';
+    
+    const preview = document.getElementById('music-cover-preview');
+    preview.innerHTML = '<span>点击上传封面</span>';
+    const previewImg = document.getElementById('music-cover-preview-img');
+    previewImg.style.display = 'none';
+    previewImg.src = '';
+    
+    // 重置封面上传标签
+    document.getElementById('cover-tab-file').classList.add('active');
+    document.getElementById('cover-tab-url').classList.remove('active');
+    document.getElementById('cover-file-section').style.display = 'block';
+    document.getElementById('cover-url-section').style.display = 'none';
+}
+
+// 切换封面上传方式
+function switchCoverTab(tab) {
+    document.getElementById('cover-tab-file').classList.toggle('active', tab === 'file');
+    document.getElementById('cover-tab-url').classList.toggle('active', tab === 'url');
+    document.getElementById('cover-file-section').style.display = tab === 'file' ? 'block' : 'none';
+    document.getElementById('cover-url-section').style.display = tab === 'url' ? 'block' : 'none';
+}
+
+// 预览封面（本地上传）
+function previewMusicCover(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const previewContainer = document.getElementById('music-cover-preview');
+            const spanElement = previewContainer.querySelector('span');
+            let previewImg = document.getElementById('music-cover-preview-img');
+            
+            // 如果img元素不存在（被resetAddMusicForm删除了），则创建一个新的
+            if (!previewImg) {
+                previewImg = document.createElement('img');
+                previewImg.id = 'music-cover-preview-img';
+                previewImg.style.width = '100%';
+                previewImg.style.height = '100%';
+                previewImg.style.objectFit = 'cover';
+                previewImg.style.borderRadius = '8px';
+                previewContainer.appendChild(previewImg);
+            }
+            
+            // 设置图片源并显示
+            previewImg.src = e.target.result;
+            previewImg.style.display = 'block';
+            
+            // 隐藏"点击上传封面"文字
+            if (spanElement) {
+                spanElement.style.display = 'none';
+            }
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// 预览封面（URL）
+function previewMusicCoverUrl(url) {
+    if (url && url.trim()) {
+        const previewImg = document.getElementById('music-cover-preview-img');
+        previewImg.src = url;
+        previewImg.style.display = 'block';
+        document.getElementById('music-cover-preview').querySelector('span').style.display = 'none';
+    }
+}
+
+// 保存新音乐
+function saveNewMusic() {
+    const title = document.getElementById('music-title-input').value.trim();
+    const artist = document.getElementById('music-artist-input').value.trim();
+    const url = document.getElementById('music-url-input').value.trim();
+    const style = document.getElementById('music-style-input').value.trim();
+    const lyrics = document.getElementById('music-lyrics-input').value.trim();
+    
+    if (!title) {
+        alert('请输入音乐标题');
+        return;
+    }
+    
+    if (!artist) {
+        alert('请输入歌手/制作者');
+        return;
+    }
+    
+    // 获取封面
+    const getCover = () => {
+        return new Promise((resolve) => {
+            const urlInput = document.getElementById('music-cover-url').value.trim();
+            const fileInput = document.getElementById('music-cover-file');
+            
+            if (urlInput) {
+                resolve(urlInput);
+            } else if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                resolve(null);
+            }
+        });
+    };
+    
+    getCover().then(cover => {
+        const newMusic = {
+            id: Date.now(),
+            title: title,
+            artist: artist,
+            url: url,
+            style: style,
+            cover: cover,
+            lyrics: lyrics,
+            timestamp: Date.now()
+        };
+        
+        const list = DB.getMusicList();
+        list.push(newMusic);
+        DB.saveMusicList(list);
+        
+        closeAddMusicModal();
+        renderMusicList();
+        
+        alert('音乐添加成功！');
+    });
+}
+
+// 打开音乐播放器
+function openMusicPlayer(index) {
+    musicList = DB.getMusicList();
+    if (index < 0 || index >= musicList.length) return;
+    
+    currentMusicIndex = index;
+    const music = musicList[index];
+    
+    // 显示播放器
+    document.getElementById('music-player-modal').classList.add('active');
+    
+    // 更新播放器信息
+    document.getElementById('music-player-title').innerText = music.title;
+    document.getElementById('music-player-artist').innerText = music.artist;
+    
+    // 更新封面
+    const coverImg = document.getElementById('music-player-cover-img');
+    if (music.cover) {
+        coverImg.src = music.cover;
+        coverImg.style.display = 'block';
+    } else {
+        coverImg.style.display = 'none';
+    }
+    
+    // 解析歌词
+    parseLyrics(music.lyrics);
+    renderLyrics();
+    
+    // 加载音频
+    const audio = document.getElementById('music-audio');
+    if (music.url) {
+        audio.src = music.url;
+        audio.load();
+    }
+    
+    // 更新菜单歌曲列表
+    renderMusicMenuSongs();
+    
+    // 关闭菜单
+    document.getElementById('music-player-menu').classList.remove('active');
+}
+
+// 解析LRC歌词
+function parseLyrics(lrcText) {
+    parsedLyrics = [];
+    if (!lrcText) return;
+    
+    const lines = lrcText.split('\n');
+    const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+    
+    lines.forEach(line => {
+        let match;
+        const times = [];
+        let text = line;
+        
+        while ((match = timeRegex.exec(line)) !== null) {
+            const minutes = parseInt(match[1]);
+            const seconds = parseInt(match[2]);
+            const ms = parseInt(match[3].padEnd(3, '0'));
+            const time = minutes * 60 + seconds + ms / 1000;
+            times.push(time);
+            text = text.replace(match[0], '');
+        }
+        
+        text = text.trim();
+        if (text && times.length > 0) {
+            times.forEach(time => {
+                parsedLyrics.push({ time, text });
+            });
+        }
+    });
+    
+    // 按时间排序
+    parsedLyrics.sort((a, b) => a.time - b.time);
+}
+
+// 渲染歌词
+function renderLyrics() {
+    const container = document.getElementById('music-player-lyrics');
+    container.innerHTML = '';
+    
+    if (parsedLyrics.length === 0) {
+        container.innerHTML = '<div class="lyrics-line">暂无歌词</div>';
+        return;
+    }
+    
+    parsedLyrics.forEach((lyric, index) => {
+        const line = document.createElement('div');
+        line.className = 'lyrics-line';
+        line.id = `lyric-${index}`;
+        line.innerText = lyric.text;
+        container.appendChild(line);
+    });
+}
+
+// 更新歌词高亮
+function updateLyricHighlight(currentTime) {
+    if (parsedLyrics.length === 0) return;
+    
+    let newIndex = -1;
+    for (let i = parsedLyrics.length - 1; i >= 0; i--) {
+        if (currentTime >= parsedLyrics[i].time) {
+            newIndex = i;
+            break;
+        }
+    }
+    
+    if (newIndex !== currentLyricIndex) {
+        // 移除旧高亮
+        if (currentLyricIndex >= 0) {
+            const oldLine = document.getElementById(`lyric-${currentLyricIndex}`);
+            if (oldLine) oldLine.classList.remove('active');
+        }
+        
+        // 添加新高亮
+        if (newIndex >= 0) {
+            const newLine = document.getElementById(`lyric-${newIndex}`);
+            if (newLine) {
+                newLine.classList.add('active');
+                // 滚动到当前歌词
+                const container = document.getElementById('music-player-lyrics');
+                const lineTop = newLine.offsetTop;
+                const containerHeight = container.clientHeight;
+                container.scrollTop = lineTop - containerHeight / 2 + newLine.clientHeight / 2;
+            }
+        }
+        
+        currentLyricIndex = newIndex;
+    }
+}
+
+// 切换播放/暂停
+function toggleMusicPlay() {
+    const audio = document.getElementById('music-audio');
+    const playBtn = document.getElementById('music-play-btn');
+    const cover = document.getElementById('music-player-cover');
+    
+    if (!audio.src) {
+        alert('当前歌曲没有音乐链接');
+        return;
+    }
+    
+    if (isPlaying) {
+        audio.pause();
+        playBtn.innerText = '▶';
+        cover.classList.remove('playing');
+        isPlaying = false;
+        
+        // 更新迷你播放器状态
+        document.getElementById('music-mini-player').classList.add('paused');
+    } else {
+        audio.play().then(() => {
+            playBtn.innerText = '⏸';
+            cover.classList.add('playing');
+            isPlaying = true;
+            
+            // 更新迷你播放器状态
+            document.getElementById('music-mini-player').classList.remove('paused');
+        }).catch(e => {
+            console.error('播放失败:', e);
+            alert('播放失败，请检查音乐链接是否有效');
+        });
+    }
+}
+
+// 上一首
+function prevMusic() {
+    if (musicList.length === 0) return;
+    
+    let newIndex;
+    if (playMode === 'single') {
+        // 单曲循环模式下，上一首还是当前歌曲
+        newIndex = currentMusicIndex;
+    } else {
+        // 列表播放模式
+        newIndex = currentMusicIndex - 1;
+        if (newIndex < 0) newIndex = musicList.length - 1;
+    }
+    
+    openMusicPlayer(newIndex);
+    
+    // 自动播放
+    setTimeout(() => {
+        if (isPlaying) {
+            const audio = document.getElementById('music-audio');
+            audio.play();
+        }
+    }, 100);
+}
+
+// 下一首
+function nextMusic() {
+    if (musicList.length === 0) return;
+    
+    let newIndex;
+    if (playMode === 'single') {
+        // 单曲循环模式下，下一首还是当前歌曲
+        newIndex = currentMusicIndex;
+    } else {
+        // 列表播放模式（从新到旧）
+        newIndex = currentMusicIndex + 1;
+        if (newIndex >= musicList.length) newIndex = 0;
+    }
+    
+    openMusicPlayer(newIndex);
+    
+    // 自动播放
+    setTimeout(() => {
+        if (isPlaying) {
+            const audio = document.getElementById('music-audio');
+            audio.play();
+        }
+    }, 100);
+}
+
+// 进度条点击
+function seekMusic(event) {
+    const audio = document.getElementById('music-audio');
+    if (!audio.duration) return;
+    
+    const progressBar = event.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const percent = clickX / rect.width;
+    
+    audio.currentTime = percent * audio.duration;
+}
+
+// 格式化时间
+function formatMusicTime(seconds) {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// 切换播放模式
+function switchPlayMode(mode) {
+    playMode = mode;
+    
+    document.getElementById('mode-single-check').style.display = mode === 'single' ? 'inline' : 'none';
+    document.getElementById('mode-list-check').style.display = mode === 'list' ? 'inline' : 'none';
+}
+
+// 切换菜单显示
+function toggleMusicMenu() {
+    const menu = document.getElementById('music-player-menu');
+    menu.classList.toggle('active');
+}
+
+// 渲染菜单歌曲列表
+function renderMusicMenuSongs() {
+    const container = document.getElementById('music-menu-songs');
+    container.innerHTML = '';
+    
+    musicList.forEach((music, index) => {
+        const item = document.createElement('div');
+        item.className = 'music-menu-song-item';
+        if (index === currentMusicIndex) {
+            item.classList.add('active');
+        }
+        
+        let coverHtml = '';
+        if (music.cover) {
+            coverHtml = `<div class="music-menu-song-cover"><img src="${music.cover}"></div>`;
+        } else {
+            coverHtml = `<div class="music-menu-song-cover">🎵</div>`;
+        }
+        
+        item.innerHTML = `
+            ${coverHtml}
+            <div class="music-menu-song-info">
+                <div class="music-menu-song-title">${music.title}</div>
+                <div class="music-menu-song-artist">${music.artist}</div>
+            </div>
+        `;
+        
+        item.onclick = () => {
+            openMusicPlayer(index);
+            toggleMusicMenu();
+            
+            // 自动播放
+            setTimeout(() => {
+                const audio = document.getElementById('music-audio');
+                audio.play().then(() => {
+                    document.getElementById('music-play-btn').innerText = '⏸';
+                    document.getElementById('music-player-cover').classList.add('playing');
+                    isPlaying = true;
+                });
+            }, 100);
+        };
+        
+        container.appendChild(item);
+    });
+}
+
+// 缩小播放器（显示迷你播放器）
+function minimizeMusicPlayer() {
+    document.getElementById('music-player-modal').classList.remove('active');
+    
+    // 显示迷你播放器
+    const miniPlayer = document.getElementById('music-mini-player');
+    miniPlayer.classList.add('active');
+    
+    // 更新迷你播放器封面
+    const music = musicList[currentMusicIndex];
+    const miniCover = document.getElementById('mini-player-cover');
+    if (music && music.cover) {
+        miniCover.src = music.cover;
+        miniCover.style.display = 'block';
+    } else {
+        miniCover.style.display = 'none';
+    }
+    
+    // 更新播放状态
+    if (!isPlaying) {
+        miniPlayer.classList.add('paused');
+    } else {
+        miniPlayer.classList.remove('paused');
+    }
+}
+
+// 音频事件监听
+document.addEventListener('DOMContentLoaded', function() {
+    const audio = document.getElementById('music-audio');
+    
+    if (audio) {
+        // 时间更新
+        audio.addEventListener('timeupdate', function() {
+            const currentTime = audio.currentTime;
+            const duration = audio.duration;
+            
+            // 更新进度条
+            if (duration) {
+                const percent = (currentTime / duration) * 100;
+                document.getElementById('music-progress-bar').style.width = percent + '%';
+            }
+            
+            // 更新时间显示
+            document.getElementById('music-current-time').innerText = formatMusicTime(currentTime);
+            
+            // 更新歌词高亮
+            updateLyricHighlight(currentTime);
+        });
+        
+        // 加载完成
+        audio.addEventListener('loadedmetadata', function() {
+            document.getElementById('music-duration').innerText = formatMusicTime(audio.duration);
+        });
+        
+        // 播放结束
+        audio.addEventListener('ended', function() {
+            if (playMode === 'single') {
+                // 单曲循环
+                audio.currentTime = 0;
+                audio.play();
+            } else {
+                // 列表播放
+                nextMusic();
+                setTimeout(() => {
+                    audio.play().then(() => {
+                        document.getElementById('music-play-btn').innerText = '⏸';
+                        document.getElementById('music-player-cover').classList.add('playing');
+                        isPlaying = true;
+                    });
+                }, 100);
+            }
+        });
+        
+        // 播放错误
+        audio.addEventListener('error', function() {
+            console.error('音频加载错误');
+        });
+    }
+    
+    // 迷你播放器点击事件
+    const miniPlayer = document.getElementById('music-mini-player');
+    if (miniPlayer) {
+        miniPlayer.addEventListener('click', function(e) {
+            if (!isMiniPlayerDragging) {
+                // 重新打开播放器
+                document.getElementById('music-player-modal').classList.add('active');
+                miniPlayer.classList.remove('active');
+            }
+        });
+        
+        // 迷你播放器拖动
+        miniPlayer.addEventListener('mousedown', startMiniPlayerDrag);
+        miniPlayer.addEventListener('touchstart', startMiniPlayerDrag);
+    }
+});
+
+// 迷你播放器拖动功能
+function startMiniPlayerDrag(e) {
+    isMiniPlayerDragging = false;
+    const miniPlayer = document.getElementById('music-mini-player');
+    
+    const startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+    const startY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    
+    const rect = miniPlayer.getBoundingClientRect();
+    miniPlayerOffset.x = startX - rect.left;
+    miniPlayerOffset.y = startY - rect.top;
+    
+    let hasMoved = false;
+    
+    function onMove(e) {
+        const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+        
+        const deltaX = Math.abs(clientX - startX);
+        const deltaY = Math.abs(clientY - startY);
+        
+        if (deltaX > 5 || deltaY > 5) {
+            hasMoved = true;
+            isMiniPlayerDragging = true;
+        }
+        
+        if (hasMoved) {
+            const newX = clientX - miniPlayerOffset.x;
+            const newY = clientY - miniPlayerOffset.y;
+            
+            miniPlayer.style.right = 'auto';
+            miniPlayer.style.bottom = 'auto';
+            miniPlayer.style.left = newX + 'px';
+            miniPlayer.style.top = newY + 'px';
+        }
+    }
+    
+    function onEnd() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        
+        setTimeout(() => {
+            isMiniPlayerDragging = false;
+        }, 100);
+    }
+    
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove);
+    document.addEventListener('touchend', onEnd);
+}
+
+// 切换音乐删除模式
+function toggleMusicDeleteMode() {
+    if (isMusicDeleteMode) {
+        exitMusicDeleteMode();
+    } else {
+        enterMusicDeleteMode();
+    }
+}
+
+// 进入音乐删除模式
+function enterMusicDeleteMode() {
+    isMusicDeleteMode = true;
+    selectedMusicIds.clear();
+    document.getElementById('music-list').classList.add('music-delete-mode');
+    document.getElementById('music-delete-bar').classList.add('active');
+    renderMusicList();
+}
+
+// 退出音乐删除模式
+function exitMusicDeleteMode() {
+    isMusicDeleteMode = false;
+    selectedMusicIds.clear();
+    const musicListEl = document.getElementById('music-list');
+    if (musicListEl) musicListEl.classList.remove('music-delete-mode');
+    const deleteBar = document.getElementById('music-delete-bar');
+    if (deleteBar) deleteBar.classList.remove('active');
+    renderMusicList();
+}
+
+// 切换音乐选择
+function toggleMusicSelection(musicId) {
+    if (selectedMusicIds.has(musicId)) {
+        selectedMusicIds.delete(musicId);
+    } else {
+        selectedMusicIds.add(musicId);
+    }
+    renderMusicList();
+}
+
+// 确认删除选中的音乐
+function confirmDeleteMusic() {
+    if (selectedMusicIds.size === 0) {
+        exitMusicDeleteMode();
+        return;
+    }
+    
+    if (confirm(`确定要删除选中的 ${selectedMusicIds.size} 首音乐吗？`)) {
+        let list = DB.getMusicList();
+        list = list.filter(m => !selectedMusicIds.has(m.id));
+        DB.saveMusicList(list);
+        exitMusicDeleteMode();
+    }
+}
+
+// 关闭音乐播放器
+function closeMusicPlayer() {
+    const audio = document.getElementById('music-audio');
+    if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+    }
+    
+    isPlaying = false;
+    document.getElementById('music-player-modal').classList.remove('active');
+    document.getElementById('music-mini-player').classList.remove('active');
+    document.getElementById('music-player-cover').classList.remove('playing');
+    document.getElementById('music-play-btn').innerText = '▶';
+    
+    // 重置歌词
+    currentLyricIndex = -1;
+}
+
+// 在 openApp 中添加音乐APP的渲染
+const originalOpenAppForMusic = openApp;
+openApp = function(appId) {
+    originalOpenAppForMusic(appId);
+    if (appId === 'app-music') {
+        renderMusicList();
+    }
+};
 
 // --- 交换情书功能 ---
 let currentCharLetter = null; // 当前角色情书内容

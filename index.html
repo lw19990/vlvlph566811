@@ -89,7 +89,7 @@
                             <div class="page2-app-grid">
                                 <div class="app-icon" id="icon-app-couple" onclick="openApp('app-couple')" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
                                 <div class="app-icon" id="icon-app-tomato" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
-                                <div class="app-icon" id="icon-app-music" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
+                                <div class="app-icon" id="icon-app-music" onclick="openApp('app-music')" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
                                 <div class="app-icon" id="icon-app-forum" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
                             </div>
 
@@ -1385,6 +1385,169 @@
                 </div>
             </div>
         </div>
+
+        <!-- 20. 音乐 App -->
+        <div id="app-music" class="screen">
+            <div class="app-header music-header">
+                <div class="back-btn" onclick="goHome()">Back</div>
+                <div class="app-title">音乐</div>
+                <div class="action-btn" style="display:flex; gap:15px; align-items:center;">
+                    <span onclick="toggleMusicDeleteMode()" style="font-size:18px;">🗑️</span>
+                    <span onclick="openAddMusicModal()" style="font-size:24px;">+</span>
+                </div>
+            </div>
+            <!-- 删除模式底部栏 -->
+            <div id="music-delete-bar" class="album-delete-bar">
+                <div class="album-delete-cancel" onclick="exitMusicDeleteMode()">取消</div>
+                <div class="album-delete-confirm" onclick="confirmDeleteMusic()">删除选中</div>
+            </div>
+            <div class="app-content music-content" id="music-list">
+                <!-- 音乐列表将动态填充 -->
+            </div>
+            
+            <!-- 空状态 -->
+            <div id="music-empty" class="music-empty">
+                <div class="music-empty-icon">🎵</div>
+                <div class="music-empty-text">还没有音乐哦</div>
+                <div class="music-empty-hint">点击右上角的加号添加音乐吧</div>
+            </div>
+        </div>
+
+        <!-- 添加音乐弹窗 -->
+        <div id="add-music-modal" class="music-modal">
+            <div class="music-modal-content">
+                <div class="music-modal-header">
+                    <span onclick="closeAddMusicModal()" style="color:#ff2d55; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#333;">添加音乐</span>
+                    <span onclick="saveNewMusic()" style="color:#ff2d55; cursor:pointer;">保存</span>
+                </div>
+                <div class="music-modal-body">
+                    <div class="music-form-group">
+                        <label class="music-label">音乐标题 <span style="color:#ff2d55;">*必填</span></label>
+                        <input type="text" id="music-title-input" class="music-input" placeholder="请输入音乐标题">
+                    </div>
+                    
+                    <div class="music-form-group">
+                        <label class="music-label">歌手/制作者 <span style="color:#ff2d55;">*必填</span></label>
+                        <input type="text" id="music-artist-input" class="music-input" placeholder="请输入歌手或制作者名称">
+                    </div>
+                    
+                    <div class="music-form-group">
+                        <label class="music-label">音乐直链</label>
+                        <input type="text" id="music-url-input" class="music-input" placeholder="https://music.163.com/song/media/outer/url?id=歌曲ID.mp3">
+                        <div class="music-hint">格式：https://music.163.com/song/media/outer/url?id=歌曲ID.mp3</div>
+                    </div>
+                    
+                    <div class="music-form-group">
+                        <label class="music-label">音乐风格 <span style="color:#999;">(选填，推荐填写)</span></label>
+                        <input type="text" id="music-style-input" class="music-input" placeholder="钢琴/舒缓/摇滚/轻音乐等...">
+                    </div>
+                    
+                    <div class="music-form-group">
+                        <label class="music-label">歌曲封面 <span style="color:#999;">(选填，推荐上传)</span></label>
+                        <div class="music-cover-upload-tabs">
+                            <div class="music-cover-tab active" id="cover-tab-file" onclick="switchCoverTab('file')">本地上传</div>
+                            <div class="music-cover-tab" id="cover-tab-url" onclick="switchCoverTab('url')">URL上传</div>
+                        </div>
+                        <div id="cover-file-section">
+                            <div class="music-cover-preview" id="music-cover-preview" onclick="document.getElementById('music-cover-file').click()">
+                                <span>点击上传封面</span>
+                                <img id="music-cover-preview-img" src="" style="display:none;">
+                            </div>
+                            <input type="file" id="music-cover-file" accept="image/*" style="display:none;" onchange="previewMusicCover(this)">
+                        </div>
+                        <div id="cover-url-section" style="display:none;">
+                            <input type="text" id="music-cover-url" class="music-input" placeholder="请输入封面图片URL" oninput="previewMusicCoverUrl(this.value)">
+                        </div>
+                    </div>
+                    
+                    <div class="music-form-group">
+                        <label class="music-label">歌词LRC文件 <span style="color:#999;">(请粘贴LRC文件的歌词内容)</span></label>
+                        <textarea id="music-lyrics-input" class="music-textarea" placeholder="[00:00.00]歌词内容&#10;[00:05.00]第二行歌词&#10;..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 音乐播放器弹窗 -->
+        <div id="music-player-modal" class="music-player-modal">
+            <div class="music-player-content">
+                <!-- 左上角缩小按钮 -->
+                <div class="music-player-minimize" onclick="minimizeMusicPlayer()">−</div>
+                
+                <!-- 右上角退出按钮 -->
+                <div class="music-player-close" onclick="closeMusicPlayer()">✕</div>
+                
+                <!-- 右下角菜单按钮 -->
+                <div class="music-player-menu-btn" onclick="toggleMusicMenu()">☰</div>
+                
+                <!-- 旋转封面 -->
+                <div class="music-player-cover-container">
+                    <div class="music-player-cover" id="music-player-cover">
+                        <img id="music-player-cover-img" src="" alt="封面">
+                    </div>
+                </div>
+                
+                <!-- 歌曲信息 -->
+                <div class="music-player-info">
+                    <div class="music-player-title" id="music-player-title">歌曲名称</div>
+                    <div class="music-player-artist" id="music-player-artist">歌手</div>
+                </div>
+                
+                <!-- 歌词显示区域 -->
+                <div class="music-player-lyrics" id="music-player-lyrics">
+                    <div class="lyrics-line">暂无歌词</div>
+                </div>
+                
+                <!-- 进度条 -->
+                <div class="music-player-progress-container">
+                    <span class="music-time" id="music-current-time">0:00</span>
+                    <div class="music-player-progress" onclick="seekMusic(event)">
+                        <div class="music-player-progress-bar" id="music-progress-bar"></div>
+                    </div>
+                    <span class="music-time" id="music-duration">0:00</span>
+                </div>
+                
+                <!-- 控制按钮 -->
+                <div class="music-player-controls">
+                    <div class="music-control-btn" onclick="prevMusic()">⏮</div>
+                    <div class="music-control-btn play-btn" id="music-play-btn" onclick="toggleMusicPlay()">▶</div>
+                    <div class="music-control-btn" onclick="nextMusic()">⏭</div>
+                </div>
+                
+                <!-- 菜单弹出层 -->
+                <div class="music-player-menu" id="music-player-menu">
+                    <div class="music-menu-header">
+                        <span class="music-menu-title">播放设置</span>
+                        <span class="music-menu-close" onclick="toggleMusicMenu()">✕</span>
+                    </div>
+                    <div class="music-menu-item" onclick="switchPlayMode('single')">
+                        <span>🔂</span> 单曲循环
+                        <span class="music-menu-check" id="mode-single-check">✓</span>
+                    </div>
+                    <div class="music-menu-item" onclick="switchPlayMode('list')">
+                        <span>📃</span> 列表播放
+                        <span class="music-menu-check" id="mode-list-check" style="display:none;">✓</span>
+                    </div>
+                    <div class="music-menu-divider"></div>
+                    <div class="music-menu-title">切换歌曲</div>
+                    <div class="music-menu-songs" id="music-menu-songs">
+                        <!-- 歌曲列表将动态填充 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 迷你播放器（可拖动） -->
+        <div id="music-mini-player" class="music-mini-player">
+            <img id="mini-player-cover" src="" alt="封面">
+            <div class="mini-player-playing-indicator">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <!-- 隐藏的音频元素 -->
+        <audio id="music-audio" preload="auto"></audio>
 
         <div class="home-indicator" onclick="goHome()"></div>
     </div>
