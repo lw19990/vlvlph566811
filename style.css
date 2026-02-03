@@ -1202,53 +1202,150 @@ input:checked + .slider:before { transform: translateX(22px); }
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
 
-/* 情书功能样式 - 新版 */
+/* 情书列表视图样式修复 */
+#couple-letters-view {
+    display: flex !important;
+    flex-direction: column !important;
+    padding-top: 88px !important; /* 确保内容不与 header 重叠 */
+    overflow-y: auto !important; /* 整个视图可滚动 */
+    -webkit-overflow-scrolling: touch;
+}
 
-/* 新版信纸样式 */
-.letter-paper-new {
-    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
+#couple-letters-view .app-header {
+    position: fixed !important; /* 固定定位，不随滚动 */
+    top: 0;
+    left: 0;
     width: 100%;
-    min-height: 350px;
+    z-index: 100;
+    background: linear-gradient(135deg, rgba(255, 154, 158, 0.98) 0%, rgba(250, 208, 196, 0.98) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: none;
+}
+
+#couple-letters-list {
+    width: 100%;
+    padding: 0 20px 20px 20px;
+}
+
+#couple-letters-empty {
+    margin-top: 30px;
+}
+
+.love-letter-card {
+    margin-bottom: 15px;
+}
+
+/* 情书功能样式 - 重新设计 */
+
+/* 邀请写情书按钮 */
+.letter-invite-btn {
+    background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
+    color: #fff;
+    border: none;
+    padding: 16px 32px;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 6px 20px rgba(255, 107, 138, 0.4);
+    transition: all 0.3s;
+    margin-top: 20px;
+}
+
+.letter-invite-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 3px 10px rgba(255, 107, 138, 0.3);
+}
+
+.letter-invite-btn span {
+    font-size: 20px;
+}
+
+/* 情书信纸展示样式 */
+.letter-paper-display {
+    background: linear-gradient(180deg, #fff0f5 0%, #ffe8ef 100%);
     border-radius: 16px;
     padding: 25px 20px;
     position: relative;
     box-shadow: 0 8px 25px rgba(255, 107, 138, 0.2);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 2px solid rgba(255, 182, 193, 0.5);
+    border: 2px solid #ffb6c1;
+    margin-bottom: 20px;
 }
 
-.letter-paper-hearts {
+.letter-paper-display::before {
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 35px;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    background: linear-gradient(90deg, rgba(255,182,193,0.3), rgba(255,192,203,0.5), rgba(255,182,193,0.3));
-    font-size: 14px;
-    opacity: 0.8;
+    height: 8px;
+    background: linear-gradient(90deg, #ffb6c1, #ff6b8a, #ffb6c1);
+    border-radius: 14px 14px 0 0;
 }
 
-.letter-paper-decoration {
+.letter-hearts-decoration {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    opacity: 0.6;
+}
+
+.letter-hearts-decoration span {
+    font-size: 16px;
+    animation: heartBeat 1.5s infinite;
+}
+
+.letter-hearts-decoration span:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.letter-hearts-decoration span:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+@keyframes heartBeat {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.letter-content {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #5d4037;
+    white-space: pre-wrap;
+    text-align: left;
+    min-height: 150px;
+}
+
+/* 情书编辑信纸样式 */
+.letter-paper-edit {
+    background: linear-gradient(180deg, #fff0f5 0%, #ffe8ef 100%);
+    border-radius: 16px;
+    padding: 25px 20px;
+    margin: 0 20px;
+    position: relative;
+    box-shadow: 0 8px 25px rgba(255, 107, 138, 0.2);
+    border: 2px solid #ffb6c1;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100% - 160px);
+}
+
+.letter-paper-edit::before {
+    content: '';
     position: absolute;
-    bottom: 15px;
-    right: 15px;
-    display: flex;
-    gap: 8px;
-    font-size: 20px;
-    opacity: 0.4;
-}
-
-.letter-paper-decoration span:first-child {
-    transform: rotate(-15deg);
-}
-
-.letter-paper-decoration span:last-child {
-    transform: rotate(15deg);
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: linear-gradient(90deg, #ffb6c1, #ff6b8a, #ffb6c1);
+    border-radius: 14px 14px 0 0;
 }
 
 #love-letter-textarea {
@@ -1259,331 +1356,58 @@ input:checked + .slider:before { transform: translateX(22px); }
     outline: none;
     resize: none;
     font-size: 16px;
-    line-height: 2;
+    line-height: 1.8;
     color: #5d4037;
-    margin-top: 25px;
     font-family: inherit;
-    background-image: repeating-linear-gradient(
-        transparent,
-        transparent 31px,
-        rgba(255, 182, 193, 0.3) 31px,
-        rgba(255, 182, 193, 0.3) 32px
-    );
+    min-height: 200px;
 }
 
 #love-letter-textarea::placeholder {
     color: #d4a5a5;
 }
 
-/* 角色情书展示卡片 */
-.letter-display-card {
-    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
-    border-radius: 20px;
-    padding: 25px;
-    position: relative;
-    box-shadow: 0 8px 30px rgba(255, 107, 138, 0.25);
-    border: 2px solid rgba(255, 182, 193, 0.5);
-    overflow: hidden;
-}
-
-.letter-display-card::before {
-    content: '';
-    position: absolute;
-    top: -50px;
-    right: -50px;
-    width: 150px;
-    height: 150px;
-    background: radial-gradient(circle, rgba(255,182,193,0.4) 0%, transparent 70%);
-    pointer-events: none;
-}
-
-.letter-display-card::after {
-    content: '';
-    position: absolute;
-    bottom: -30px;
-    left: -30px;
-    width: 100px;
-    height: 100px;
-    background: radial-gradient(circle, rgba(255,182,193,0.3) 0%, transparent 70%);
-    pointer-events: none;
-}
-
-.letter-display-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 2px dashed rgba(255, 107, 138, 0.3);
-}
-
-.letter-display-from {
-    font-size: 18px;
-    font-weight: bold;
-    color: #ff6b8a;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.letter-display-date {
-    font-size: 12px;
-    color: #d4a5a5;
-}
-
-.letter-display-body {
-    font-size: 16px;
-    line-height: 1.8;
-    color: #5d4037;
-    white-space: pre-wrap;
-    position: relative;
-    z-index: 1;
-    min-height: 150px;
-}
-
-.letter-display-hearts {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    margin-top: 20px;
-    font-size: 18px;
-    opacity: 0.6;
-}
-
+/* 交换情书按钮 */
 .letter-exchange-btn {
-    width: 100%;
-    margin-top: 20px;
-    padding: 15px;
     background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
     color: #fff;
     border: none;
-    border-radius: 30px;
-    font-size: 16px;
-    font-weight: bold;
+    padding: 14px 28px;
+    border-radius: 25px;
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 5px 20px rgba(255, 107, 138, 0.4);
-    transition: transform 0.2s, box-shadow 0.2s;
     display: flex;
-    justify-content: center;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 5px 15px rgba(255, 107, 138, 0.4);
+    transition: all 0.3s;
+    width: calc(100% - 40px);
+    margin: 0 auto;
 }
 
 .letter-exchange-btn:active {
     transform: scale(0.98);
-    box-shadow: 0 3px 10px rgba(255, 107, 138, 0.3);
 }
 
-/* 情书收纳箱网格 */
-.letter-box-grid {
-    flex: 1;
-    width: 100%;
-    padding: 20px 15px;
-    overflow-y: auto;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-content: flex-start;
-    gap: 15px;
+.letter-exchange-btn span {
+    font-size: 18px;
 }
 
-.letter-box-item {
-    width: calc(50% - 8px);
-    aspect-ratio: 1;
-    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
-    border-radius: 16px;
-    border: 2px solid rgba(255, 182, 193, 0.5);
-    box-shadow: 0 4px 15px rgba(255, 107, 138, 0.2);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    position: relative;
-    overflow: hidden;
-}
-
-.letter-box-item:active {
-    transform: scale(0.95);
-}
-
-.letter-box-item::before {
-    content: '💌';
-    font-size: 40px;
-    margin-bottom: 10px;
-    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.1));
-}
-
-.letter-box-item-date {
-    font-size: 14px;
-    color: #ff6b8a;
-    font-weight: 600;
-    text-shadow: 0 1px 2px rgba(255,255,255,0.8);
-}
-
-.letter-box-item-hearts {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 12px;
-    opacity: 0.6;
-}
-
-.letter-box-empty {
-    flex: 1;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-}
-
-/* 情书详情弹窗 */
-.letter-detail-modal {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 100;
-    display: none;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-}
-
-.letter-detail-modal.active {
-    display: flex;
-}
-
-.letter-detail-content {
-    width: 100%;
-    max-height: 90%;
-    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
-    border-radius: 24px;
-    padding: 25px 20px;
-    position: relative;
-    box-shadow: 0 15px 50px rgba(255, 107, 138, 0.4);
-    border: 3px solid rgba(255, 182, 193, 0.6);
-    overflow-y: auto;
-    animation: letterDetailSlideUp 0.3s ease;
-}
-
-@keyframes letterDetailSlideUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-.letter-detail-close {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    width: 32px;
-    height: 32px;
-    background: rgba(255, 107, 138, 0.2);
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    font-size: 16px;
-    color: #ff6b8a;
-    z-index: 10;
-    transition: background 0.2s;
-}
-
-.letter-detail-close:active {
-    background: rgba(255, 107, 138, 0.4);
-}
-
-.letter-detail-section {
-    padding: 20px;
-    border-radius: 16px;
-    margin-bottom: 15px;
-    position: relative;
-}
-
-.letter-detail-section.char-section {
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px dashed rgba(255, 107, 138, 0.4);
-}
-
-.letter-detail-section.user-section {
-    background: rgba(255, 182, 193, 0.2);
-    border: 1px dashed rgba(255, 107, 138, 0.4);
-}
-
-.letter-detail-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 107, 138, 0.2);
-}
-
-.letter-detail-role {
-    font-size: 16px;
-    font-weight: bold;
-    color: #ff6b8a;
-}
-
-.letter-detail-date {
-    font-size: 12px;
-    color: #d4a5a5;
-}
-
-.letter-detail-body {
-    font-size: 15px;
-    line-height: 1.8;
-    color: #5d4037;
-    white-space: pre-wrap;
-}
-
-.letter-detail-divider {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 10px 0;
-    position: relative;
-}
-
-.letter-detail-divider::before,
-.letter-detail-divider::after {
-    content: '';
-    flex: 1;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(255, 107, 138, 0.4), transparent);
-}
-
-.letter-detail-divider span {
-    padding: 0 15px;
-    font-size: 20px;
-}
-
-/* 加载动画 */
+/* 情书加载状态 */
 .letter-loading {
-    text-align: center;
-    padding: 20px;
-    color: #fff;
-    font-size: 14px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #ff6b8a;
+    font-size: 14px;
     gap: 15px;
 }
 
 .letter-loading-icon {
-    font-size: 50px;
+    font-size: 48px;
     animation: letterFloat 2s ease-in-out infinite;
 }
 
@@ -1592,34 +1416,124 @@ input:checked + .slider:before { transform: translateX(22px); }
     50% { transform: translateY(-15px) rotate(5deg); }
 }
 
-/* 旧版样式保留兼容 */
-.letter-paper {
-    background: #fff0f5;
+/* 情书收纳箱网格 */
+.letter-box-grid {
     width: 100%;
-    min-height: 300px;
-    border-radius: 10px;
-    padding: 20px;
-    position: relative;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    padding: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    overflow-y: auto;
+    align-content: flex-start;
+}
+
+/* 情书预览卡片 */
+.letter-preview-card {
+    width: calc(50% - 7.5px);
+    aspect-ratio: 1;
+    background: linear-gradient(135deg, #fff0f5 0%, #ffe8ef 100%);
+    border-radius: 16px;
+    border: 2px solid #ffb6c1;
+    box-shadow: 0 4px 15px rgba(255, 107, 138, 0.2);
+    cursor: pointer;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
 }
-.letter-paper::before {
+
+.letter-preview-card::before {
+    content: '💌';
+    font-size: 36px;
+    margin-bottom: 10px;
+}
+
+.letter-preview-card:active {
+    transform: scale(0.95);
+}
+
+.letter-preview-date {
+    font-size: 13px;
+    color: #ff6b8a;
+    font-weight: 600;
+    text-align: center;
+}
+
+.letter-preview-hint {
+    font-size: 11px;
+    color: #d4a5a5;
+    margin-top: 5px;
+}
+
+/* 情书收纳箱空状态 */
+.letter-box-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60%;
+    color: #ff6b8a;
+    text-align: center;
+    padding: 20px;
+}
+
+.letter-box-empty-icon {
+    font-size: 60px;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* 情书详情弹窗 */
+.letter-detail-content {
+    width: 90%;
+    max-height: 85%;
+    background: linear-gradient(135deg, #fff0f5 0%, #ffe8ef 100%);
+    border-radius: 20px;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(255, 107, 138, 0.3);
+    position: relative;
+    animation: albumSlideUp 0.3s ease;
+}
+
+.letter-detail-section {
+    margin-bottom: 20px;
+}
+
+.letter-detail-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ff6b8a;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.letter-detail-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 25px 0;
+    position: relative;
+}
+
+.letter-detail-divider::before,
+.letter-detail-divider::after {
     content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; height: 30px;
-    background: repeating-linear-gradient(45deg, #ffb7b2, #ffb7b2 10px, #fff0f5 10px, #fff0f5 20px);
-    border-radius: 10px 10px 0 0;
-    opacity: 0.5;
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #ffb6c1, transparent);
 }
-.letter-decoration {
-    position: absolute;
-    bottom: 10px;
-    right: 15px;
+
+.letter-detail-divider span {
     font-size: 24px;
-    opacity: 0.5;
-    transform: rotate(-15deg);
+    margin: 0 15px;
 }
+
+/* 旧版样式兼容（保留部分） */
 .love-letter-card {
     background: #fff0f5;
     border-radius: 15px;
@@ -1630,6 +1544,7 @@ input:checked + .slider:before { transform: translateX(22px); }
     animation: slideUp 0.3s ease;
     overflow: hidden;
 }
+
 .love-letter-card::after {
     content: '❤';
     position: absolute;
@@ -1640,6 +1555,7 @@ input:checked + .slider:before { transform: translateX(22px); }
     transform: rotate(-20deg);
     pointer-events: none;
 }
+
 .love-letter-header {
     display: flex;
     justify-content: space-between;
@@ -1648,23 +1564,10 @@ input:checked + .slider:before { transform: translateX(22px); }
     border-bottom: 1px dashed rgba(0,0,0,0.1);
     padding-bottom: 10px;
 }
+
 .love-letter-role { font-weight: bold; font-size: 16px; color: #ff6b6b; }
 .love-letter-date { font-size: 12px; opacity: 0.6; }
 .love-letter-body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
-.exchange-letter-btn {
-    background: #ff6b6b;
-    color: #fff;
-    border: none;
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-size: 14px;
-    margin-top: 15px;
-    cursor: pointer;
-    float: right;
-    box-shadow: 0 2px 5px rgba(255, 107, 107, 0.3);
-    transition: transform 0.2s;
-}
-.exchange-letter-btn:active { transform: scale(0.95); }
 .couple-menu-text {
     font-size: 12px;
     font-weight: 500;
