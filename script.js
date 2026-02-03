@@ -2486,62 +2486,81 @@ async function generateSummary(contact, recentMessages) {
 
 if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').then(r => console.log('SW registered:', r.scope)).catch(e => console.log('SW failed:', e)); }); }
 
-// --- 情书功能逻辑 ---
+// --- 情书功能逻辑 (新版) ---
+
+// 打开情书主界面
 function openCoupleLetters() {
     document.getElementById('couple-main-view').style.display = 'none';
     document.getElementById('couple-letters-view').style.display = 'flex';
     renderCoupleLetters();
 }
 
+// 关闭情书主界面
 function closeCoupleLetters() {
     document.getElementById('couple-letters-view').style.display = 'none';
     document.getElementById('couple-main-view').style.display = 'flex';
 }
 
+// 渲染情书界面
 function renderCoupleLetters() {
     const cd = DB.getCoupleData();
-    const list = document.getElementById('couple-letters-list');
     const empty = document.getElementById('couple-letters-empty');
+    const content = document.getElementById('couple-letters-content');
+    const displayCard = document.getElementById('char-letter-display');
     
-    list.innerHTML = '';
+    // 检查是否有未回复的角色情书（即最新的情书是角色的）
+    // 或者如果没有情书，显示空状态
     
     if (!cd.letters || cd.letters.length === 0) {
         empty.style.display = 'flex';
+        content.style.display = 'none';
+        return;
+    }
+    
+    // 找到最新的一封情书
+    const sortedLetters = [...cd.letters].sort((a, b) => b.timestamp - a.timestamp);
+    const latestLetter = sortedLetters[0];
+    
+    // 如果最新的一封是角色写的，且没有被回复（这里简化逻辑：只要最新的是角色的，就显示在主页等待交换）
+    // 实际上，我们应该显示最新的一封角色情书，无论是否已回复，但重点是如果未回复，显示交换按钮
+    
+    // 查找最新的一封角色情书
+    const latestCharLetter = sortedLetters.find(l => l.role === 'char');
+    
+    if (!latestCharLetter) {
+        // 只有用户写的情书（理论上不应该发生，因为流程是先邀请角色写）
+        // 但为了健壮性，如果只有用户情书，也显示空状态引导邀请
+        empty.style.display = 'flex';
+        content.style.display = 'none';
         return;
     }
     
     empty.style.display = 'none';
-    
-    const sortedLetters = [...cd.letters].sort((a, b) => b.timestamp - a.timestamp);
+    content.style.display = 'flex';
     
     const contacts = DB.getContacts();
     const partner = contacts.find(c => c.id == cd.partnerId);
     const partnerName = partner ? partner.name : "TA";
-
-    sortedLetters.forEach(letter => {
-        const card = document.createElement('div');
-        card.className = 'love-letter-card';
-        
-        const dateStr = new Date(letter.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        const roleName = letter.role === 'user' ? '我' : partnerName;
-        
-        let html = `
-            <div class="love-letter-header">
-                <span class="love-letter-role">${roleName}</span>
-                <span class="love-letter-date">${dateStr}</span>
+    const dateStr = new Date(latestCharLetter.timestamp).toLocaleString('zh-CN', { month: 'long', day: 'numeric' });
+    
+    displayCard.innerHTML = `
+        <div class="letter-display-header">
+            <div class="letter-display-from">
+                <span>💌</span> 来自 ${partnerName} 的情书
             </div>
-            <div class="love-letter-body">${letter.content}</div>
-        `;
-        
-        if (letter.role === 'char') {
-            html += `<button class="exchange-letter-btn" onclick="openLetterEditor()">交换情书</button>`;
-        }
-        
-        card.innerHTML = html;
-        list.appendChild(card);
-    });
+            <div class="letter-display-date">${dateStr}</div>
+        </div>
+        <div class="letter-display-body">${latestCharLetter.content.replace(/\n/g, '<br>')}</div>
+        <div class="letter-display-hearts">
+            <span>❤️</span><span>💕</span><span>💗</span>
+        </div>
+        <button class="letter-exchange-btn" onclick="openLetterEditor()">
+            <span>✍️</span> 交换情书
+        </button>
+    `;
 }
 
+// 邀请TA写情书
 async function inviteLoveLetter() {
     const cd = DB.getCoupleData();
     const contacts = DB.getContacts();
@@ -2550,7 +2569,7 @@ async function inviteLoveLetter() {
     if (!partner) return alert("情侣数据异常，找不到伴侣信息");
     
     document.getElementById('couple-letters-empty').style.display = 'none';
-    document.getElementById('couple-letter-loading').style.display = 'block';
+    document.getElementById('couple-letter-loading').style.display = 'flex';
     
     try {
         const content = await callLoveLetterAPI(partner, 'invite');
@@ -2574,92 +2593,150 @@ async function inviteLoveLetter() {
     }
 }
 
+// 打开编辑情书界面
 function openLetterEditor() {
     document.getElementById('couple-letters-view').style.display = 'none';
     document.getElementById('couple-letter-editor').style.display = 'flex';
     document.getElementById('love-letter-textarea').value = '';
 }
 
+// 关闭编辑情书界面
 function closeLetterEditor() {
     document.getElementById('couple-letter-editor').style.display = 'none';
     document.getElementById('couple-letters-view').style.display = 'flex';
 }
 
-async function sendLoveLetter() {
+// 发送（交换）情书
+function sendLoveLetter() {
     const content = document.getElementById('love-letter-textarea').value.trim();
     if (!content) return alert("请写下你想说的话");
     
     const cd = DB.getCoupleData();
-    const contacts = DB.getContacts();
-    const partner = contacts.find(c => c.id == cd.partnerId);
     
-    if (!partner) return alert("情侣数据异常");
-
     if (!cd.letters) cd.letters = [];
-    cd.letters.push({
+    
+    // 保存用户情书
+    const newLetter = {
         id: Date.now(),
         role: 'user',
         content: content,
         timestamp: Date.now()
-    });
+    };
+    
+    cd.letters.push(newLetter);
     DB.saveCoupleData(cd);
     
-    closeLetterEditor();
-    renderCoupleLetters(); 
+    // 关闭编辑器，直接跳转到收纳箱
+    document.getElementById('couple-letter-editor').style.display = 'none';
+    openLetterBox();
     
-    document.getElementById('couple-letter-loading').style.display = 'block';
-    
-    try {
-        const replyContent = await callLoveLetterAPI(partner, 'reply', content);
-        if (replyContent) {
-            const cd = DB.getCoupleData(); 
-            cd.letters.push({
-                id: Date.now(),
-                role: 'char',
-                content: replyContent,
-                timestamp: Date.now()
-            });
-            DB.saveCoupleData(cd);
-            renderCoupleLetters();
-        }
-    } catch (e) {
-        alert("对方回信失败：" + e.message);
-    } finally {
-        document.getElementById('couple-letter-loading').style.display = 'none';
-    }
+    alert("情书交换成功！已存入收纳箱。");
 }
 
-async function callLoveLetterAPI(partner, type, userContent = '') {
+// 打开情书收纳箱
+function openLetterBox() {
+    document.getElementById('couple-letters-view').style.display = 'none';
+    document.getElementById('couple-letter-box').style.display = 'flex';
+    renderLetterBox();
+}
+
+// 关闭情书收纳箱
+function closeLetterBox() {
+    document.getElementById('couple-letter-box').style.display = 'none';
+    document.getElementById('couple-letters-view').style.display = 'flex';
+}
+
+// 渲染情书收纳箱
+function renderLetterBox() {
+    const cd = DB.getCoupleData();
+    const grid = document.getElementById('letter-box-grid');
+    const empty = document.getElementById('letter-box-empty');
+    
+    grid.innerHTML = '';
+    
+    if (!cd.letters || cd.letters.length === 0) {
+        empty.style.display = 'flex';
+        return;
+    }
+    
+    // 过滤出成对的情书（或者至少有用户回复的）
+    // 逻辑：每一封用户情书，都应该对应一封之前的角色情书
+    // 我们以用户情书为基准展示，点击后显示它和它回复的那封角色情书
+    
+    const userLetters = cd.letters.filter(l => l.role === 'user').sort((a, b) => b.timestamp - a.timestamp); // 新的在上面
+    // 需求：从上往下（越旧的情书越下面） -> 即新的在上面。
+    
+    if (userLetters.length === 0) {
+        empty.style.display = 'flex';
+        return;
+    }
+    
+    empty.style.display = 'none';
+    
+    userLetters.forEach(uLetter => {
+        const item = document.createElement('div');
+        item.className = 'letter-box-item';
+        
+        const date = new Date(uLetter.timestamp);
+        const dateStr = `${date.getMonth() + 1}月${date.getDate()}日`;
+        
+        item.innerHTML = `
+            <div class="letter-box-item-date">${dateStr}</div>
+            <div class="letter-box-item-hearts">💕</div>
+        `;
+        
+        item.onclick = () => openLetterDetail(uLetter);
+        
+        grid.appendChild(item);
+    });
+}
+
+// 打开情书详情
+function openLetterDetail(userLetter) {
+    const cd = DB.getCoupleData();
+    
+    // 找到这封用户情书对应的角色情书
+    // 逻辑：在用户情书时间戳之前，最近的一封角色情书
+    const charLetters = cd.letters.filter(l => l.role === 'char' && l.timestamp < userLetter.timestamp);
+    const charLetter = charLetters.sort((a, b) => b.timestamp - a.timestamp)[0];
+    
+    if (!charLetter) return alert("找不到对应的角色情书");
+    
+    const contacts = DB.getContacts();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    const partnerName = partner ? partner.name : "TA";
+    
+    document.getElementById('letter-detail-char-name').innerText = partnerName;
+    document.getElementById('letter-detail-char-date').innerText = new Date(charLetter.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('letter-detail-char-content').innerText = charLetter.content;
+    
+    document.getElementById('letter-detail-user-date').innerText = new Date(userLetter.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('letter-detail-user-content').innerText = userLetter.content;
+    
+    document.getElementById('letter-detail-modal').classList.add('active');
+}
+
+// 关闭情书详情
+function closeLetterDetail() {
+    document.getElementById('letter-detail-modal').classList.remove('active');
+}
+
+// API 调用
+async function callLoveLetterAPI(partner, type) {
     const settings = DB.getSettings();
     if (!settings.key) throw new Error('请先配置 API Key');
     
-    let prompt = "";
-    if (type === 'invite') {
-        prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
-                
-                请给你的恋人（用户）写一封情书。
-                
-                要求：
-                1. 第一人称视角。
-                2. 书信格式。
-                3. 表达爱意，语气温柔、深情。
-                4. 字数 200 字左右。
-                5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
-    } else {
-        prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
-                
-                你的恋人（用户）刚给你写了一封情书：
-                "${userContent}"
-                
-                请给 TA 写一封回信。
-                
-                要求：
-                1. 第一人称视角。
-                2. 书信格式。
-                3. 回应 TA 信中的内容，表达你的感受和爱意。
-                4. 字数 200 字左右。
-                5. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
-    }
+    const prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}。
+            
+            请给你的恋人（用户）写一封情书。
+            
+            要求：
+            1. 第一人称视角。
+            2. 书信格式。
+            3. 表达爱意，语气温柔、深情。
+            4. 字数 300 字左右。
+            5. 内容要细腻、感人，可以回忆你们的点滴。
+            6. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
 
     const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
     const res = await fetch(`${settings.url}/chat/completions`, {

@@ -1202,7 +1202,397 @@ input:checked + .slider:before { transform: translateX(22px); }
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
 
-/* 情书功能样式 */
+/* 情书功能样式 - 新版 */
+
+/* 新版信纸样式 */
+.letter-paper-new {
+    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
+    width: 100%;
+    min-height: 350px;
+    border-radius: 16px;
+    padding: 25px 20px;
+    position: relative;
+    box-shadow: 0 8px 25px rgba(255, 107, 138, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 2px solid rgba(255, 182, 193, 0.5);
+}
+
+.letter-paper-hearts {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 35px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: linear-gradient(90deg, rgba(255,182,193,0.3), rgba(255,192,203,0.5), rgba(255,182,193,0.3));
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.letter-paper-decoration {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    display: flex;
+    gap: 8px;
+    font-size: 20px;
+    opacity: 0.4;
+}
+
+.letter-paper-decoration span:first-child {
+    transform: rotate(-15deg);
+}
+
+.letter-paper-decoration span:last-child {
+    transform: rotate(15deg);
+}
+
+#love-letter-textarea {
+    width: 100%;
+    flex-grow: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-size: 16px;
+    line-height: 2;
+    color: #5d4037;
+    margin-top: 25px;
+    font-family: inherit;
+    background-image: repeating-linear-gradient(
+        transparent,
+        transparent 31px,
+        rgba(255, 182, 193, 0.3) 31px,
+        rgba(255, 182, 193, 0.3) 32px
+    );
+}
+
+#love-letter-textarea::placeholder {
+    color: #d4a5a5;
+}
+
+/* 角色情书展示卡片 */
+.letter-display-card {
+    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
+    border-radius: 20px;
+    padding: 25px;
+    position: relative;
+    box-shadow: 0 8px 30px rgba(255, 107, 138, 0.25);
+    border: 2px solid rgba(255, 182, 193, 0.5);
+    overflow: hidden;
+}
+
+.letter-display-card::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle, rgba(255,182,193,0.4) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.letter-display-card::after {
+    content: '';
+    position: absolute;
+    bottom: -30px;
+    left: -30px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(255,182,193,0.3) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.letter-display-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px dashed rgba(255, 107, 138, 0.3);
+}
+
+.letter-display-from {
+    font-size: 18px;
+    font-weight: bold;
+    color: #ff6b8a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.letter-display-date {
+    font-size: 12px;
+    color: #d4a5a5;
+}
+
+.letter-display-body {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #5d4037;
+    white-space: pre-wrap;
+    position: relative;
+    z-index: 1;
+    min-height: 150px;
+}
+
+.letter-display-hearts {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+    font-size: 18px;
+    opacity: 0.6;
+}
+
+.letter-exchange-btn {
+    width: 100%;
+    margin-top: 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
+    color: #fff;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 5px 20px rgba(255, 107, 138, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+.letter-exchange-btn:active {
+    transform: scale(0.98);
+    box-shadow: 0 3px 10px rgba(255, 107, 138, 0.3);
+}
+
+/* 情书收纳箱网格 */
+.letter-box-grid {
+    flex: 1;
+    width: 100%;
+    padding: 20px 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-content: flex-start;
+    gap: 15px;
+}
+
+.letter-box-item {
+    width: calc(50% - 8px);
+    aspect-ratio: 1;
+    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
+    border-radius: 16px;
+    border: 2px solid rgba(255, 182, 193, 0.5);
+    box-shadow: 0 4px 15px rgba(255, 107, 138, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.letter-box-item:active {
+    transform: scale(0.95);
+}
+
+.letter-box-item::before {
+    content: '💌';
+    font-size: 40px;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.1));
+}
+
+.letter-box-item-date {
+    font-size: 14px;
+    color: #ff6b8a;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+}
+
+.letter-box-item-hearts {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.letter-box-empty {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 情书详情弹窗 */
+.letter-detail-modal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.letter-detail-modal.active {
+    display: flex;
+}
+
+.letter-detail-content {
+    width: 100%;
+    max-height: 90%;
+    background: linear-gradient(180deg, #fff0f5 0%, #ffe4ec 100%);
+    border-radius: 24px;
+    padding: 25px 20px;
+    position: relative;
+    box-shadow: 0 15px 50px rgba(255, 107, 138, 0.4);
+    border: 3px solid rgba(255, 182, 193, 0.6);
+    overflow-y: auto;
+    animation: letterDetailSlideUp 0.3s ease;
+}
+
+@keyframes letterDetailSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.letter-detail-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 107, 138, 0.2);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 16px;
+    color: #ff6b8a;
+    z-index: 10;
+    transition: background 0.2s;
+}
+
+.letter-detail-close:active {
+    background: rgba(255, 107, 138, 0.4);
+}
+
+.letter-detail-section {
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.letter-detail-section.char-section {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px dashed rgba(255, 107, 138, 0.4);
+}
+
+.letter-detail-section.user-section {
+    background: rgba(255, 182, 193, 0.2);
+    border: 1px dashed rgba(255, 107, 138, 0.4);
+}
+
+.letter-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 107, 138, 0.2);
+}
+
+.letter-detail-role {
+    font-size: 16px;
+    font-weight: bold;
+    color: #ff6b8a;
+}
+
+.letter-detail-date {
+    font-size: 12px;
+    color: #d4a5a5;
+}
+
+.letter-detail-body {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #5d4037;
+    white-space: pre-wrap;
+}
+
+.letter-detail-divider {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 0;
+    position: relative;
+}
+
+.letter-detail-divider::before,
+.letter-detail-divider::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 138, 0.4), transparent);
+}
+
+.letter-detail-divider span {
+    padding: 0 15px;
+    font-size: 20px;
+}
+
+/* 加载动画 */
+.letter-loading {
+    text-align: center;
+    padding: 20px;
+    color: #fff;
+    font-size: 14px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.letter-loading-icon {
+    font-size: 50px;
+    animation: letterFloat 2s ease-in-out infinite;
+}
+
+@keyframes letterFloat {
+    0%, 100% { transform: translateY(0) rotate(-5deg); }
+    50% { transform: translateY(-15px) rotate(5deg); }
+}
+
+/* 旧版样式保留兼容 */
 .letter-paper {
     background: #fff0f5;
     width: 100%;
@@ -1221,19 +1611,6 @@ input:checked + .slider:before { transform: translateX(22px); }
     background: repeating-linear-gradient(45deg, #ffb7b2, #ffb7b2 10px, #fff0f5 10px, #fff0f5 20px);
     border-radius: 10px 10px 0 0;
     opacity: 0.5;
-}
-#love-letter-textarea {
-    width: 100%;
-    flex-grow: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    resize: none;
-    font-size: 16px;
-    line-height: 1.8;
-    color: #5d4037;
-    margin-top: 20px;
-    font-family: inherit;
 }
 .letter-decoration {
     position: absolute;
@@ -1288,13 +1665,6 @@ input:checked + .slider:before { transform: translateX(22px); }
     transition: transform 0.2s;
 }
 .exchange-letter-btn:active { transform: scale(0.95); }
-.letter-loading {
-    text-align: center;
-    padding: 20px;
-    color: #fff;
-    font-size: 14px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
 .couple-menu-text {
     font-size: 12px;
     font-weight: 500;
