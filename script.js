@@ -2486,236 +2486,7 @@ async function generateSummary(contact, recentMessages) {
 
 if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').then(r => console.log('SW registered:', r.scope)).catch(e => console.log('SW failed:', e)); }); }
 
-// --- 情书功能逻辑 (重构版) ---
-
-// 1. 打开交换情书主界面
-function openCoupleLetters() {
-    document.getElementById('couple-main-view').style.display = 'none';
-    document.getElementById('couple-letters-view').style.display = 'flex';
-    
-    const cd = DB.getCoupleData();
-    const inviteArea = document.getElementById('letter-invite-area');
-    const displayArea = document.getElementById('char-letter-display');
-    
-    // 检查是否有暂存的角色情书
-    if (cd.pendingCharLetter) {
-        inviteArea.style.display = 'none';
-        displayArea.style.display = 'flex';
-        displayArea.style.flexDirection = 'column';
-        document.getElementById('char-letter-content').innerText = cd.pendingCharLetter.content;
-    } else {
-        inviteArea.style.display = 'block';
-        displayArea.style.display = 'none';
-    }
-}
-
-// 2. 关闭交换情书界面
-function closeCoupleLetters() {
-    document.getElementById('couple-letters-view').style.display = 'none';
-    document.getElementById('couple-main-view').style.display = 'flex';
-}
-
-// 3. 邀请TA写情书
-async function inviteCharLetter() {
-    const cd = DB.getCoupleData();
-    const contacts = DB.getContacts();
-    const partner = contacts.find(c => c.id == cd.partnerId);
-    
-    if (!partner) return alert("情侣数据异常，找不到伴侣信息");
-    
-    const settings = DB.getSettings();
-    if (!settings.key) return alert('请先在设置中配置 API Key');
-    
-    document.getElementById('letter-invite-area').style.display = 'none';
-    document.getElementById('letter-loading').style.display = 'flex';
-    
-    try {
-        const content = await callCharLetterAPI(partner);
-        
-        // 保存暂存情书
-        const cd = DB.getCoupleData();
-        cd.pendingCharLetter = {
-            content: content,
-            timestamp: Date.now()
-        };
-        DB.saveCoupleData(cd);
-        
-        // 显示情书
-        document.getElementById('letter-loading').style.display = 'none';
-        document.getElementById('char-letter-display').style.display = 'flex';
-        document.getElementById('char-letter-display').style.flexDirection = 'column';
-        document.getElementById('char-letter-content').innerText = content;
-        
-    } catch (e) {
-        alert("邀请失败：" + e.message);
-        document.getElementById('letter-loading').style.display = 'none';
-        document.getElementById('letter-invite-area').style.display = 'block';
-    }
-}
-
-// 4. 调用API生成情书
-async function callCharLetterAPI(partner) {
-    const settings = DB.getSettings();
-    
-    // 获取最近聊天记录作为参考
-    const chatHistory = (DB.getChats()[partner.id] || []).slice(-20).map(m => {
-        return `${m.role === 'user' ? 'User' : partner.name}: ${m.content}`;
-    }).join('\n');
-    
-    const prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
-    
-    你的恋人（用户）邀请你写一封情书。
-    
-    请写一封深情、温柔的情书给TA。
-    
-    参考你们最近的聊天记录（仅供参考语气和近期话题）：
-    ${chatHistory}
-    
-    要求：
-    1. 第一人称视角。
-    2. 标准书信格式（开头称呼，正文，落款）。
-    3. 表达你对TA的爱意、思念和对未来的期许。
-    4. 语气要符合你的人设。
-    5. 字数 300-500 字左右。
-    6. 严禁返回 JSON 或 Markdown，直接返回情书正文内容。`;
-
-    const temp = settings.temperature !== undefined ? settings.temperature : 0.9; // 稍微调高温度增加创造性
-    
-    const res = await fetch(`${settings.url}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
-        body: JSON.stringify({
-            model: settings.model,
-            messages: [{ role: "system", content: prompt }],
-            temperature: temp
-        })
-    });
-    
-    const data = await res.json();
-    if (data.choices && data.choices.length > 0) {
-        return data.choices[0].message.content.trim();
-    }
-    throw new Error("API 无响应");
-}
-
-// 5. 打开写情书（回信）界面
-function openLetterEditor() {
-    document.getElementById('couple-letters-view').style.display = 'none';
-    document.getElementById('couple-letter-editor').style.display = 'flex';
-    document.getElementById('love-letter-textarea').value = '';
-}
-
-// 6. 关闭写情书界面
-function closeLetterEditor() {
-    document.getElementById('couple-letter-editor').style.display = 'none';
-    document.getElementById('couple-letters-view').style.display = 'flex';
-}
-
-// 7. 交换情书并收纳
-function exchangeLetter() {
-    const userContent = document.getElementById('love-letter-textarea').value.trim();
-    if (!userContent) return alert("请写下你想说的话");
-    
-    const cd = DB.getCoupleData();
-    if (!cd.pendingCharLetter) return alert("数据异常：没有待交换的角色情书");
-    
-    // 创建收纳的情书对象
-    const newLetterPair = {
-        id: Date.now(),
-        charLetter: cd.pendingCharLetter.content,
-        charLetterTime: cd.pendingCharLetter.timestamp,
-        userLetter: userContent,
-        userLetterTime: Date.now()
-    };
-    
-    // 收纳进信箱
-    if (!cd.letterBox) cd.letterBox = [];
-    cd.letterBox.push(newLetterPair);
-    
-    // 清除暂存
-    delete cd.pendingCharLetter;
-    
-    DB.saveCoupleData(cd);
-    
-    // 关闭编辑器，跳转到收纳箱
-    document.getElementById('couple-letter-editor').style.display = 'none';
-    openLetterBox();
-    
-    alert("交换成功！情书已收纳进信箱。");
-}
-
-// 8. 打开情书收纳箱
-function openLetterBox() {
-    // 如果是从主界面打开，需要隐藏主界面
-    document.getElementById('couple-main-view').style.display = 'none';
-    // 如果是从交换界面打开，需要隐藏交换界面
-    document.getElementById('couple-letters-view').style.display = 'none';
-    
-    document.getElementById('couple-letter-box').style.display = 'flex';
-    renderLetterBox();
-}
-
-// 9. 关闭情书收纳箱
-function closeLetterBox() {
-    document.getElementById('couple-letter-box').style.display = 'none';
-    // 默认返回到交换情书界面
-    openCoupleLetters();
-}
-
-// 10. 渲染收纳箱
-function renderLetterBox() {
-    const cd = DB.getCoupleData();
-    const grid = document.getElementById('letter-box-grid');
-    const empty = document.getElementById('letter-box-empty');
-    
-    grid.innerHTML = '';
-    
-    if (!cd.letterBox || cd.letterBox.length === 0) {
-        empty.style.display = 'flex';
-        return;
-    }
-    
-    empty.style.display = 'none';
-    
-    // 按时间排序：越旧的越下面 -> 新的在上面
-    // 实际上用户要求：从上往下（越旧的情书越下面） -> 新的在上面，旧的在下面
-    // 所以是按时间降序排列
-    const sortedLetters = [...cd.letterBox].sort((a, b) => b.userLetterTime - a.userLetterTime);
-    
-    sortedLetters.forEach(pair => {
-        const card = document.createElement('div');
-        card.className = 'letter-preview-card';
-        card.onclick = () => openLetterDetail(pair.id);
-        
-        const date = new Date(pair.userLetterTime);
-        const dateStr = `${date.getMonth() + 1}月${date.getDate()}日`;
-        
-        card.innerHTML = `
-            <div class="letter-preview-date">${dateStr}</div>
-            <div class="letter-preview-hint">点击查看详情</div>
-        `;
-        
-        grid.appendChild(card);
-    });
-}
-
-// 11. 打开情书详情
-function openLetterDetail(id) {
-    const cd = DB.getCoupleData();
-    const pair = cd.letterBox.find(p => p.id === id);
-    
-    if (!pair) return;
-    
-    document.getElementById('detail-char-content').innerText = pair.charLetter;
-    document.getElementById('detail-user-content').innerText = pair.userLetter;
-    
-    document.getElementById('letter-detail-modal').classList.add('active');
-}
-
-// 12. 关闭情书详情
-function closeLetterDetail() {
-    document.getElementById('letter-detail-modal').classList.remove('active');
-}
+// --- 情书功能已移除，保留入口按钮用于重建 ---
 
 // --- 提问箱功能 ---
 let currentQBoxContact = null;
@@ -2948,6 +2719,264 @@ ${userPersona ? `关于 ${userName}：${userPersona}` : ''}
     }
     
     throw new Error("API 无响应");
+}
+
+// --- 交换情书功能 ---
+let currentCharLetter = null; // 当前角色情书内容
+
+// 获取情书数据
+DB.getLetterBox = () => {
+    const cd = DB.getCoupleData();
+    return cd.letterBox || [];
+};
+
+DB.saveLetterBox = (letterBox) => {
+    const cd = DB.getCoupleData();
+    cd.letterBox = letterBox;
+    DB.saveCoupleData(cd);
+};
+
+// 打开交换情书界面
+function openLoveLetterView() {
+    document.getElementById('couple-main-view').style.display = 'none';
+    document.getElementById('couple-letter-view').style.display = 'flex';
+    
+    // 重置状态
+    currentCharLetter = null;
+    
+    // 显示邀请状态
+    document.getElementById('letter-invite-state').style.display = 'flex';
+    document.getElementById('letter-loading-state').style.display = 'none';
+    document.getElementById('letter-display-area').style.display = 'none';
+}
+
+// 关闭交换情书界面
+function closeLoveLetterView() {
+    document.getElementById('couple-letter-view').style.display = 'none';
+    document.getElementById('couple-main-view').style.display = 'flex';
+    currentCharLetter = null;
+}
+
+// 邀请TA写情书
+async function inviteTAWriteLetter() {
+    const cd = DB.getCoupleData();
+    const contacts = DB.getContacts();
+    const partner = contacts.find(c => c.id == cd.partnerId);
+    
+    if (!partner) {
+        alert('找不到伴侣信息');
+        return;
+    }
+    
+    const settings = DB.getSettings();
+    if (!settings.key) {
+        alert('请先在设置中配置 API Key');
+        return;
+    }
+    
+    // 显示加载状态
+    document.getElementById('letter-invite-state').style.display = 'none';
+    document.getElementById('letter-loading-state').style.display = 'flex';
+    document.getElementById('letter-display-area').style.display = 'none';
+    
+    try {
+        const letterContent = await callLoveLetterAPI(partner);
+        
+        if (letterContent) {
+            currentCharLetter = {
+                content: letterContent,
+                timestamp: Date.now()
+            };
+            
+            // 显示情书
+            document.getElementById('char-letter-content').innerText = letterContent;
+            document.getElementById('letter-loading-state').style.display = 'none';
+            document.getElementById('letter-display-area').style.display = 'block';
+        }
+    } catch (e) {
+        alert('生成情书失败：' + e.message);
+        document.getElementById('letter-loading-state').style.display = 'none';
+        document.getElementById('letter-invite-state').style.display = 'flex';
+    }
+}
+
+// 调用API生成情书
+async function callLoveLetterAPI(partner) {
+    const settings = DB.getSettings();
+    
+    // 获取用户信息
+    const userSettings = partner.userSettings || {};
+    const userName = userSettings.userName || '亲爱的';
+    
+    // 获取聊天记录作为参考
+    const chatHistory = (DB.getChats()[partner.id] || []).slice(-30).map(m => {
+        return `${m.role === 'user' ? 'User' : partner.name}: ${m.content}`;
+    }).join('\n');
+    
+    const prompt = `你正在扮演 ${partner.name}。人设：${partner.persona}
+
+你现在要给恋人 ${userName} 写一封情书。
+
+参考你们最近的聊天记录：
+${chatHistory || '（暂无聊天记录）'}
+
+要求：
+1. 以第一人称（我）的角色视角写
+2. 采用书信格式，开头可以是"亲爱的${userName}："或类似称呼
+3. 内容要真诚、有感情，符合你的人设和性格
+4. 可以回忆你们之间的甜蜜时刻
+5. 可以表达对恋人的爱意和思念
+6. 结尾要有落款，如"永远爱你的 ${partner.name}"
+7. 字数控制在200-400字
+8. 直接返回情书内容，不要加任何格式标记`;
+
+    const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+    
+    const res = await fetch(`${settings.url}/chat/completions`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${settings.key}` 
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: temp
+        })
+    });
+    
+    if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (data.choices && data.choices.length > 0) {
+        return data.choices[0].message.content.trim();
+    }
+    
+    throw new Error("API 无响应");
+}
+
+// 打开编辑情书界面
+function openLetterEditor() {
+    if (!currentCharLetter) {
+        alert('请先邀请TA写一封情书');
+        return;
+    }
+    
+    document.getElementById('couple-letter-editor').style.display = 'flex';
+    document.getElementById('love-letter-textarea').value = '';
+    document.getElementById('love-letter-textarea').focus();
+}
+
+// 关闭编辑情书界面
+function closeLetterEditor() {
+    document.getElementById('couple-letter-editor').style.display = 'none';
+}
+
+// 提交情书交换
+function submitLetterExchange() {
+    const userLetter = document.getElementById('love-letter-textarea').value.trim();
+    
+    if (!userLetter) {
+        alert('请写下你的情书');
+        return;
+    }
+    
+    if (!currentCharLetter) {
+        alert('情书数据丢失，请重新邀请TA写情书');
+        closeLetterEditor();
+        return;
+    }
+    
+    // 保存到收纳箱
+    const letterBox = DB.getLetterBox();
+    const now = new Date();
+    
+    letterBox.push({
+        id: Date.now(),
+        charLetter: currentCharLetter.content,
+        charLetterTime: currentCharLetter.timestamp,
+        userLetter: userLetter,
+        userLetterTime: now.getTime(),
+        displayDate: `${now.getMonth() + 1}月${now.getDate()}日`
+    });
+    
+    DB.saveLetterBox(letterBox);
+    
+    // 重置状态
+    currentCharLetter = null;
+    
+    // 关闭编辑界面
+    closeLetterEditor();
+    
+    // 打开收纳箱
+    openLetterBox();
+    
+    alert('情书交换成功！已收纳到情书收纳箱');
+}
+
+// 打开情书收纳箱
+function openLetterBox() {
+    document.getElementById('couple-letter-view').style.display = 'none';
+    document.getElementById('couple-letter-box').style.display = 'flex';
+    renderLetterBox();
+}
+
+// 关闭情书收纳箱
+function closeLetterBox() {
+    document.getElementById('couple-letter-box').style.display = 'none';
+    document.getElementById('couple-letter-view').style.display = 'flex';
+    
+    // 重置交换情书界面状态
+    document.getElementById('letter-invite-state').style.display = 'flex';
+    document.getElementById('letter-loading-state').style.display = 'none';
+    document.getElementById('letter-display-area').style.display = 'none';
+}
+
+// 渲染情书收纳箱
+function renderLetterBox() {
+    const container = document.getElementById('letter-box-content');
+    const emptyState = document.getElementById('letter-box-empty');
+    const letterBox = DB.getLetterBox();
+    
+    container.innerHTML = '';
+    
+    if (letterBox.length === 0) {
+        emptyState.style.display = 'flex';
+        container.style.display = 'none';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.style.display = 'flex';
+    
+    // 按时间排序：越旧的在下面（时间戳从大到小）
+    const sortedLetters = [...letterBox].sort((a, b) => b.userLetterTime - a.userLetterTime);
+    
+    sortedLetters.forEach((letter, index) => {
+        const card = document.createElement('div');
+        card.className = 'letter-preview-card';
+        card.innerHTML = `
+            <div class="letter-preview-date">${letter.displayDate}</div>
+            <div class="letter-preview-hint">点击查看</div>
+        `;
+        card.onclick = () => openLetterDetailModal(letter);
+        container.appendChild(card);
+    });
+}
+
+// 打开情书详情弹窗
+function openLetterDetailModal(letter) {
+    document.getElementById('letter-detail-modal').classList.add('active');
+    document.getElementById('detail-char-letter').innerText = letter.charLetter;
+    document.getElementById('detail-user-letter').innerText = letter.userLetter;
+}
+
+// 关闭情书详情弹窗
+function closeLetterDetailModal() {
+    document.getElementById('letter-detail-modal').classList.remove('active');
 }
 
 // --- 留言板功能 ---

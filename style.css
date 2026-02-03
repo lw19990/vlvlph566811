@@ -1207,12 +1207,12 @@ input:checked + .slider:before { transform: translateX(22px); }
     display: flex !important;
     flex-direction: column !important;
     padding-top: 88px !important; /* 确保内容不与 header 重叠 */
-    overflow-y: auto !important; /* 整个视图可滚动 */
+    overflow: hidden !important; /* 容器不滚动，由子元素滚动 */
     -webkit-overflow-scrolling: touch;
 }
 
 #couple-letters-view .app-header {
-    position: fixed !important; /* 固定定位，不随滚动 */
+    position: absolute !important; /* 修复：改为绝对定位，相对于手机屏幕 */
     top: 0;
     left: 0;
     width: 100%;
@@ -1221,6 +1221,12 @@ input:checked + .slider:before { transform: translateX(22px); }
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-bottom: none;
+}
+
+/* 修复收纳箱和编辑界面的滚动和定位问题 */
+#couple-letter-box, #couple-letter-editor {
+    overflow: hidden !important;
+    padding-top: 88px !important;
 }
 
 #couple-letters-list {
@@ -2694,4 +2700,58 @@ input:checked + .slider:before { transform: translateX(22px); }
     cursor: pointer;
     margin-top: 5px;
     display: inline-block;
+}
+
+/* --- 交换情书功能样式 --- */
+.letter-main-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.letter-invite-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.letter-invite-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: letterFloat 2s ease-in-out infinite;
+}
+
+.letter-invite-text {
+    font-size: 16px;
+    color: #ff6b8a;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.letter-editor-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    overflow: hidden;
+}
+
+.letter-editor-content .letter-paper-edit {
+    flex-grow: 1;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.letter-editor-content #love-letter-textarea {
+    flex-grow: 1;
+    min-height: 250px;
 }

@@ -1092,7 +1092,7 @@
 
                 <!-- 功能按钮网格 -->
                 <div class="couple-menu-grid">
-                    <div class="couple-menu-item" onclick="openCoupleLetters()">
+                    <div class="couple-menu-item" onclick="openLoveLetterView()">
                         <div class="couple-menu-icon">💌</div>
                         <div class="couple-menu-text">交换情书</div>
                     </div>
@@ -1158,117 +1158,6 @@
                 </div>
             </div>
 
-            <!-- 交换情书主界面 -->
-            <div class="couple-container" id="couple-letters-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #fff0f5 0%, #ffe4ec 100%);">
-                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255,240,245,0.95); backdrop-filter: blur(10px);">
-                    <div class="back-btn" onclick="closeCoupleLetters()" style="color:#ff6b8a;">Back</div>
-                    <div class="app-title" style="color:#ff6b8a;">交换情书</div>
-                    <div class="action-btn" onclick="openLetterBox()" style="color:#ff6b8a; font-size:18px;">📬</div>
-                </div>
-
-                <!-- 邀请写情书按钮区域 -->
-                <div id="letter-invite-area" style="width:100%; padding:20px; text-align:center;">
-                    <button class="letter-invite-btn" onclick="inviteCharLetter()">
-                        <span>💌</span> 邀请TA写一封情书
-                    </button>
-                </div>
-
-                <!-- 角色情书展示区域 -->
-                <div id="char-letter-display" style="display:none; width:100%; padding:0 20px; flex-grow:1; overflow-y:auto;">
-                    <div class="letter-paper-display" id="char-letter-paper">
-                        <div class="letter-hearts-decoration">
-                            <span>❤️</span><span>💕</span><span>❤️</span>
-                        </div>
-                        <div class="letter-content" id="char-letter-content"></div>
-                        <div class="letter-hearts-decoration" style="margin-top:20px;">
-                            <span>💕</span><span>❤️</span><span>💕</span>
-                        </div>
-                    </div>
-                    <button class="letter-exchange-btn" onclick="openLetterEditor()">
-                        <span>✉️</span> 交换情书
-                    </button>
-                </div>
-                
-                <div id="letter-loading" class="letter-loading" style="display:none;">
-                    <div class="letter-loading-icon">💌</div>
-                    <div>TA正在写情书中...</div>
-                </div>
-            </div>
-
-            <!-- 写情书界面 -->
-            <div class="couple-container" id="couple-letter-editor" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 60; background: linear-gradient(135deg, #fff0f5 0%, #ffe4ec 100%);">
-                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255,240,245,0.95); backdrop-filter: blur(10px);">
-                    <div class="back-btn" onclick="closeLetterEditor()" style="color:#ff6b8a;">取消</div>
-                    <div class="app-title" style="color:#ff6b8a;">写情书</div>
-                    <div class="action-btn"></div>
-                </div>
-
-                <div class="letter-paper-edit">
-                    <div class="letter-hearts-decoration">
-                        <span>❤️</span><span>💕</span><span>❤️</span>
-                    </div>
-                    <textarea id="love-letter-textarea" placeholder="写下你想对 TA 说的话..."></textarea>
-                    <div class="letter-hearts-decoration" style="margin-top:10px;">
-                        <span>💕</span><span>❤️</span><span>💕</span>
-                    </div>
-                </div>
-                <button class="letter-exchange-btn" style="margin:20px;" onclick="exchangeLetter()">
-                    <span>💕</span> 向TA交换情书
-                </button>
-            </div>
-
-            <!-- 情书收纳箱界面 -->
-            <div class="couple-container" id="couple-letter-box" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 55; background: linear-gradient(135deg, #fff0f5 0%, #ffe4ec 100%);">
-                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255,240,245,0.95); backdrop-filter: blur(10px);">
-                    <div class="back-btn" onclick="closeLetterBox()" style="color:#ff6b8a;">Back</div>
-                    <div class="app-title" style="color:#ff6b8a;">情书收纳箱</div>
-                    <div class="action-btn"></div>
-                </div>
-
-                <div id="letter-box-grid" class="letter-box-grid">
-                    <!-- 情书预览卡片将动态填充 -->
-                </div>
-
-                <div id="letter-box-empty" class="letter-box-empty">
-                    <div class="letter-box-empty-icon">📭</div>
-                    <div>还没有收纳的情书</div>
-                    <div style="font-size:12px; margin-top:5px; opacity:0.7;">交换情书后会自动收纳到这里</div>
-                </div>
-            </div>
-
-            <!-- 情书详情弹窗 -->
-            <div id="letter-detail-modal" class="album-modal">
-                <div class="letter-detail-content">
-                    <div class="album-view-close" onclick="closeLetterDetail()">✕</div>
-                    
-                    <!-- TA的情书 -->
-                    <div class="letter-detail-section">
-                        <div class="letter-detail-label">💕 TA的情书</div>
-                        <div class="letter-paper-display" id="detail-char-letter">
-                            <div class="letter-hearts-decoration">
-                                <span>❤️</span><span>💕</span><span>❤️</span>
-                            </div>
-                            <div class="letter-content" id="detail-char-content"></div>
-                        </div>
-                    </div>
-
-                    <!-- 分隔线 -->
-                    <div class="letter-detail-divider">
-                        <span>💌</span>
-                    </div>
-
-                    <!-- 我的情书 -->
-                    <div class="letter-detail-section">
-                        <div class="letter-detail-label">💕 我的情书</div>
-                        <div class="letter-paper-display" id="detail-user-letter">
-                            <div class="letter-hearts-decoration">
-                                <span>❤️</span><span>💕</span><span>❤️</span>
-                            </div>
-                            <div class="letter-content" id="detail-user-content"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- 恋爱相册界面 -->
             <div class="couple-container" id="couple-album-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #fff0f3 0%, #ffe4ec 100%);">
@@ -1361,12 +1250,126 @@
                     </div>
                     
                     <button class="album-comment-btn" id="invite-comment-btn" onclick="invitePhotoComment()">
-                        <span>💬</span> 邀请TA来评论
+                        <span>�</span> 邀请TA来评论
                     </button>
                     
                     <div class="album-comment-loading" id="comment-loading">
                         <div class="album-loading-spinner"></div>
                         <span>TA正在思考中...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 交换情书主界面 -->
+            <div class="couple-container" id="couple-letter-view" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; background: linear-gradient(135deg, #fff0f5 0%, #ffe8ef 100%);">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255, 240, 245, 0.95); backdrop-filter: blur(10px);">
+                    <div class="back-btn" onclick="closeLoveLetterView()" style="color:#ff6b8a;">Back</div>
+                    <div class="app-title" style="color:#ff6b8a;">交换情书</div>
+                    <div class="action-btn" onclick="openLetterBox()" style="color:#ff6b8a; font-size:18px;">📬</div>
+                </div>
+
+                <!-- 情书主内容区域 -->
+                <div id="letter-main-content" class="letter-main-content">
+                    <!-- 默认邀请状态 -->
+                    <div id="letter-invite-state" class="letter-invite-state">
+                        <div class="letter-invite-icon">💌</div>
+                        <div class="letter-invite-text">还没有情书哦，快去邀请TA写一封吧</div>
+                        <button class="letter-invite-btn" onclick="inviteTAWriteLetter()">
+                            <span>✉️</span> 邀请TA写情书
+                        </button>
+                    </div>
+
+                    <!-- 加载状态 -->
+                    <div id="letter-loading-state" class="letter-loading" style="display:none;">
+                        <div class="letter-loading-icon">💌</div>
+                        <div>TA正在认真写情书...</div>
+                    </div>
+
+                    <!-- 角色情书展示区域 -->
+                    <div id="letter-display-area" style="display:none; width:100%; height:100%; overflow-y:auto; padding:15px;">
+                        <div class="letter-paper-display" id="char-letter-paper">
+                            <div class="letter-hearts-decoration">
+                                <span>❤️</span><span>💕</span><span>❤️</span>
+                            </div>
+                            <div class="letter-content" id="char-letter-content"></div>
+                        </div>
+                        <button class="letter-exchange-btn" onclick="openLetterEditor()">
+                            <span>💌</span> 交换情书
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 编辑情书界面 -->
+            <div class="couple-container" id="couple-letter-editor" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 55; background: linear-gradient(135deg, #fff0f5 0%, #ffe8ef 100%);">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255, 240, 245, 0.95); backdrop-filter: blur(10px);">
+                    <div class="back-btn" onclick="closeLetterEditor()" style="color:#ff6b8a;">取消</div>
+                    <div class="app-title" style="color:#ff6b8a;">写情书</div>
+                    <div class="action-btn"></div>
+                </div>
+
+                <div class="letter-editor-content">
+                    <div class="letter-paper-edit">
+                        <div class="letter-hearts-decoration">
+                            <span>❤️</span><span>💕</span><span>❤️</span>
+                        </div>
+                        <textarea id="love-letter-textarea" placeholder="亲爱的TA，我想对你说..."></textarea>
+                    </div>
+                    <button class="letter-exchange-btn" onclick="submitLetterExchange()" style="margin-top:15px;">
+                        <span>💕</span> 向TA交换情书
+                    </button>
+                </div>
+            </div>
+
+            <!-- 情书收纳箱界面 -->
+            <div class="couple-container" id="couple-letter-box" style="display:none; padding-top: 60px; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 55; background: linear-gradient(135deg, #fff0f5 0%, #ffe8ef 100%);">
+                <div class="app-header" style="position:absolute; top:0; left:0; width:100%; background: rgba(255, 240, 245, 0.95); backdrop-filter: blur(10px);">
+                    <div class="back-btn" onclick="closeLetterBox()" style="color:#ff6b8a;">Back</div>
+                    <div class="app-title" style="color:#ff6b8a;">情书收纳箱</div>
+                    <div class="action-btn"></div>
+                </div>
+
+                <div id="letter-box-content" class="letter-box-grid">
+                    <!-- 情书预览卡片将动态填充 -->
+                </div>
+
+                <div id="letter-box-empty" class="letter-box-empty" style="display:none;">
+                    <div class="letter-box-empty-icon">📭</div>
+                    <div>还没有收纳的情书</div>
+                    <div style="font-size:12px; margin-top:5px; opacity:0.7;">交换情书后会自动收纳到这里</div>
+                </div>
+            </div>
+
+            <!-- 情书详情弹窗 -->
+            <div id="letter-detail-modal" class="album-modal">
+                <div class="letter-detail-content">
+                    <div class="album-view-close" onclick="closeLetterDetailModal()">✕</div>
+                    
+                    <!-- TA的情书 -->
+                    <div class="letter-detail-section">
+                        <div class="letter-detail-label">💌 TA的情书</div>
+                        <div class="letter-paper-display" style="margin-bottom:0;">
+                            <div class="letter-hearts-decoration">
+                                <span>❤️</span><span>💕</span><span>❤️</span>
+                            </div>
+                            <div class="letter-content" id="detail-char-letter"></div>
+                        </div>
+                    </div>
+
+                    <!-- 分隔线 -->
+                    <div class="letter-detail-divider">
+                        <span>💕</span>
+                    </div>
+
+                    <!-- 我的情书 -->
+                    <div class="letter-detail-section">
+                        <div class="letter-detail-label">✉️ 我的情书</div>
+                        <div class="letter-paper-display" style="margin-bottom:0;">
+                            <div class="letter-hearts-decoration">
+                                <span>❤️</span><span>💕</span><span>❤️</span>
+                            </div>
+                            <div class="letter-content" id="detail-user-letter"></div>
+                        </div>
                     </div>
                 </div>
             </div>
