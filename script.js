@@ -2489,7 +2489,7 @@ if ('serviceWorker' in navigator) { window.addEventListener('load', function() {
 // --- 情书功能逻辑 ---
 function openCoupleLetters() {
     document.getElementById('couple-main-view').style.display = 'none';
-    document.getElementById('couple-letters-view').style.display = 'flex';
+    document.getElementById('couple-letters-view').style.display = 'block';
     renderCoupleLetters();
 }
 
@@ -2582,7 +2582,7 @@ function openLetterEditor() {
 
 function closeLetterEditor() {
     document.getElementById('couple-letter-editor').style.display = 'none';
-    document.getElementById('couple-letters-view').style.display = 'flex';
+    document.getElementById('couple-letters-view').style.display = 'block';
 }
 
 async function sendLoveLetter() {
