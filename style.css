@@ -2564,7 +2564,9 @@ input:checked + .slider:before { transform: translateX(22px); }
     display: flex;
     flex-direction: column;
     gap: 15px;
+    padding-top: 103px; /* 为顶部固定栏留出空间（88px header + 15px padding） */
     padding-bottom: 80px; /* 为底部按钮留出空间 */
+    margin-top: -88px; /* 抵消容器的 padding-top，使滚动区域从正确位置开始 */
 }
 
 .message-board-item {
@@ -3409,6 +3411,445 @@ input:checked + .slider:before { transform: translateX(22px); }
     font-size: 18px;
     cursor: pointer;
     z-index: 10;
+}
+
+/* --- 论坛 App 样式 (Tumblr风格) --- */
+#app-forum {
+    background: #000;
+    color: #fff;
+}
+
+.forum-header {
+    position: absolute;
+    top: 44px;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+    background: #000;
+    z-index: 20;
+}
+
+.forum-back-btn {
+    font-size: 24px;
+    color: #fff;
+    cursor: pointer;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.forum-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    pointer-events: none;
+}
+
+.forum-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.forum-add-btn {
+    font-size: 28px;
+    color: #fff;
+    cursor: pointer;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.forum-settings-btn {
+    font-size: 20px;
+    color: #fff;
+    cursor: pointer;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.forum-tabs {
+    position: absolute;
+    top: 94px;
+    left: 15px;
+    display: flex;
+    gap: 20px;
+    z-index: 10;
+}
+
+.forum-tab {
+    font-size: 16px;
+    color: #999;
+    cursor: pointer;
+    padding-bottom: 5px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s;
+}
+
+.forum-tab.active {
+    color: #fff;
+    border-bottom-color: #fff;
+}
+
+.forum-content {
+    position: absolute;
+    top: 130px;
+    left: 0;
+    width: 100%;
+    height: calc(100% - 130px);
+    overflow-y: auto;
+    padding: 15px;
+    padding-bottom: 30px;
+}
+
+/* 帖子卡片 */
+.forum-post {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    position: relative;
+    animation: forumPostSlideIn 0.3s ease;
+}
+
+@keyframes forumPostSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.forum-post-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.forum-post-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.forum-post-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.forum-post-info {
+    flex-grow: 1;
+}
+
+.forum-post-username {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 3px;
+}
+
+.forum-post-time {
+    font-size: 12px;
+    color: #999;
+}
+
+.forum-post-menu {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #999;
+    font-size: 20px;
+}
+
+.forum-post-content {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #e0e0e0;
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.forum-post-image-desc {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    color: #bbb;
+    border-left: 3px solid #5856d6;
+}
+
+.forum-post-image-desc::before {
+    content: '📷 ';
+}
+
+/* 论坛弹窗 */
+.forum-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.forum-modal.active {
+    display: flex;
+}
+
+.forum-modal-content {
+    width: 90%;
+    max-width: 400px;
+    max-height: 85%;
+    background: #1a1a1a;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.forum-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #000;
+    border-bottom: 1px solid #333;
+}
+
+.forum-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.forum-form-group {
+    margin-bottom: 20px;
+}
+
+.forum-label {
+    display: block;
+    font-size: 14px;
+    color: #999;
+    margin-bottom: 8px;
+}
+
+.forum-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.forum-textarea::placeholder {
+    color: #666;
+}
+
+.forum-clear-btn {
+    width: 100%;
+    padding: 12px;
+    background: #ff3b30;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.forum-clear-btn:active {
+    opacity: 0.8;
+}
+
+/* 添加帖子选项 */
+.forum-add-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.forum-add-option {
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.forum-add-option:active {
+    transform: scale(0.98);
+    background: #111;
+}
+
+.forum-add-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.forum-add-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 5px;
+}
+
+.forum-add-desc {
+    font-size: 12px;
+    color: #999;
+}
+
+/* 帖子菜单弹窗 */
+.forum-post-menu-modal {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #1a1a1a;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    z-index: 1001;
+    display: none;
+    flex-direction: column;
+    padding: 20px;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
+    transform: translateY(100%);
+    transition: transform 0.3s;
+}
+
+.forum-post-menu-modal.active {
+    display: flex;
+    transform: translateY(0);
+}
+
+.forum-menu-item {
+    padding: 15px;
+    text-align: center;
+    font-size: 16px;
+    color: #fff;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+}
+
+.forum-menu-item:last-child {
+    border-bottom: none;
+    color: #999;
+}
+
+.forum-menu-item.delete {
+    color: #ff3b30;
+}
+
+/* 删除模式 */
+.forum-delete-mode .forum-post {
+    padding-left: 50px;
+}
+
+.forum-post-checkbox {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border: 2px solid #5856d6;
+    border-radius: 50%;
+    background: #000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.forum-delete-mode .forum-post-checkbox {
+    display: flex;
+}
+
+.forum-post-checkbox.checked {
+    background: #5856d6;
+}
+
+.forum-post-checkbox.checked::after {
+    content: '✓';
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.forum-delete-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    background: #000;
+    border-top: 1px solid #333;
+    display: none;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 30;
+}
+
+.forum-delete-bar.active {
+    display: flex;
+}
+
+.forum-delete-cancel {
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.forum-delete-confirm {
+    color: #ff3b30;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
 }
 
 /* 音乐菜单头部 */

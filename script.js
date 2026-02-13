@@ -1773,13 +1773,26 @@ function renderChatHistory(maintainScroll = false) {
         }
 
         if (msg.isRetracted) {
+            const row = document.createElement('div');
+            row.className = 'message-row';
+            row.style.justifyContent = 'center';
+            
+            // 添加选择框
+            const cb = document.createElement('div');
+            cb.className = 'selection-checkbox';
+            if (selectedIndices.has(originalIndex)) cb.classList.add('checked');
+            row.appendChild(cb);
+            
             const retractedDiv = document.createElement('div');
             retractedDiv.className = 'retracted-message-bar';
             const name = msg.role === 'user' ? (currentChatContact.userSettings?.userName || '我') : currentChatContact.name;
             retractedDiv.innerText = `【${name}】撤回了一条消息`;
+            row.appendChild(retractedDiv);
             
-            if (h && document.getElementById('chat-interface').style.display !== 'none') h.appendChild(retractedDiv);
-            if (isCallActive && callHistory && msg.timestamp >= currentCallStartTime) callHistory.appendChild(retractedDiv.cloneNode(true));
+            if (isSelectionMode) row.onclick = () => toggleSelection(originalIndex);
+            
+            if (h && document.getElementById('chat-interface').style.display !== 'none') h.appendChild(row);
+            if (isCallActive && callHistory && msg.timestamp >= currentCallStartTime) callHistory.appendChild(row.cloneNode(true));
             return; 
         }
 
@@ -2265,7 +2278,6 @@ async function triggerAIResponse() {
         }
     }
 
-    systemContent += `\n\n[特殊功能] 如果你想撤回你发的上一条消息（例如表现傲娇后的后悔，或者说错话了），请在回复的最开头加上 [CMD:RETRACT_LAST]。系统会自动将你上一条消息标记为撤回。`;
 
     if (isCallActive) {
         systemContent += `\n\n===== 【语音通话模式】 =====\n现在你正在和用户进行语音通话。\n**重要规则**：\n1. 请像打电话一样回复，保持口语化。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n4. 必须在回复前生成心声。\n格式：[THOUGHTS: 心声] ||| 回复内容`;
@@ -2318,19 +2330,6 @@ async function triggerAIResponse() {
         if (data.choices && data.choices.length > 0) {
             let content = data.choices[0].message.content;
             
-            if (content.includes('[CMD:RETRACT_LAST]')) {
-                content = content.replace('[CMD:RETRACT_LAST]', '').trim();
-                allChats = DB.getChats();
-                const currentChat = allChats[currentChatContact.id];
-                for (let i = currentChat.length - 1; i >= 0; i--) {
-                    if (currentChat[i].role === 'assistant' && !currentChat[i].isRetracted) {
-                        currentChat[i].isRetracted = true;
-                        break;
-                    }
-                }
-                DB.saveChats(allChats);
-                renderChatHistory(); 
-            }
 
             let extractedThought = null;
             const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s);
@@ -4158,6 +4157,473 @@ openApp = function(appId) {
     originalOpenApp(appId);
     if (appId === 'app-question-box') {
         renderQBoxContactList();
+    }
+};
+
+// --- 论坛功能 ---
+let currentForumTab = 'following';
+let currentEditingPostId = null;
+let isForumDeleteMode = false;
+let selectedForumPostIds = new Set();
+
+// 获取论坛数据
+DB.getForumData = () => {
+    const theme = DB.getTheme();
+    return theme.forumData || { settings: { systemPrompt: '' }, posts: [] };
+};
+
+DB.saveForumData = (data) => {
+    const theme = DB.getTheme();
+    theme.forumData = data;
+    DB.saveTheme(theme);
+};
+
+// 切换论坛标签
+function switchForumTab(tab) {
+    currentForumTab = tab;
+    document.getElementById('forum-tab-following').classList.toggle('active', tab === 'following');
+    document.getElementById('forum-tab-recommended').classList.toggle('active', tab === 'recommended');
+    renderForumPosts();
+}
+
+// 渲染论坛帖子
+function renderForumPosts() {
+    const container = document.getElementById('forum-posts-container');
+    const forumData = DB.getForumData();
+    const posts = forumData.posts || [];
+    
+    container.innerHTML = '';
+    
+    // 按时间倒序排列
+    const sortedPosts = [...posts].sort((a, b) => b.timestamp - a.timestamp);
+    
+    // 根据当前标签过滤
+    const filteredPosts = sortedPosts.filter(post => {
+        if (currentForumTab === 'following') {
+            return post.type === 'character';
+        } else {
+            return post.type === 'passerby';
+        }
+    });
+    
+    if (filteredPosts.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; color: #999; padding: 40px 20px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">📝</div>
+                <div style="font-size: 16px;">暂无帖子</div>
+                <div style="font-size: 13px; margin-top: 8px; opacity: 0.7;">点击右上角加号生成帖子</div>
+            </div>
+        `;
+        return;
+    }
+    
+    filteredPosts.forEach(post => {
+        const postEl = document.createElement('div');
+        postEl.className = 'forum-post';
+        
+        // 选择框
+        const checkbox = document.createElement('div');
+        checkbox.className = 'forum-post-checkbox';
+        if (selectedForumPostIds.has(post.id)) {
+            checkbox.classList.add('checked');
+        }
+        postEl.appendChild(checkbox);
+        
+        // 格式化时间
+        const date = new Date(post.timestamp);
+        const timeStr = `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        
+        // 头像
+        let avatarHtml = '';
+        if (post.avatar) {
+            avatarHtml = `<div class="forum-post-avatar"><img src="${post.avatar}"></div>`;
+        } else {
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#a29bfe'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const initial = post.username.charAt(0).toUpperCase();
+            avatarHtml = `<div class="forum-post-avatar" style="background: ${color};">${initial}</div>`;
+        }
+        
+        let contentHtml = `
+            <div class="forum-post-header">
+                ${avatarHtml}
+                <div class="forum-post-info">
+                    <div class="forum-post-username">${post.username}</div>
+                    <div class="forum-post-time">${timeStr}</div>
+                </div>
+                <div class="forum-post-menu" onclick="openForumPostMenu(${post.id})">⋯</div>
+            </div>
+            <div class="forum-post-content">${post.content}</div>
+        `;
+        
+        // 如果有图片描述
+        if (post.imageDesc) {
+            contentHtml += `<div class="forum-post-image-desc">${post.imageDesc}</div>`;
+        }
+        
+        postEl.innerHTML += contentHtml;
+        
+        // 点击事件
+        if (isForumDeleteMode) {
+            postEl.onclick = () => toggleForumPostSelection(post.id);
+        }
+        
+        container.appendChild(postEl);
+    });
+}
+
+// 打开帖子菜单
+function openForumPostMenu(postId) {
+    currentEditingPostId = postId;
+    const forumData = DB.getForumData();
+    const post = forumData.posts.find(p => p.id === postId);
+    
+    if (!post) return;
+    
+    // 只有角色帖子可以编辑
+    if (post.type === 'character') {
+        if (confirm('选择操作：\n1. 点击"确定"编辑\n2. 点击"取消"删除')) {
+            openForumEditModal(postId);
+        } else {
+            deleteForumPost(postId);
+        }
+    } else {
+        // 路人帖子只能删除
+        deleteForumPost(postId);
+    }
+}
+
+// 删除单条帖子
+function deleteForumPost(postId) {
+    if (!confirm('确定要删除这条帖子吗？')) return;
+    
+    const forumData = DB.getForumData();
+    forumData.posts = forumData.posts.filter(p => p.id !== postId);
+    DB.saveForumData(forumData);
+    renderForumPosts();
+}
+
+// 打开设置弹窗
+function openForumSettings() {
+    const forumData = DB.getForumData();
+    document.getElementById('forum-system-prompt').value = forumData.settings?.systemPrompt || '';
+    renderForumBindCharacters();
+    document.getElementById('forum-settings-modal').classList.add('active');
+}
+
+// 渲染论坛绑定角色列表
+function renderForumBindCharacters() {
+    const container = document.getElementById('forum-bind-characters');
+    const contacts = DB.getContacts();
+    const forumData = DB.getForumData();
+    const boundCharacters = forumData.settings?.boundCharacters || [];
+    
+    container.innerHTML = '';
+    
+    if (contacts.length === 0) {
+        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">暂无联系人</div>';
+        return;
+    }
+    
+    contacts.forEach(contact => {
+        const isChecked = boundCharacters.includes(contact.id.toString());
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #333;';
+        item.innerHTML = `
+            <input type="checkbox" id="forum-bind-char-${contact.id}" value="${contact.id}" ${isChecked ? 'checked' : ''} style="margin-right: 10px;">
+            <label for="forum-bind-char-${contact.id}" style="flex: 1; cursor: pointer; color: #fff;">${contact.name}</label>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// 关闭设置弹窗
+function closeForumSettings() {
+    document.getElementById('forum-settings-modal').classList.remove('active');
+}
+
+// 保存论坛设置
+function saveForumSettings() {
+    const systemPrompt = document.getElementById('forum-system-prompt').value.trim();
+    const boundCharacters = [...document.querySelectorAll('#forum-bind-characters input:checked')].map(cb => cb.value);
+    
+    const forumData = DB.getForumData();
+    forumData.settings = { 
+        systemPrompt: systemPrompt,
+        boundCharacters: boundCharacters
+    };
+    DB.saveForumData(forumData);
+    closeForumSettings();
+    alert('论坛设置已保存');
+}
+
+// 清空所有帖子
+function clearAllForumPosts() {
+    if (!confirm('确定要清空所有帖子吗？（不包括用户自己发的帖）')) return;
+    
+    const forumData = DB.getForumData();
+    forumData.posts = [];
+    DB.saveForumData(forumData);
+    renderForumPosts();
+    closeForumSettings();
+    alert('所有帖子已清空');
+}
+
+// 打开添加帖子弹窗
+function openForumAddModal() {
+    document.getElementById('forum-add-modal').classList.add('active');
+}
+
+// 关闭添加帖子弹窗
+function closeForumAddModal() {
+    document.getElementById('forum-add-modal').classList.remove('active');
+}
+
+// 生成论坛帖子
+async function generateForumPosts(type) {
+    const settings = DB.getSettings();
+    if (!settings.key) {
+        alert('请先在设置中配置 API Key');
+        return;
+    }
+    
+    // 如果是角色帖子，检查是否有绑定的角色
+    if (type === 'character') {
+        const forumData = DB.getForumData();
+        const boundCharacters = forumData.settings?.boundCharacters || [];
+        
+        if (boundCharacters.length === 0) {
+            alert('请先在论坛设置中绑定角色');
+            return;
+        }
+    }
+    
+    closeForumAddModal();
+    alert('正在生成帖子，请稍候...');
+    
+    try {
+        const posts = await callForumAPI(type);
+        if (posts && posts.length > 0) {
+            const forumData = DB.getForumData();
+            posts.forEach(postData => {
+                forumData.posts.push({
+                    id: Date.now() + Math.random(),
+                    type: type,
+                    username: postData.username,
+                    avatar: postData.avatar || null,
+                    content: postData.content,
+                    imageDesc: postData.imageDesc || null,
+                    timestamp: Date.now()
+                });
+            });
+            DB.saveForumData(forumData);
+            renderForumPosts();
+            alert(`成功生成 ${posts.length} 条帖子！`);
+        }
+    } catch (e) {
+        alert('生成失败：' + e.message);
+    }
+}
+
+// 调用API生成帖子
+async function callForumAPI(type) {
+    const settings = DB.getSettings();
+    const forumData = DB.getForumData();
+    const systemPrompt = forumData.settings?.systemPrompt || '这是一个普通的论坛';
+    
+    let prompt = '';
+    
+    if (type === 'character') {
+        // 角色帖子
+        const contacts = DB.getContacts();
+        if (contacts.length === 0) {
+            throw new Error('请先在通讯录添加角色');
+        }
+        
+        const contact = contacts[0]; // 使用第一个联系人
+        
+        prompt = `你正在扮演 ${contact.name}。人设：${contact.persona}
+
+论坛设定：${systemPrompt}
+
+请生成 5-10 条你在这个论坛上发布的帖子。
+
+要求：
+1. 以第一人称（我）发帖
+2. 每条帖子不超过100字
+3. 内容符合你的人设和性格
+4. 至少生成1条带图帖子（不需要真实图片，只生成图片描述）
+5. 严格返回JSON数组格式：
+[
+  {
+    "content": "帖子文本内容",
+    "imageDesc": "图片描述（可选，如果没有图则为 null）"
+  }
+]`;
+        
+        const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+        const res = await fetch(`${settings.url}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: temp
+            })
+        });
+        
+        const data = await res.json();
+        if (data.choices && data.choices.length > 0) {
+            let content = data.choices[0].message.content.trim();
+            content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            const postsData = JSON.parse(content);
+            return postsData.map(p => ({
+                username: contact.name,
+                avatar: contact.avatar,
+                content: p.content,
+                imageDesc: p.imageDesc
+            }));
+        }
+    } else {
+        // 路人帖子
+        prompt = `论坛设定：${systemPrompt}
+
+请生成 4-8 条路人在这个论坛上发布的帖子。
+
+要求：
+1. 随机生成网名
+2. 每条帖子不超过100字
+3. 为了增加真实感，允许出现各种发言，包括但不限于：
+   - 分享生活
+   - 提问
+   - 杠精/喷子发言
+   - 负面情绪言论
+   - 吐槽抱怨
+   - 炫耀
+   - 求助
+4. 至少生成1条带图帖子（不需要真实图片，只生成图片描述）
+5. 严格返回JSON数组格式：
+[
+  {
+    "username": "随机网名",
+    "content": "帖子文本内容",
+    "imageDesc": "图片描述（可选，如果没有图则为 null）"
+  }
+]`;
+        
+        const temp = settings.temperature !== undefined ? settings.temperature : 0.9;
+        const res = await fetch(`${settings.url}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: temp
+            })
+        });
+        
+        const data = await res.json();
+        if (data.choices && data.choices.length > 0) {
+            let content = data.choices[0].message.content.trim();
+            content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            return JSON.parse(content);
+        }
+    }
+    
+    throw new Error('API 无响应');
+}
+
+// 打开编辑帖子弹窗
+function openForumEditModal(postId) {
+    currentEditingPostId = postId;
+    const forumData = DB.getForumData();
+    const post = forumData.posts.find(p => p.id === postId);
+    
+    if (!post) return;
+    
+    document.getElementById('forum-edit-textarea').value = post.content;
+    document.getElementById('forum-edit-modal').classList.add('active');
+}
+
+// 关闭编辑帖子弹窗
+function closeForumEditModal() {
+    document.getElementById('forum-edit-modal').classList.remove('active');
+    currentEditingPostId = null;
+}
+
+// 保存编辑后的帖子
+function saveForumPostEdit() {
+    if (!currentEditingPostId) return;
+    
+    const newContent = document.getElementById('forum-edit-textarea').value.trim();
+    if (!newContent) {
+        alert('帖子内容不能为空');
+        return;
+    }
+    
+    const forumData = DB.getForumData();
+    const post = forumData.posts.find(p => p.id === currentEditingPostId);
+    
+    if (post) {
+        post.content = newContent;
+        DB.saveForumData(forumData);
+        renderForumPosts();
+        closeForumEditModal();
+        alert('帖子已更新');
+    }
+}
+
+// 进入删除模式
+function enterForumDeleteMode() {
+    isForumDeleteMode = true;
+    selectedForumPostIds.clear();
+    document.getElementById('forum-posts-container').classList.add('forum-delete-mode');
+    document.getElementById('forum-delete-bar').classList.add('active');
+    renderForumPosts();
+}
+
+// 退出删除模式
+function exitForumDeleteMode() {
+    isForumDeleteMode = false;
+    selectedForumPostIds.clear();
+    document.getElementById('forum-posts-container').classList.remove('forum-delete-mode');
+    document.getElementById('forum-delete-bar').classList.remove('active');
+    renderForumPosts();
+}
+
+// 切换帖子选择
+function toggleForumPostSelection(postId) {
+    if (selectedForumPostIds.has(postId)) {
+        selectedForumPostIds.delete(postId);
+    } else {
+        selectedForumPostIds.add(postId);
+    }
+    renderForumPosts();
+}
+
+// 确认删除选中的帖子
+function confirmDeleteForumPosts() {
+    if (selectedForumPostIds.size === 0) {
+        exitForumDeleteMode();
+        return;
+    }
+    
+    if (confirm(`确定要删除选中的 ${selectedForumPostIds.size} 条帖子吗？`)) {
+        const forumData = DB.getForumData();
+        forumData.posts = forumData.posts.filter(p => !selectedForumPostIds.has(p.id));
+        DB.saveForumData(forumData);
+        exitForumDeleteMode();
+    }
+}
+
+// 在 openApp 函数中添加论坛的渲染
+const originalOpenAppForForum = openApp;
+openApp = function(appId) {
+    originalOpenAppForForum(appId);
+    if (appId === 'app-forum') {
+        renderForumPosts();
     }
 };
 

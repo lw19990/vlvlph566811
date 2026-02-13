@@ -90,7 +90,7 @@
                                 <div class="app-icon" id="icon-app-couple" onclick="openApp('app-couple')" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
                                 <div class="app-icon" id="icon-app-tomato" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
                                 <div class="app-icon" id="icon-app-music" onclick="openApp('app-music')" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
-                                <div class="app-icon" id="icon-app-forum" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
+                                <div class="app-icon" id="icon-app-forum" onclick="openApp('app-forum')" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
                             </div>
 
                             <!-- 左下角：四个应用 -->
@@ -1386,7 +1386,93 @@
             </div>
         </div>
 
-        <!-- 20. 音乐 App -->
+        <!-- 20. 论坛 App -->
+        <div id="app-forum" class="screen">
+            <div class="forum-header">
+                <div class="forum-back-btn" onclick="goHome()">←</div>
+                <div class="forum-title">论坛</div>
+                <div class="forum-header-right">
+                    <div class="forum-add-btn" onclick="openForumAddModal()">+</div>
+                    <div class="forum-settings-btn" onclick="openForumSettings()">⚙️</div>
+                </div>
+            </div>
+            
+            <div class="forum-tabs">
+                <div class="forum-tab active" id="forum-tab-following" onclick="switchForumTab('following')">关注</div>
+                <div class="forum-tab" id="forum-tab-recommended" onclick="switchForumTab('recommended')">为你推荐</div>
+            </div>
+            
+            <div class="forum-content" id="forum-posts-container">
+                <!-- 帖子将在这里动态生成 -->
+            </div>
+        </div>
+        
+        <!-- 论坛设置弹窗 -->
+        <div id="forum-settings-modal" class="forum-modal">
+            <div class="forum-modal-content">
+                <div class="forum-modal-header">
+                    <span onclick="closeForumSettings()" style="color:#999; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#fff;">论坛设置</span>
+                    <span onclick="saveForumSettings()" style="color:#5856d6; cursor:pointer;">保存</span>
+                </div>
+                <div class="forum-modal-body">
+                    <div class="forum-form-group">
+                        <label class="forum-label">论坛设定 (System Prompt)</label>
+                        <textarea id="forum-system-prompt" class="forum-textarea" placeholder="例如：这是一个二次元爱好者聚集的论坛..."></textarea>
+                    </div>
+                    
+                    <div class="forum-form-group" style="margin-top: 20px;">
+                        <label class="forum-label">绑定发帖角色</label>
+                        <div id="forum-bind-characters" style="max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+                        <div style="font-size: 11px; color: #999; margin-top: 8px;">勾选后，只有绑定的角色才能在论坛发帖</div>
+                    </div>
+                    
+                    <button class="forum-clear-btn" onclick="clearAllForumPosts()">清空所有帖子</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加帖子弹窗 -->
+        <div id="forum-add-modal" class="forum-modal">
+            <div class="forum-modal-content">
+                <div class="forum-modal-header">
+                    <span onclick="closeForumAddModal()" style="color:#999; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#fff;">生成帖子</span>
+                    <span></span>
+                </div>
+                <div class="forum-modal-body">
+                    <div class="forum-add-options">
+                        <div class="forum-add-option" onclick="generateForumPosts('character')">
+                            <div class="forum-add-icon">👤</div>
+                            <div class="forum-add-text">看看TA的帖子</div>
+                        </div>
+                        <div class="forum-add-option" onclick="generateForumPosts('passerby')">
+                            <div class="forum-add-icon">👥</div>
+                            <div class="forum-add-text">看看大家在聊什么</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 编辑帖子弹窗 -->
+        <div id="forum-edit-modal" class="forum-modal">
+            <div class="forum-modal-content">
+                <div class="forum-modal-header">
+                    <span onclick="closeForumEditModal()" style="color:#999; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#fff;">编辑帖子</span>
+                    <span onclick="saveForumPostEdit()" style="color:#5856d6; cursor:pointer;">保存</span>
+                </div>
+                <div class="forum-modal-body">
+                    <div class="forum-form-group">
+                        <label class="forum-label">帖子内容</label>
+                        <textarea id="forum-edit-textarea" class="forum-textarea"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 21. 音乐 App -->
         <div id="app-music" class="screen">
             <div class="app-header music-header">
                 <div class="back-btn" onclick="goHome()">Back</div>
