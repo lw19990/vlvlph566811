@@ -2579,8 +2579,13 @@ input:checked + .slider:before { transform: translateX(22px); }
 }
 
 /* 只在非删除模式下显示动画 */
-.couple-container:not(.message-board-delete-mode) .message-board-item {
+.message-board-list:not(.message-board-delete-mode) .message-board-item {
     animation: slideUp 0.3s ease;
+}
+
+/* 在删除模式下显式禁用动画 */
+.message-board-delete-mode .message-board-item {
+    animation: none !important;
 }
 
 .message-board-header {
