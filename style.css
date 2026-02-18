@@ -2564,9 +2564,9 @@ input:checked + .slider:before { transform: translateX(22px); }
     display: flex;
     flex-direction: column;
     gap: 15px;
-    padding-top: 103px; /* 为顶部固定栏留出空间（88px header + 15px padding） */
-    padding-bottom: 80px; /* 为底部按钮留出空间 */
-    margin-top: -88px; /* 抵消容器的 padding-top，使滚动区域从正确位置开始 */
+    padding-top: 40px; /* 修正：配合容器的60px padding，总共100px，避开88px的Header */
+    padding-bottom: 100px; /* 修正：增加底部留白，避免被底部按钮遮挡 */
+    margin-top: 0; /* 修正：移除负margin，恢复正常流布局 */
 }
 
 .message-board-item {
