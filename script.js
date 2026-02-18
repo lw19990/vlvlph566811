@@ -3791,7 +3791,7 @@ function enterMessageBoardDeleteMode() {
     selectedMessageIds.clear();
     document.getElementById('message-board-list').classList.add('message-board-delete-mode');
     document.getElementById('message-board-delete-bar').classList.add('active');
-    renderCoupleMessages();
+    renderCoupleMessages(true);
 }
 
 function exitMessageBoardDeleteMode() {
@@ -3799,7 +3799,7 @@ function exitMessageBoardDeleteMode() {
     selectedMessageIds.clear();
     document.getElementById('message-board-list').classList.remove('message-board-delete-mode');
     document.getElementById('message-board-delete-bar').classList.remove('active');
-    renderCoupleMessages();
+    renderCoupleMessages(true);
 }
 
 function toggleMessageSelection(msgId) {
@@ -3808,7 +3808,7 @@ function toggleMessageSelection(msgId) {
     } else {
         selectedMessageIds.add(msgId);
     }
-    renderCoupleMessages();
+    renderCoupleMessages(true);
 }
 
 function confirmDeleteMessagesBoard() {
@@ -3826,8 +3826,9 @@ function confirmDeleteMessagesBoard() {
 }
 
 // 渲染留言板
-function renderCoupleMessages() {
+function renderCoupleMessages(maintainScroll = false) {
     const list = document.getElementById('message-board-list');
+    const previousScrollTop = list.scrollTop;
     const messages = DB.getCoupleMessages();
     
     list.innerHTML = '';
@@ -3924,7 +3925,11 @@ function renderCoupleMessages() {
     });
     
     // 自动滚动到底部
-    list.scrollTop = list.scrollHeight;
+    if (maintainScroll) {
+        list.scrollTop = previousScrollTop;
+    } else {
+        list.scrollTop = list.scrollHeight;
+    }
 }
 
 // 打开添加留言弹窗
