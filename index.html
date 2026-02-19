@@ -1250,7 +1250,7 @@
                     </div>
                     
                     <button class="album-comment-btn" id="invite-comment-btn" onclick="invitePhotoComment()">
-                        <span>�</span> 邀请TA来评论
+                        <span></span> 邀请TA来评论
                     </button>
                     
                     <div class="album-comment-loading" id="comment-loading">
@@ -1404,6 +1404,15 @@
             
             <div class="forum-content" id="forum-posts-container">
                 <!-- 帖子将在这里动态生成 -->
+            </div>
+
+            <!-- Forum Action Sheet -->
+            <div id="forum-action-sheet" class="forum-action-sheet-overlay" onclick="closeForumActionSheet()">
+                <div class="forum-action-sheet-content" onclick="event.stopPropagation()">
+                    <div class="forum-action-sheet-item" onclick="handleForumEditAction()">编辑</div>
+                    <div class="forum-action-sheet-item delete" onclick="handleForumDeleteAction()">删除</div>
+                    <div class="forum-action-sheet-cancel" onclick="closeForumActionSheet()">取消</div>
+                </div>
             </div>
         </div>
         

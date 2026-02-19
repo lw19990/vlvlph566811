@@ -4280,22 +4280,32 @@ function renderForumPosts() {
 // 打开帖子菜单
 function openForumPostMenu(postId) {
     currentEditingPostId = postId;
-    const forumData = DB.getForumData();
-    const post = forumData.posts.find(p => p.id === postId);
-    
-    if (!post) return;
-    
-    // 只有角色帖子可以编辑
-    if (post.type === 'character') {
-        if (confirm('选择操作：\n1. 点击"确定"编辑\n2. 点击"取消"删除')) {
-            openForumEditModal(postId);
-        } else {
-            deleteForumPost(postId);
-        }
-    } else {
-        // 路人帖子只能删除
-        deleteForumPost(postId);
+    document.getElementById('forum-action-sheet').classList.add('active');
+}
+
+// 关闭 Action Sheet
+function closeForumActionSheet() {
+    document.getElementById('forum-action-sheet').classList.remove('active');
+    currentEditingPostId = null;
+}
+
+// 处理编辑操作
+function handleForumEditAction() {
+    if (!currentEditingPostId) return;
+    openForumEditModal(currentEditingPostId);
+    document.getElementById('forum-action-sheet').classList.remove('active');
+}
+
+// 处理删除操作
+function handleForumDeleteAction() {
+    if (!currentEditingPostId) return;
+    if (confirm('确定要删除这条帖子吗？')) {
+        const forumData = DB.getForumData();
+        forumData.posts = forumData.posts.filter(p => p.id !== currentEditingPostId);
+        DB.saveForumData(forumData);
+        renderForumPosts();
     }
+    closeForumActionSheet();
 }
 
 // 删除单条帖子

@@ -835,6 +835,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 /* 每日总结样式 */
 .memo-item.daily-summary {
     background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border-radius: 10px;
     border: 2px solid #4caf50;
 }
 .memo-item.daily-summary .memo-date {
@@ -3753,45 +3754,75 @@ input:checked + .slider:before { transform: translateX(22px); }
     color: #999;
 }
 
-/* 帖子菜单弹窗 */
-.forum-post-menu-modal {
+/* Forum Action Sheet Styles (Replacing the Menu Modal) */
+.forum-action-sheet-overlay {
     position: fixed;
-    bottom: 0;
+    top: 0;
     left: 0;
     width: 100%;
-    background: #1a1a1a;
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
     z-index: 1001;
     display: none;
     flex-direction: column;
-    padding: 20px;
-    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
-    transform: translateY(100%);
-    transition: transform 0.3s;
+    justify-content: flex-end;
 }
 
-.forum-post-menu-modal.active {
+.forum-action-sheet-overlay.active {
     display: flex;
-    transform: translateY(0);
 }
 
-.forum-menu-item {
-    padding: 15px;
+.forum-action-sheet-content {
+    background: transparent;
+    padding: 10px 10px 20px 10px;
+    width: 100%;
+    animation: slideUp 0.3s ease-out;
+}
+
+.forum-action-sheet-item {
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #fff;
+    padding: 16px;
     text-align: center;
     font-size: 16px;
-    color: #fff;
     cursor: pointer;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.forum-menu-item:last-child {
+.forum-action-sheet-item:first-child {
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}
+
+.forum-action-sheet-item:last-of-type {
     border-bottom: none;
-    color: #999;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    margin-bottom: 8px;
 }
 
-.forum-menu-item.delete {
+.forum-action-sheet-item.delete {
     color: #ff3b30;
+}
+
+.forum-action-sheet-cancel {
+    background: rgba(44, 44, 46, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #fff;
+    padding: 16px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 14px;
+    cursor: pointer;
+}
+
+.forum-action-sheet-item:active,
+.forum-action-sheet-cancel:active {
+    background: rgba(58, 58, 60, 0.95);
 }
 
 /* 删除模式 */
