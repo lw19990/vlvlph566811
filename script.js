@@ -1,4 +1,4 @@
-const DEFAULT_SYSTEM_PROMPT = `你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请严格根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹，你的回复长度随心情起伏，不要每次都回复相同长度的内容。结尾禁止带句号，禁止使用括号内动作描写。`;
+const DEFAULT_SYSTEM_PROMPT = `你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请严格根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹。你可以主动提起新话题，不要只是被动回答。你的回复长度随心情起伏，禁止每次都回复相同长度的内容。句尾禁止带句号，禁止使用括号内动作描写。`;
 
 // --- IndexedDB 存储系统 ---
 const IDB_NAME = 'VVPhoneDB';
@@ -1066,7 +1066,66 @@ function importThemePreset(input) {
     reader.readAsText(file);
 }
 
-function calculatePeriodDays(year, month) { const events = DB.getCalendarEvents(); const periodMap = {}; const predictedStarts = []; const manualStarts = []; const manualEnds = []; Object.keys(events).forEach(dateStr => { events[dateStr].forEach(ev => { if (ev.type === 'period_start' || ev.type === 'period') { manualStarts.push({ date: new Date(dateStr), cycle: ev.cycle || 28, duration: ev.duration || 5 }); } if (ev.type === 'period_end') { manualEnds.push(new Date(dateStr)); } }); }); manualStarts.sort((a, b) => a.date - b.date); manualEnds.sort((a, b) => a.date - b.date); manualStarts.forEach(startObj => { const startDate = startObj.date; const endDate = manualEnds.find(end => end >= startDate); let limitDate; if (endDate) { limitDate = endDate; } else { limitDate = new Date(startDate); limitDate.setDate(startDate.getDate() + startObj.duration - 1); } let temp = new Date(startDate); while (temp <= limitDate) { const dStr = `${temp.getFullYear()}-${String(temp.getMonth()+1).padStart(2,'0')}-${String(temp.getDate()).padStart(2,'0')}`; periodMap[dStr] = 'active'; temp.setDate(temp.getDate() + 1); } }); if (manualStarts.length > 0) { const lastManual = manualStarts[manualStarts.length - 1]; let nextStart = new Date(lastManual.date); const viewEnd = new Date(year, month + 1, 15); while (nextStart <= viewEnd) { nextStart.setDate(nextStart.getDate() + lastManual.cycle); if (nextStart > lastManual.date) { const pStr = `${nextStart.getFullYear()}-${String(nextStart.getMonth()+1).padStart(2,'0')}-${String(nextStart.getDate()).padStart(2,'0')}`; if (!periodMap[pStr]) { predictedStarts.push(pStr); let tempP = new Date(nextStart); for (let i = 0; i < lastManual.duration; i++) { const pdStr = `${tempP.getFullYear()}-${String(tempP.getMonth()+1).padStart(2,'0')}-${String(tempP.getDate()).padStart(2,'0')}`; if (!periodMap[pdStr]) { periodMap[pdStr] = 'predicted'; } tempP.setDate(tempP.getDate() + 1); } } } } } return { periodMap, predictedStarts }; }
+function calculatePeriodDays(year, month) {
+    const events = DB.getCalendarEvents();
+    const periodMap = {};
+    const predictedStarts = [];
+    const manualStarts = [];
+    const manualEnds = [];
+    Object.keys(events).forEach(dateStr => {
+        events[dateStr].forEach(ev => {
+            if (ev.type === 'period_start' || ev.type === 'period') {
+                manualStarts.push({ date: new Date(dateStr), cycle: ev.cycle || 28, duration: ev.duration || 5 });
+            }
+            if (ev.type === 'period_end') {
+                manualEnds.push(new Date(dateStr));
+            }
+        });
+    });
+    manualStarts.sort((a, b) => a.date - b.date);
+    manualEnds.sort((a, b) => a.date - b.date);
+    manualStarts.forEach((startObj, index) => {
+        const startDate = startObj.date;
+        const nextStart = manualStarts[index + 1];
+        const endDate = manualEnds.find(end => end >= startDate);
+        let limitDate;
+        if (endDate && (!nextStart || nextStart.date > endDate)) {
+            limitDate = endDate;
+        } else {
+            limitDate = new Date(startDate);
+            limitDate.setDate(startDate.getDate() + startObj.duration - 1);
+        }
+        let temp = new Date(startDate);
+        while (temp <= limitDate) {
+            const dStr = `${temp.getFullYear()}-${String(temp.getMonth()+1).padStart(2,'0')}-${String(temp.getDate()).padStart(2,'0')}`;
+            periodMap[dStr] = 'active';
+            temp.setDate(temp.getDate() + 1);
+        }
+    });
+    if (manualStarts.length > 0) {
+        const lastManual = manualStarts[manualStarts.length - 1];
+        let nextStart = new Date(lastManual.date);
+        const viewEnd = new Date(year, month + 1, 15);
+        while (nextStart <= viewEnd) {
+            nextStart.setDate(nextStart.getDate() + lastManual.cycle);
+            if (nextStart > lastManual.date) {
+                const pStr = `${nextStart.getFullYear()}-${String(nextStart.getMonth()+1).padStart(2,'0')}-${String(nextStart.getDate()).padStart(2,'0')}`;
+                if (!periodMap[pStr]) {
+                    predictedStarts.push(pStr);
+                    let tempP = new Date(nextStart);
+                    for (let i = 0; i < lastManual.duration; i++) {
+                        const pdStr = `${tempP.getFullYear()}-${String(tempP.getMonth()+1).padStart(2,'0')}-${String(tempP.getDate()).padStart(2,'0')}`;
+                        if (!periodMap[pdStr]) {
+                            periodMap[pdStr] = 'predicted';
+                        }
+                        tempP.setDate(tempP.getDate() + 1);
+                    }
+                }
+            }
+        }
+    }
+    return { periodMap, predictedStarts };
+}
 function renderCalendar() { const year = currentCalDate.getFullYear(); const month = currentCalDate.getMonth(); document.getElementById('calendar-month-title').innerText = `${year}年 ${month + 1}月`; const firstDay = new Date(year, month, 1); const lastDay = new Date(year, month + 1, 0); const daysInMonth = lastDay.getDate(); const startDayOfWeek = firstDay.getDay(); const grid = document.getElementById('calendar-grid'); grid.innerHTML = ''; const { periodMap } = calculatePeriodDays(year, month); const events = DB.getCalendarEvents(); const today = new Date(); for (let i = 0; i < startDayOfWeek; i++) { const div = document.createElement('div'); div.className = 'calendar-day other-month'; grid.appendChild(div); } for (let d = 1; d <= daysInMonth; d++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const div = document.createElement('div'); div.className = 'calendar-day'; const dayEvents = events[dateStr]; if (dayEvents && dayEvents.length > 0) { div.classList.add('has-event'); } if (periodMap[dateStr]) { div.classList.add('period-day'); } if (year === today.getFullYear() && month === today.getMonth() && d === today.getDate()) { div.classList.add('today'); } div.innerHTML = `<div class="day-number">${d}</div>`; div.onclick = () => openCalendarModal(dateStr); grid.appendChild(div); } renderMonthEventList(year, month); }
 function renderMonthEventList(year, month) { const container = document.getElementById('calendar-month-events'); container.innerHTML = ''; const events = DB.getCalendarEvents(); const lastDay = new Date(year, month + 1, 0).getDate(); const { predictedStarts } = calculatePeriodDays(year, month); let hasEvents = false; for (let d = 1; d <= lastDay; d++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const dayEvents = events[dateStr]; if (dayEvents && dayEvents.length > 0) { dayEvents.forEach(ev => { if (ev.type === 'period_end') return; hasEvents = true; const row = document.createElement('div'); row.className = 'calendar-event-row'; let displayText = `${year}年${month+1}月${d}日`; let dotColor = '#ccc'; switch(ev.type) { case 'anniversary': displayText += ` - 纪念日 - ${ev.title}`; dotColor = '#ff9500'; break; case 'birthday_char': displayText += ` - TA的生日 - ${ev.title || '未知角色'}`; dotColor = '#5856d6'; break; case 'birthday_user': displayText += ` - 我的生日`; dotColor = '#5856d6'; break; case 'period_start': case 'period': displayText += ` - 上次月经来潮日`; dotColor = '#ff2d55'; break; case 'custom': displayText += ` - 行程 - ${ev.title}`; dotColor = '#34c759'; break; } row.innerHTML = `<div class="cal-event-dot" style="background:${dotColor}"></div><div>${displayText}</div>`; container.appendChild(row); }); } if (predictedStarts.includes(dateStr)) { hasEvents = true; const row = document.createElement('div'); row.className = 'calendar-event-row'; row.innerHTML = `<div class="cal-event-dot" style="background:#ff2d55; opacity:0.6;"></div><div style="color:#666;">${year}年${month+1}月${d}日 - 预计下月月经来潮日</div>`; container.appendChild(row); } } if (!hasEvents) { container.innerHTML = '<div style="text-align:center; color:#ccc; padding:20px; font-size:12px;">本月暂无标记事件</div>'; } }
 function changeCalendarMonth(delta) { currentCalDate.setMonth(currentCalDate.getMonth() + delta); renderCalendar(); }
@@ -1075,6 +1134,30 @@ function openCalendarModal(dateStr) { selectedCalDateStr = dateStr; document.get
 function closeCalendarModal() { document.getElementById('calendar-event-modal').classList.remove('active'); renderCalendar(); }
 function renderCalendarEventList() { const list = document.getElementById('cal-event-list'); list.innerHTML = ''; const events = DB.getCalendarEvents()[selectedCalDateStr] || []; if (events.length === 0) { list.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">暂无事件</div>'; return; } events.forEach((ev, index) => { const div = document.createElement('div'); div.className = 'event-list-item'; let typeLabel = ''; let details = ''; switch(ev.type) { case 'anniversary': typeLabel = '❤️ 纪念日'; details = ev.title; break; case 'birthday_char': typeLabel = '🎂 【' + (ev.title || '未知') + '】的生日'; break; case 'birthday_user': typeLabel = '🎉 我的生日'; break; case 'period_start': case 'period': typeLabel = '🩸 月经开始'; details = `(周期:${ev.cycle}天, 持续:${ev.duration}天)`; break; case 'period_end': typeLabel = '🏁 月经结束'; break; case 'custom': typeLabel = '📌 ' + (ev.title || '自定义'); break; } div.innerHTML = `<div><div style="font-weight:bold;">${typeLabel}</div><div style="font-size:12px; color:#666;">${details}</div></div><div style="color:#ff3b30; cursor:pointer;" onclick="deleteCalendarEvent(${index})">🗑️</div>`; list.appendChild(div); }); }
 function addCalendarEvent(type) { 
+    if (type === 'period_end') {
+        const d = prompt("请输入本次月经总天数", "5");
+        if (d === null) return;
+        const duration = parseInt(d) || 5;
+        
+        const allEvents = DB.getCalendarEvents();
+        const endDate = new Date(selectedCalDateStr);
+        const startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - duration + 1);
+        const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}`;
+        
+        if (!allEvents[startDateStr]) allEvents[startDateStr] = [];
+        allEvents[startDateStr] = allEvents[startDateStr].filter(e => e.type !== 'period_start');
+        allEvents[startDateStr].push({ type: 'period_start', title: '', cycle: 28, duration: duration });
+        
+        if (!allEvents[selectedCalDateStr]) allEvents[selectedCalDateStr] = [];
+        allEvents[selectedCalDateStr].push({ type: 'period_end', title: '' });
+        
+        DB.saveCalendarEvents(allEvents);
+        renderCalendarEventList();
+        renderCalendar();
+        return;
+    }
+
     let title = ''; 
     let cycle = 28; 
     let duration = 5; 
@@ -1101,37 +1184,6 @@ function addCalendarEvent(type) {
             return alert("无效的选择");
         }
     }
-    
-    if (type === 'period_end') {
-        const d = prompt("请输入本次月经总天数：", "5");
-        if (d === null) return;
-        duration = parseInt(d) || 5;
-        
-        const allEvents = DB.getCalendarEvents();
-        
-        // 1. 在当前日期添加 period_end
-        if (!allEvents[selectedCalDateStr]) allEvents[selectedCalDateStr] = [];
-        allEvents[selectedCalDateStr] = allEvents[selectedCalDateStr].filter(e => e.type !== 'period_end');
-        allEvents[selectedCalDateStr].push({ type: 'period_end', title: '', cycle: 28, duration: duration });
-        
-        // 2. 计算开始日期并添加 period_start
-        const [y, m, day] = selectedCalDateStr.split('-').map(Number);
-        const endDateObj = new Date(y, m - 1, day);
-        const startDateObj = new Date(endDateObj);
-        startDateObj.setDate(startDateObj.getDate() - duration + 1);
-        
-        const startDateStr = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,'0')}-${String(startDateObj.getDate()).padStart(2,'0')}`;
-        
-        if (!allEvents[startDateStr]) allEvents[startDateStr] = [];
-        allEvents[startDateStr] = allEvents[startDateStr].filter(e => e.type !== 'period_start' && e.type !== 'period');
-        allEvents[startDateStr].push({ type: 'period_start', title: '', cycle: 28, duration: duration });
-        
-        DB.saveCalendarEvents(allEvents);
-        renderCalendarEventList();
-        renderCalendar();
-        return;
-    }
-
     if (type === 'period_start') { 
         const c = prompt("请输入月经周期 (天)：", "28"); 
         if (c === null) return; 
@@ -1828,15 +1880,23 @@ function renderChatHistory(maintainScroll = false) {
         }
 
         const row = document.createElement('div'); 
-        row.className = `message-row ${msg.role === 'user' ? 'user' : 'ai'}`; 
-        if (msg.type === 'call_end') { 
+        
+        if (msg.role === 'system') {
             row.className = 'message-row'; 
             row.style.justifyContent = 'center'; 
             const sysMsg = document.createElement('div'); 
-            sysMsg.className = 'system-message-bar'; 
+            
+            // 区分通话结束和其他系统通知(如一起听)
+            if (msg.type === 'call_end') {
+                sysMsg.className = 'system-message-bar'; 
+            } else {
+                sysMsg.className = 'listen-together-notice';
+            }
+            
             sysMsg.innerText = msg.content; 
             row.appendChild(sysMsg); 
         } else {
+            row.className = `message-row ${msg.role === 'user' ? 'user' : 'ai'}`;
             const cb = document.createElement('div'); 
             cb.className = 'selection-checkbox'; 
             if (selectedIndices.has(originalIndex)) cb.classList.add('checked'); 
@@ -2278,6 +2338,14 @@ async function triggerAIResponse() {
 
     let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${currentChatContact.name}\n人设：${currentChatContact.persona}`;
     if (userSettings.userName || userSettings.userPersona) systemContent += `\n\n[用户信息]\n名字：${userSettings.userName || 'User'}\n人设：${userSettings.userPersona || ''}`;
+
+    // 一起听：添加当前歌曲信息
+    if (listenTogetherTarget && listenTogetherTarget.id === currentChatContact.id && currentMusicIndex !== -1 && isPlaying) {
+        const music = musicList[currentMusicIndex];
+        if (music) {
+            systemContent += `\n\n===== 【一起听模式已开启】 =====\n你们正在一起听歌。\n当前正在播放的歌曲信息：\n曲名：${music.title}\n歌手：${music.artist}\n风格：${music.style || '未知'}\n歌词片段：${music.lyrics ? music.lyrics.substring(0, 200).replace(/\n/g, ' ') + '...' : '暂无歌词'}\n\n请在回复中自然地提及或讨论这首歌，就像你们真的在一起听一样。`;
+        }
+    }
 
     const mems = DB.getMemories()[currentChatContact.id] || { important: [], normal: [] };
     if (mems.important.length > 0) { systemContent += `\n\n[⭐ 重要回忆 - 绝对不能遗忘]\n`; mems.important.forEach((m, i) => { systemContent += `${i+1}. ${m.content}\n`; }); }
@@ -2762,6 +2830,7 @@ let parsedLyrics = [];
 let currentLyricIndex = -1;
 let isMiniPlayerDragging = false;
 let miniPlayerOffset = { x: 0, y: 0 };
+let listenTogetherTarget = null; // 当前一起听的角色对象 {id, name}
 
 // 获取音乐数据
 DB.getMusicList = () => {
@@ -3149,6 +3218,9 @@ function toggleMusicPlay() {
             
             // 更新迷你播放器状态
             document.getElementById('music-mini-player').classList.remove('paused');
+            
+            // 一起听：播放通知
+            notifyListenTogetherSongSwitch();
         }).catch(e => {
             console.error('播放失败:', e);
             alert('播放失败，请检查音乐链接是否有效');
@@ -3204,6 +3276,9 @@ function nextMusic() {
             audio.play();
         }
     }, 100);
+    
+    // 一起听：切换歌曲通知
+    notifyListenTogetherSongSwitch();
 }
 
 // 进度条点击
@@ -3507,6 +3582,147 @@ function closeMusicPlayer() {
     
     // 重置歌词
     currentLyricIndex = -1;
+}
+
+// --- 一起听功能 ---
+function handleListenTogetherClick() {
+    if (listenTogetherTarget) {
+        // 已经开启，询问是否退出
+        if (confirm(`是否要退出与 ${listenTogetherTarget.name} 的一起听模式？`)) {
+            exitListenTogether();
+        }
+    } else {
+        // 未开启，显示选择弹窗
+        openListenTogetherModal();
+    }
+}
+
+function openListenTogetherModal() {
+    document.getElementById('listen-together-modal').classList.add('active');
+    renderListenTogetherContacts();
+}
+
+function closeListenTogetherModal() {
+    document.getElementById('listen-together-modal').classList.remove('active');
+}
+
+function renderListenTogetherContacts() {
+    const list = document.getElementById('listen-together-contact-list');
+    list.innerHTML = '';
+    const contacts = DB.getContacts();
+    
+    if (contacts.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">通讯录暂无联系人</div>';
+        return;
+    }
+    
+    contacts.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'invite-item';
+        div.onclick = () => startListenTogether(c);
+        div.innerHTML = `
+            <img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}">
+            <div class="invite-item-name">${c.name}</div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function startListenTogether(contact) {
+    listenTogetherTarget = contact;
+    closeListenTogetherModal();
+    
+    // 更新图标状态
+    const btn = document.getElementById('listen-together-btn');
+    if (btn) btn.style.color = '#ff2d55';
+    
+    // 发送开启通知
+    const userSettings = contact.userSettings || {};
+    const userName = userSettings.userName || '用户';
+    
+    const c = DB.getChats();
+    if (!c[contact.id]) c[contact.id] = [];
+    
+    c[contact.id].push({
+        role: 'system',
+        content: `【${userName}】已开启一起听`,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    
+    DB.saveChats(c);
+    if (currentChatContact && currentChatContact.id === contact.id) {
+        renderChatHistory();
+    }
+    
+    alert(`已开启与 ${contact.name} 的一起听模式！`);
+}
+
+function exitListenTogether() {
+    if (!listenTogetherTarget) return;
+    
+    const contact = listenTogetherTarget;
+    const userSettings = contact.userSettings || {};
+    const userName = userSettings.userName || '用户';
+    
+    // 发送关闭通知
+    const c = DB.getChats();
+    if (!c[contact.id]) c[contact.id] = [];
+    
+    c[contact.id].push({
+        role: 'system',
+        content: `【${userName}】已关闭一起听`,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    
+    DB.saveChats(c);
+    
+    // 重置状态
+    listenTogetherTarget = null;
+    const btn = document.getElementById('listen-together-btn');
+    if (btn) btn.style.color = '#fff';
+    
+    if (currentChatContact && currentChatContact.id === contact.id) {
+        renderChatHistory();
+    }
+    
+    alert('已退出一起听模式');
+}
+
+function notifyListenTogetherSongSwitch() {
+    if (!listenTogetherTarget) return;
+    if (currentMusicIndex === -1) return;
+    
+    const music = musicList[currentMusicIndex];
+    if (!music) return;
+    
+    const contact = listenTogetherTarget;
+    const userSettings = contact.userSettings || {};
+    const userName = userSettings.userName || '用户';
+    
+    const c = DB.getChats();
+    if (!c[contact.id]) c[contact.id] = [];
+    
+    // 检查上一条消息是否已经是同一首歌的切换通知，避免重复发送
+    const lastMsg = c[contact.id][c[contact.id].length - 1];
+    const newContent = `【${userName}】已切换歌曲为【${music.title}】`;
+    
+    if (lastMsg && lastMsg.role === 'system' && lastMsg.content === newContent) {
+        return;
+    }
+    
+    c[contact.id].push({
+        role: 'system',
+        content: newContent,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    
+    DB.saveChats(c);
+    if (currentChatContact && currentChatContact.id === contact.id) {
+        renderChatHistory();
+    }
 }
 
 // 在 openApp 中添加音乐APP的渲染

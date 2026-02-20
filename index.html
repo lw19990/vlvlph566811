@@ -1487,6 +1487,7 @@
                 <div class="back-btn" onclick="goHome()">Back</div>
                 <div class="app-title">音乐</div>
                 <div class="action-btn" style="display:flex; gap:15px; align-items:center;">
+                    <span id="listen-together-btn" onclick="handleListenTogetherClick()" style="font-size:20px; color:#fff;">🤍</span>
                     <span onclick="toggleMusicDeleteMode()" style="font-size:18px;">🗑️</span>
                     <span onclick="openAddMusicModal()" style="font-size:24px;">+</span>
                 </div>
@@ -1505,6 +1506,22 @@
                 <div class="music-empty-icon">🎵</div>
                 <div class="music-empty-text">还没有音乐哦</div>
                 <div class="music-empty-hint">点击右上角的加号添加音乐吧</div>
+            </div>
+        </div>
+
+        <!-- 一起听 - 选择角色弹窗 -->
+        <div id="listen-together-modal" class="music-modal">
+            <div class="music-modal-content">
+                <div class="music-modal-header">
+                    <span onclick="closeListenTogetherModal()" style="color:#ff2d55; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#333;">想和TA一起听...</span>
+                    <span></span>
+                </div>
+                <div class="music-modal-body">
+                    <div id="listen-together-contact-list" class="invite-list">
+                        <!-- 动态填充 -->
+                    </div>
+                </div>
             </div>
         </div>
 

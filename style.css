@@ -342,6 +342,18 @@ input:checked + .slider:before { transform: translateX(22px); }
 .transfer-status { font-size: 12px; opacity: 0.8; }
 .transfer-footer { background: rgba(255,255,255,0.2); padding: 8px 15px; font-size: 11px; }
 .system-message-bar { align-self: center; background: rgba(0, 0, 0, 0.3); color: #fff; padding: 5px 15px; border-radius: 15px; font-size: 12px; margin: 10px 0; max-width: 80%; text-align: center; backdrop-filter: blur(2px); }
+.listen-together-notice {
+    align-self: center;
+    background-color: #e0e0e0;
+    color: #666;
+    padding: 4px 15px;
+    border-radius: 15px;
+    font-size: 12px;
+    margin: 10px auto;
+    text-align: center;
+    max-width: 80%;
+    width: fit-content;
+}
 .selection-checkbox { width: 20px; height: 20px; border: 2px solid #ccc; border-radius: 50%; margin-right: 10px; display: none; flex-shrink: 0; }
 .selection-checkbox.checked { background: #007aff; border-color: #007aff; }
 .selection-mode .selection-checkbox { display: block; }
