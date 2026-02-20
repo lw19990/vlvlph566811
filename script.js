@@ -1101,6 +1101,37 @@ function addCalendarEvent(type) {
             return alert("无效的选择");
         }
     }
+    
+    if (type === 'period_end') {
+        const d = prompt("请输入本次月经总天数：", "5");
+        if (d === null) return;
+        duration = parseInt(d) || 5;
+        
+        const allEvents = DB.getCalendarEvents();
+        
+        // 1. 在当前日期添加 period_end
+        if (!allEvents[selectedCalDateStr]) allEvents[selectedCalDateStr] = [];
+        allEvents[selectedCalDateStr] = allEvents[selectedCalDateStr].filter(e => e.type !== 'period_end');
+        allEvents[selectedCalDateStr].push({ type: 'period_end', title: '', cycle: 28, duration: duration });
+        
+        // 2. 计算开始日期并添加 period_start
+        const [y, m, day] = selectedCalDateStr.split('-').map(Number);
+        const endDateObj = new Date(y, m - 1, day);
+        const startDateObj = new Date(endDateObj);
+        startDateObj.setDate(startDateObj.getDate() - duration + 1);
+        
+        const startDateStr = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,'0')}-${String(startDateObj.getDate()).padStart(2,'0')}`;
+        
+        if (!allEvents[startDateStr]) allEvents[startDateStr] = [];
+        allEvents[startDateStr] = allEvents[startDateStr].filter(e => e.type !== 'period_start' && e.type !== 'period');
+        allEvents[startDateStr].push({ type: 'period_start', title: '', cycle: 28, duration: duration });
+        
+        DB.saveCalendarEvents(allEvents);
+        renderCalendarEventList();
+        renderCalendar();
+        return;
+    }
+
     if (type === 'period_start') { 
         const c = prompt("请输入月经周期 (天)：", "28"); 
         if (c === null) return; 
