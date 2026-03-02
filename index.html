@@ -547,9 +547,9 @@
 
         <!-- 12. VKontakte App (主) -->
         <div id="app-vk" class="screen">
-            <div class="app-header">
-                <div class="back-btn" onclick="goHome()">Home</div>
-                <div class="app-title">Vkontakte</div>
+            <div class="app-header vk-list-header">
+                <div class="back-btn vk-arrow-back" onclick="goHome()" aria-label="返回主界面">←</div>
+                <div class="app-title vk-list-title">Vkontakte</div>
                 <div class="action-btn"></div>
             </div>
             <div class="app-content" id="vk-chat-list"></div>
@@ -557,18 +557,33 @@
 
         <!-- 13. 聊天界面 (主) -->
         <div id="chat-interface">
-            <div class="app-header">
-                <div class="back-btn" onclick="closeChat()">Back</div>
-                <div style="position:absolute; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:5px;">
-                    <span id="chat-title" style="font-size:18px; font-weight:700;">Chat</span>
-                    <span onclick="toggleThoughts()" style="cursor:pointer; font-size:16px; color:#ff2d55;">❤️</span>
+            <div class="app-header chat-header">
+                <div class="chat-header-left">
+                    <div class="back-btn chat-arrow-back" onclick="closeChat()" aria-label="返回联系人列表">←</div>
+                    <img id="chat-header-avatar" class="chat-header-avatar" src="" alt="角色头像">
+                    <div class="chat-header-title-wrap">
+                        <span id="chat-title" class="chat-header-title">Chat</span>
+                        <span id="chat-last-online" class="chat-last-online">在线</span>
+                    </div>
                 </div>
-                <div class="action-btn" onclick="openChatSettings()">⚙️</div>
+                <div class="action-btn chat-header-actions">
+                    <button class="chat-header-icon-btn thought-icon-btn" onclick="toggleThoughts()" aria-label="角色心声">
+                        <span class="chat-thought-toggle">❤</span>
+                    </button>
+                    <button class="chat-header-icon-btn call-icon-btn" onclick="startCall()" aria-label="通话">
+                        <svg class="call-icon-shape" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6.62 10.79a15.47 15.47 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.11.37 2.29.57 3.5.57a1 1 0 0 1 1 1v3.49a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3.99a1 1 0 0 1 1-1H7.5a1 1 0 0 1 1 1c0 1.21.19 2.39.57 3.5a1 1 0 0 1-.25 1.01l-2.2 2.29z"></path>
+                        </svg>
+                    </button>
+                    <button class="chat-header-icon-btn info-icon-btn" onclick="openChatSettings()" aria-label="设置">
+                        <span class="info-icon-shape">i</span>
+                    </button>
+                </div>
             </div>
 
             <div id="thoughts-modal" class="thoughts-modal">
                 <div class="thoughts-close" onclick="toggleThoughts()">✕</div>
-                <div class="thoughts-header">❤️ 角色心声</div>
+                <div class="thoughts-header">❤ 角色心声</div>
                 <div class="thoughts-content" id="thoughts-text">暂无心声...</div>
             </div>
 
@@ -632,7 +647,6 @@
                 <button class="tool-btn" onclick="regenerateLastResponse()">🔄 刷新</button>
                 <button class="tool-btn" onclick="continueChat()">⏩ 继续</button>
                 <button class="tool-btn" onclick="openTransferModal()">💰 转账</button>
-                <button class="tool-btn" onclick="startCall()">📞 通话</button>
                 <button class="tool-btn" onclick="openOfflineMode()">📴 线下模式</button>
             </div>
 
@@ -758,6 +772,11 @@
                         <label class="switch"><input type="checkbox" id="time-perception-toggle"><span class="slider"></span></label>
                     </div>
                     <div style="font-size:11px; color:#888; margin-bottom:20px;">开启后，AI 将知道当前现实时间，并根据作息和回复间隔做出反应。</div>
+                    <div class="toggle-switch" style="margin-top:-5px;">
+                        <span class="toggle-label" style="font-size:14px; font-weight:bold;">开启 html小剧场</span>
+                        <label class="switch"><input type="checkbox" id="html-theater-toggle"><span class="slider"></span></label>
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-bottom:20px;">开启此功能后可能会增加token消耗。</div>
 
                     <div class="settings-section-title">记忆与上下文</div>
                     <div class="toggle-switch">

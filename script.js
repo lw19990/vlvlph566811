@@ -1751,28 +1751,136 @@ async function callSpyAPI(type) {
 let currentChatContact = null, longPressTimer, selectedMessageIndex = -1, isSelectionMode = false, selectedIndices = new Set(), pendingQuoteContent = null;
 let displayedMessageCount = 20; // 初始显示的消息数量
 const MESSAGES_PER_PAGE = 20; // 每次加载的消息数量
+let chatOnlineStatusTimer = null;
 function renderVKList() { const l = document.getElementById('vk-chat-list'); l.innerHTML = ''; DB.getContacts().forEach(c => { const d = document.createElement('div'); d.className = 'chat-list-item'; d.onclick = () => openChat(c); d.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">点击开始聊天</div></div>`; l.appendChild(d); }); }
 function openChat(c) { 
     currentChatContact = c; 
     displayedMessageCount = MESSAGES_PER_PAGE; // 重置显示的消息数量
     document.getElementById('chat-interface').style.display = 'flex'; 
     document.getElementById('chat-title').innerText = c.name; 
+    document.getElementById('chat-header-avatar').src = c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23dbe8ff%22 width=%22100%22 height=%22100%22/></svg>';
+    updateChatLastOnlineStatus();
+    if (chatOnlineStatusTimer) clearInterval(chatOnlineStatusTimer);
+    chatOnlineStatusTimer = setInterval(updateChatLastOnlineStatus, 60000);
     exitDeleteMode(); 
     cancelQuote(); 
     applyChatTheme(c); 
     renderChatHistory(); 
 }
 function applyChatTheme(contact) { const theme = contact.chatTheme || {}; const styleTag = document.getElementById('dynamic-chat-theme'); const chatInterface = document.getElementById('chat-interface'); if (theme.bgType === 'image' && theme.bgValue) { chatInterface.style.backgroundImage = `url(${theme.bgValue})`; chatInterface.style.backgroundColor = 'transparent'; } else { chatInterface.style.backgroundImage = 'none'; chatInterface.style.backgroundColor = theme.bgValue || '#f5f5f5'; } let css = ''; if (theme.userBubbleColor) css += `.message-bubble.user { background-color: ${theme.userBubbleColor} !important; color: #fff; } `; if (theme.userBubbleCSS) css += `.message-bubble.user { ${theme.userBubbleCSS} } `; if (theme.aiBubbleColor) css += `.message-bubble.ai { background-color: ${theme.aiBubbleColor} !important; } `; if (theme.aiBubbleCSS) css += `.message-bubble.ai { ${theme.aiBubbleCSS} } `; styleTag.innerHTML = css; }
-function closeChat() { document.getElementById('chat-interface').style.display = 'none'; currentChatContact = null; }
+function closeChat() { document.getElementById('chat-interface').style.display = 'none'; if (chatOnlineStatusTimer) { clearInterval(chatOnlineStatusTimer); chatOnlineStatusTimer = null; } currentChatContact = null; }
 let currentChatBgType = 'color';
-function openChatSettings() { if(!currentChatContact) return; document.getElementById('ctx-overlay').classList.add('active'); document.getElementById('chat-settings-modal').classList.add('active'); const us = currentChatContact.userSettings || {}; document.getElementById('user-setting-name').value = us.userName || ''; document.getElementById('user-setting-persona').value = us.userPersona || ''; document.getElementById('user-setting-avatar-preview').src = us.userAvatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23eee%22 width=%22100%22 height=%22100%22/></svg>'; document.getElementById('user-setting-avatar-url').value = (us.userAvatar?.startsWith('http') ? us.userAvatar : ''); document.getElementById('time-perception-toggle').checked = us.enableTimePerception || false; document.getElementById('auto-summary-toggle').checked = us.autoSummaryEnabled !== false; document.getElementById('summary-interval-input').value = us.summaryInterval || 20; document.getElementById('context-limit-input').value = us.contextLimit || 100; renderBindWorldBookList(); const theme = currentChatContact.chatTheme || {}; document.getElementById('theme-user-color').value = theme.userBubbleColor || '#007aff'; document.getElementById('theme-user-css').value = theme.userBubbleCSS || ''; document.getElementById('theme-ai-color').value = theme.aiBubbleColor || '#ffffff'; document.getElementById('theme-ai-css').value = theme.aiBubbleCSS || ''; currentChatBgType = theme.bgType || 'color'; switchChatBgType(currentChatBgType); if (currentChatBgType === 'color') document.getElementById('theme-chat-bg-color').value = theme.bgValue || '#f5f5f5'; if (currentChatBgType === 'image' && theme.bgValue && theme.bgValue.startsWith('http')) { document.getElementById('theme-chat-bg-url').value = theme.bgValue; } else { document.getElementById('theme-chat-bg-url').value = ''; } }
+function openChatSettings() {
+    if(!currentChatContact) return;
+    document.getElementById('ctx-overlay').classList.add('active');
+    document.getElementById('chat-settings-modal').classList.add('active');
+    const us = currentChatContact.userSettings || {};
+    document.getElementById('user-setting-name').value = us.userName || '';
+    document.getElementById('user-setting-persona').value = us.userPersona || '';
+    document.getElementById('user-setting-avatar-preview').src = us.userAvatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23eee%22 width=%22100%22 height=%22100%22/></svg>';
+    document.getElementById('user-setting-avatar-url').value = (us.userAvatar?.startsWith('http') ? us.userAvatar : '');
+    document.getElementById('time-perception-toggle').checked = us.enableTimePerception || false;
+    document.getElementById('html-theater-toggle').checked = us.enableHtmlTheater === true;
+    document.getElementById('auto-summary-toggle').checked = us.autoSummaryEnabled !== false;
+    document.getElementById('summary-interval-input').value = us.summaryInterval || 20;
+    document.getElementById('context-limit-input').value = us.contextLimit || 100;
+    renderBindWorldBookList();
+    const theme = currentChatContact.chatTheme || {};
+    document.getElementById('theme-user-color').value = theme.userBubbleColor || '#cce5ff';
+    document.getElementById('theme-user-css').value = theme.userBubbleCSS || '';
+    document.getElementById('theme-ai-color').value = theme.aiBubbleColor || '#eceef2';
+    document.getElementById('theme-ai-css').value = theme.aiBubbleCSS || '';
+    currentChatBgType = theme.bgType || 'color';
+    switchChatBgType(currentChatBgType);
+    if (currentChatBgType === 'color') document.getElementById('theme-chat-bg-color').value = theme.bgValue || '#f5f5f5';
+    if (currentChatBgType === 'image' && theme.bgValue && theme.bgValue.startsWith('http')) {
+        document.getElementById('theme-chat-bg-url').value = theme.bgValue;
+    } else {
+        document.getElementById('theme-chat-bg-url').value = '';
+    }
+}
 function switchChatBgType(type) { currentChatBgType = type; document.getElementById('chat-bg-type-color').classList.toggle('active', type === 'color'); document.getElementById('chat-bg-type-image').classList.toggle('active', type === 'image'); document.getElementById('chat-bg-input-color').style.display = type === 'color' ? 'block' : 'none'; document.getElementById('chat-bg-input-image').style.display = type === 'image' ? 'block' : 'none'; }
 function renderBindWorldBookList() { const l = document.getElementById('bind-wb-list'); l.innerHTML = ''; const wb = DB.getWorldBook(); const local = wb.entries.filter(e => e.type === 'local'); const bound = currentChatContact.boundWorldBooks || []; if (local.length === 0) { l.innerHTML = '<div style="padding:10px;color:#999;font-size:12px;">暂无局部世界书</div>'; return; } local.forEach(en => { const d = document.createElement('div'); d.className = 'bind-wb-item'; d.innerHTML = `<input type="checkbox" value="${en.id}" id="wb-bind-${en.id}" ${bound.includes(en.id.toString()) ? 'checked' : ''}><label for="wb-bind-${en.id}">${en.title}</label>`; l.appendChild(d); }); }
 function closeChatSettings() { saveChatUserSettings(); document.getElementById('ctx-overlay').classList.remove('active'); document.getElementById('chat-settings-modal').classList.remove('active'); }
 function previewUserAvatar(input) { if (input.files?.[0]) { const r = new FileReader(); r.onload = e => document.getElementById('user-setting-avatar-preview').src = e.target.result; r.readAsDataURL(input.files[0]); } }
 function saveChatBubbleSettings() { saveChatUserSettings().then(() => alert("气泡设置已保存")); }
 function saveChatBgSettings() { saveChatUserSettings().then(() => alert("聊天背景已保存")); }
-function saveChatUserSettings() { if(!currentChatContact) return Promise.resolve(); const userName = document.getElementById('user-setting-name').value; const userPersona = document.getElementById('user-setting-persona').value; const urlInput = document.getElementById('user-setting-avatar-url').value; const fileInput = document.getElementById('user-setting-avatar-input'); const enableTime = document.getElementById('time-perception-toggle').checked; const autoSummary = document.getElementById('auto-summary-toggle').checked; const summaryInterval = parseInt(document.getElementById('summary-interval-input').value) || 20; const contextLimit = parseInt(document.getElementById('context-limit-input').value) || 100; const boundIds = [...document.querySelectorAll('#bind-wb-list input:checked')].map(cb => cb.value); const userBubbleColor = document.getElementById('theme-user-color').value; const userBubbleCSS = document.getElementById('theme-user-css').value; const aiBubbleColor = document.getElementById('theme-ai-color').value; const aiBubbleCSS = document.getElementById('theme-ai-css').value; const bgUrlInput = document.getElementById('theme-chat-bg-url').value; const bgFileInput = document.getElementById('theme-chat-bg-file'); const processSave = (av, bgVal) => { let cs = DB.getContacts(); const i = cs.findIndex(c => c.id === currentChatContact.id); if (i !== -1) { cs[i].userSettings = { userName, userPersona, userAvatar: av || cs[i].userSettings?.userAvatar || '', enableTimePerception: enableTime, autoSummaryEnabled: autoSummary, summaryInterval: summaryInterval, contextLimit: contextLimit }; cs[i].boundWorldBooks = boundIds; let finalBgValue = bgVal; if (!finalBgValue) { if (currentChatBgType === 'color') { finalBgValue = document.getElementById('theme-chat-bg-color').value; } else { finalBgValue = cs[i].chatTheme?.bgValue || ''; } } cs[i].chatTheme = { userBubbleColor, userBubbleCSS, aiBubbleColor, aiBubbleCSS, bgType: currentChatBgType, bgValue: finalBgValue }; DB.saveContacts(cs); currentChatContact = cs[i]; applyChatTheme(currentChatContact); renderChatHistory(); } }; const handleAvatar = () => { return new Promise(resolve => { if (urlInput) resolve(urlInput); else if (fileInput.files?.[0]) { const r = new FileReader(); r.onload = e => resolve(e.target.result); r.readAsDataURL(fileInput.files[0]); } else resolve(null); }); }; const handleBg = () => { return new Promise(resolve => { if (currentChatBgType === 'color') { resolve(document.getElementById('theme-chat-bg-color').value); } else { if (bgUrlInput) resolve(bgUrlInput); else if (bgFileInput.files?.[0]) { const r = new FileReader(); r.onload = e => resolve(e.target.result); r.readAsDataURL(bgFileInput.files[0]); } else { resolve(null); } } }); }; return Promise.all([handleAvatar(), handleBg()]).then(([av, bg]) => { processSave(av, bg); }); }
+function saveChatUserSettings() {
+    if(!currentChatContact) return Promise.resolve();
+    const userName = document.getElementById('user-setting-name').value;
+    const userPersona = document.getElementById('user-setting-persona').value;
+    const urlInput = document.getElementById('user-setting-avatar-url').value;
+    const fileInput = document.getElementById('user-setting-avatar-input');
+    const enableTime = document.getElementById('time-perception-toggle').checked;
+    const enableHtmlTheater = document.getElementById('html-theater-toggle').checked;
+    const autoSummary = document.getElementById('auto-summary-toggle').checked;
+    const summaryInterval = parseInt(document.getElementById('summary-interval-input').value) || 20;
+    const contextLimit = parseInt(document.getElementById('context-limit-input').value) || 100;
+    const boundIds = [...document.querySelectorAll('#bind-wb-list input:checked')].map(cb => cb.value);
+    const userBubbleColor = document.getElementById('theme-user-color').value;
+    const userBubbleCSS = document.getElementById('theme-user-css').value;
+    const aiBubbleColor = document.getElementById('theme-ai-color').value;
+    const aiBubbleCSS = document.getElementById('theme-ai-css').value;
+    const bgUrlInput = document.getElementById('theme-chat-bg-url').value;
+    const bgFileInput = document.getElementById('theme-chat-bg-file');
+    const processSave = (av, bgVal) => {
+        let cs = DB.getContacts();
+        const i = cs.findIndex(c => c.id === currentChatContact.id);
+        if (i !== -1) {
+            cs[i].userSettings = {
+                userName,
+                userPersona,
+                userAvatar: av || cs[i].userSettings?.userAvatar || '',
+                enableTimePerception: enableTime,
+                enableHtmlTheater: enableHtmlTheater,
+                autoSummaryEnabled: autoSummary,
+                summaryInterval: summaryInterval,
+                contextLimit: contextLimit
+            };
+            cs[i].boundWorldBooks = boundIds;
+            let finalBgValue = bgVal;
+            if (!finalBgValue) {
+                if (currentChatBgType === 'color') {
+                    finalBgValue = document.getElementById('theme-chat-bg-color').value;
+                } else {
+                    finalBgValue = cs[i].chatTheme?.bgValue || '';
+                }
+            }
+            cs[i].chatTheme = { userBubbleColor, userBubbleCSS, aiBubbleColor, aiBubbleCSS, bgType: currentChatBgType, bgValue: finalBgValue };
+            DB.saveContacts(cs);
+            currentChatContact = cs[i];
+            applyChatTheme(currentChatContact);
+            renderChatHistory();
+        }
+    };
+    const handleAvatar = () => {
+        return new Promise(resolve => {
+            if (urlInput) resolve(urlInput);
+            else if (fileInput.files?.[0]) {
+                const r = new FileReader();
+                r.onload = e => resolve(e.target.result);
+                r.readAsDataURL(fileInput.files[0]);
+            } else resolve(null);
+        });
+    };
+    const handleBg = () => {
+        return new Promise(resolve => {
+            if (currentChatBgType === 'color') {
+                resolve(document.getElementById('theme-chat-bg-color').value);
+            } else {
+                if (bgUrlInput) resolve(bgUrlInput);
+                else if (bgFileInput.files?.[0]) {
+                    const r = new FileReader();
+                    r.onload = e => resolve(e.target.result);
+                    r.readAsDataURL(bgFileInput.files[0]);
+                } else {
+                    resolve(null);
+                }
+            }
+        });
+    };
+    return Promise.all([handleAvatar(), handleBg()]).then(([av, bg]) => { processSave(av, bg); });
+}
 function applyThemeToAllChats() { if (!confirm("确定要将当前的气泡样式和背景应用到所有联系人的聊天中吗？")) return; saveChatUserSettings().then(() => { const currentTheme = currentChatContact.chatTheme; if (!currentTheme) return; let contacts = DB.getContacts(); contacts.forEach(c => { c.chatTheme = JSON.parse(JSON.stringify(currentTheme)); }); DB.saveContacts(contacts); alert("已应用到所有聊天！"); }); }
 function clearCurrentHistory() { if (confirm('清空记录？')) { const c = DB.getChats(); c[currentChatContact.id] = []; DB.saveChats(c); renderChatHistory(); closeChatSettings(); } }
 function openTransferModal() { document.getElementById('transfer-modal').classList.add('active'); document.getElementById('transfer-amount').value = ''; document.getElementById('transfer-note').value = ''; }
@@ -1790,6 +1898,36 @@ function formatChatTime(timestamp) {
     if (isToday) return timeStr;
     if (isYesterday) return `昨日 ${timeStr}`;
     return `${date.getMonth() + 1}月${date.getDate()}日 ${timeStr}`;
+}
+
+function formatLastOnlineText(lastAssistantTime) {
+    if (!lastAssistantTime) return '上次上线：暂无记录';
+    const diffMs = Math.max(0, Date.now() - lastAssistantTime);
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 5) return '在线';
+    if (diffMinutes < 60) return `上次上线：${diffMinutes}分钟前`;
+    if (diffMinutes < 1440) {
+        const hours = Math.floor(diffMinutes / 60);
+        const minutes = diffMinutes % 60;
+        return `上次上线：${hours}小时${minutes}分钟前`;
+    }
+    const days = Math.floor(diffMinutes / 1440);
+    return `上次在线：${days}天前`;
+}
+
+function updateChatLastOnlineStatus() {
+    if (!currentChatContact) return;
+    const statusEl = document.getElementById('chat-last-online');
+    if (!statusEl) return;
+    const chats = DB.getChats()[currentChatContact.id] || [];
+    let lastAssistantTime = null;
+    for (let i = chats.length - 1; i >= 0; i--) {
+        if (chats[i].role === 'assistant' && chats[i].timestamp) {
+            lastAssistantTime = chats[i].timestamp;
+            break;
+        }
+    }
+    statusEl.innerText = formatLastOnlineText(lastAssistantTime);
 }
 
 function loadMoreMessages() {
@@ -1951,6 +2089,17 @@ function renderChatHistory(maintainScroll = false) {
                     b.addEventListener('mouseup', cancelLongPress);
                     b.addEventListener('contextmenu', e => e.preventDefault());
                 }
+            } else if (msg.type === 'html_theater') {
+                const stage = document.createElement('div');
+                stage.style.maxWidth = '280px';
+                stage.style.width = '100%';
+                stage.style.borderRadius = '18px';
+                stage.style.padding = '0';
+                stage.style.overflow = 'hidden';
+                stage.style.boxShadow = '0 8px 24px rgba(50,45,95,0.16)';
+                stage.style.backdropFilter = 'blur(10px)';
+                stage.innerHTML = msg.content || '';
+                bc.appendChild(stage);
             } else { 
                 const b = document.createElement('div'); 
                 b.className = `message-bubble ${msg.role === 'user' ? 'user' : 'ai'}`; 
@@ -1997,6 +2146,7 @@ function renderChatHistory(maintainScroll = false) {
         }
     }
     if (isCallActive && callHistory) callHistory.scrollTop = callHistory.scrollHeight;
+    updateChatLastOnlineStatus();
 
     const offlineHistory = document.getElementById('offline-history'); 
     if (offlineHistory && document.getElementById('offline-mode').classList.contains('active')) { 
@@ -2120,7 +2270,33 @@ function triggerDeleteMode() { closeContextMenu(); isSelectionMode = true; selec
 function exitDeleteMode() { isSelectionMode = false; selectedIndices.clear(); document.getElementById('chat-history').classList.remove('selection-mode'); document.getElementById('delete-mode-bar').classList.remove('active'); renderChatHistory(); }
 function toggleSelection(i) { if (selectedIndices.has(i)) selectedIndices.delete(i); else selectedIndices.add(i); renderChatHistory(); }
 function confirmDeleteMessages() { if (selectedIndices.size === 0) return exitDeleteMode(); if (confirm(`删除 ${selectedIndices.size} 条？`)) { const c = DB.getChats(); c[currentChatContact.id] = c[currentChatContact.id].filter((_, i) => !selectedIndices.has(i)); DB.saveChats(c); exitDeleteMode(); } }
-function saveMessage(role, content, quote = null, thought = null) { const c = DB.getChats(); if (!c[currentChatContact.id]) c[currentChatContact.id] = []; const isOffline = document.getElementById('offline-mode').classList.contains('active'); const mode = isOffline ? 'offline' : 'online'; const o = { role, content, timestamp: Date.now(), mode: mode }; if (quote) o.quote = quote; if (thought) o.thought = thought; c[currentChatContact.id].push(o); DB.saveChats(c); renderChatHistory(); }
+function saveMessage(role, content, quote = null, thought = null) {
+    const c = DB.getChats();
+    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+    const isOffline = document.getElementById('offline-mode').classList.contains('active');
+    const mode = isOffline ? 'offline' : 'online';
+    const o = { role, content, timestamp: Date.now(), mode: mode };
+    if (quote) o.quote = quote;
+    if (thought) o.thought = thought;
+    c[currentChatContact.id].push(o);
+    DB.saveChats(c);
+    renderChatHistory();
+}
+
+function saveHtmlTheaterMessageForContact(contactId, htmlContent) {
+    if (!contactId || !htmlContent) return;
+    const c = DB.getChats();
+    if (!c[contactId]) c[contactId] = [];
+    c[contactId].push({
+        role: 'assistant',
+        type: 'html_theater',
+        content: sanitizeTheaterHtml(htmlContent),
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(c);
+    if (currentChatContact && currentChatContact.id === contactId) renderChatHistory();
+}
 
 function handleEnterKey(event) {
     if (event.key === 'Enter') {
@@ -2221,6 +2397,50 @@ function saveOfflineSettings() {
 function toggleThoughts() { const modal = document.getElementById('thoughts-modal'); if (modal.classList.contains('active')) { modal.classList.remove('active'); } else { const chat = DB.getChats()[currentChatContact.id] || []; let lastThought = "暂无心声..."; for (let i = chat.length - 1; i >= 0; i--) { if (chat[i].role === 'assistant' && chat[i].thought) { lastThought = chat[i].thought; break; } } document.getElementById('thoughts-text').innerText = lastThought; modal.classList.add('active'); } }
 function calculateChatRounds(history) { let rounds = 0; let hasUser = false; for (const msg of history) { if (msg.role === 'user') { hasUser = true; } else if (msg.role === 'assistant' && hasUser) { rounds++; hasUser = false; } } return rounds; }
 
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function sanitizeTheaterHtml(rawHtml) {
+    if (!rawHtml) return '';
+    let html = String(rawHtml);
+    html = html.replace(/```html|```/gi, '').trim();
+    html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+    html = html.replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
+    html = html.replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '');
+    html = html.replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '');
+    html = html.replace(/<(iframe|object|embed|link|meta)[\s\S]*?>/gi, '');
+    return html.trim();
+}
+
+function buildFallbackTheaterHtml(messageText, characterName) {
+    const safeName = escapeHtml(characterName || '我');
+    const safeMood = escapeHtml((messageText || '').replace(/\s+/g, ' ').slice(0, 42) || '心里像落下一片轻雪');
+    return `<div style="max-width:280px;position:relative;border-radius:18px;padding:10px;background:linear-gradient(145deg,rgba(255,242,250,0.95),rgba(231,244,255,0.95));border:1px solid rgba(255,255,255,0.65);box-shadow:0 10px 24px rgba(69,63,120,0.16),inset 0 1px 0 rgba(255,255,255,0.8);backdrop-filter:blur(10px);">
+<div style="position:absolute;right:10px;top:8px;font-size:11px;color:#8a78b8;">✦ 心情胶片</div>
+<div style="font-size:13px;font-weight:700;color:#5c4a9f;margin-bottom:8px;">${safeName}的小剧场 (๑˃̵ᴗ˂̵)و</div>
+<div style="border-radius:12px;padding:8px 10px;background:linear-gradient(180deg,#ffffff,#f8faff);border:1px solid rgba(207,220,255,0.9);font-size:12px;line-height:1.65;color:#2f3152;">
+我把刚刚那句话悄悄折成纸星星：${safeMood}
+</div>
+<details style="margin-top:8px;border-radius:12px;overflow:hidden;border:1px solid rgba(173,198,255,0.7);background:rgba(255,255,255,0.75);">
+<summary style="cursor:pointer;padding:7px 10px;font-size:12px;color:#3561a8;background:linear-gradient(90deg,rgba(224,239,255,0.9),rgba(246,236,255,0.9));">展开幕后补全（点我）</summary>
+<div style="padding:8px 10px;font-size:12px;line-height:1.65;color:#2c456d;">场景灯光偏暖，我的指尖还留着一点慌乱，嘴上装作淡定，心跳却像细小的波纹一圈圈荡开</div>
+</details>
+<details style="margin-top:7px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,200,215,0.7);background:rgba(255,255,255,0.75);">
+<summary style="cursor:pointer;padding:7px 10px;font-size:12px;color:#a2456a;background:linear-gradient(90deg,rgba(255,233,241,0.9),rgba(255,245,233,0.9));">切换心跳线反馈（再点可收起）</summary>
+<div style="padding:8px 10px;">
+<div style="font-size:12px;color:#7f3557;margin-bottom:6px;">心跳线：▁▂▁▃▆▃▁  … 然后慢慢回稳 ♡</div>
+<div style="height:8px;border-radius:99px;background:linear-gradient(90deg,#ff9ec0,#ffd8a8,#9fd3ff);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.7);"></div>
+</div>
+</details>
+</div>`;
+}
+
 function getCalendarContextPrompt() {
     const events = DB.getCalendarEvents();
     const today = new Date();
@@ -2289,6 +2509,7 @@ async function triggerAIResponse() {
     const contextLimit = userSettings.contextLimit || 100;
     const autoSummaryEnabled = userSettings.autoSummaryEnabled !== false;
     const summaryInterval = userSettings.summaryInterval || 20;
+    const htmlTheaterEnabled = userSettings.enableHtmlTheater === true && !isCallActive && !isOfflineActive;
     const limitedHistory = history.slice(-contextLimit);
 
     let pendingTransferIndex = -1, pendingTransferAmount = 0, pendingTransferNote = '';
@@ -2385,6 +2606,9 @@ async function triggerAIResponse() {
         systemContent += `\n\n===== 【线下见面模式】 =====\n现在你和用户正在线下见面，面对面交流。\n**重要规则**：\n1. **严禁**使用 '|||' 分隔消息。\n2. 请使用小说般的描写手法，包含详细的动作描写、神态描写、环境描写和心理描写。\n3. 字数要求：${offSet.min} - ${offSet.max} 字。\n4. 文风要求：${offSet.style || '细腻、沉浸感强'}\n5. 必须在回复前生成心声。\n格式：[THOUGHTS: 心声] ||| 长篇描写回复内容`;
     } else {
         systemContent += `\n\n===== 【强制回复格式】 =====\n你必须在每次回复的**最开始**生成一段内心独白（心声），展示你此刻真实的心理活动、情绪或对用户的看法。心声必须包裹在 [THOUGHTS: ...] 中，且不超过100字。心声之后，使用 ||| 分隔，然后才是你对用户的实际回复。\n格式示例：\n[THOUGHTS: 他怎么突然问这个？有点害羞...] ||| 呃，这个嘛... ||| 其实我也不太清楚。`;
+        if (htmlTheaterEnabled) {
+            systemContent += `\n\n===== 【html小剧场模式已开启】 =====\n在本次正文回复全部输出完后，你还必须再输出一个 html 小剧场，且仅输出一个，格式严格如下：\n[HTML_THEATER]\n<div style="...">...</div>\n[/HTML_THEATER]\n\n小剧场规则：\n1. 纯 HTML + 行内 CSS，禁止 <script>、禁止 <style>、禁止外链。\n2. 宽度不超过 280px。\n3. 必须有可触发且可反向切换的交互（推荐 details/summary）。\n4. 必须第一人称中文，禁止重复正文原句，允许延展剧情或补全背景。\n5. 视觉要生动：圆角、阴影、渐变、层叠、磨砂玻璃质感可组合，可适度颜文字。\n6. 禁止在 HTML 代码中使用 |||。\n7. 小剧场中的按钮/标签/交互文案必须中文。`;
+        }
     }
 
     const messages = [{ role: "system", content: systemContent }, ...apiMessages];
@@ -2518,15 +2742,26 @@ async function triggerAIResponse() {
                     content = content.trim();
                 }
                 
+                let theaterHtml = '';
+                if (htmlTheaterEnabled) {
+                    const theaterMatch = content.match(/\[HTML_THEATER\]([\s\S]*?)\[\/HTML_THEATER\]/i);
+                    if (theaterMatch) {
+                        theaterHtml = sanitizeTheaterHtml(theaterMatch[1] || '');
+                        content = content.replace(theaterMatch[0], '').trim();
+                    }
+                }
                 if (isCallActive || isOfflineActive) {
                     if (content) {
                         saveMessage('assistant', content, null, extractedThought);
                     }
                 } else {
-                    const parts = content.split('|||').filter(p => p.trim());
+                    const parts = content.split('|||').filter(p => p.trim()).map(p => p.trim());
+                    const finalPart = parts.length > 0 ? parts[parts.length - 1] : '';
+                    const responseContactId = currentChatContact.id;
+                    const responseCharacterName = currentChatContact.name;
                     let delay = isTransferEvent ? 500 : 0;
                     parts.forEach((part, index) => { 
-                        const clean = part.trim(); 
+                        const clean = part; 
                         if (clean) { 
                             setTimeout(() => {
                                 const isLastPart = index === parts.length - 1;
@@ -2535,6 +2770,12 @@ async function triggerAIResponse() {
                             delay += 800; 
                         } 
                     });
+                    if (htmlTheaterEnabled && finalPart) {
+                        const finalTheaterHtml = theaterHtml || buildFallbackTheaterHtml(finalPart, responseCharacterName);
+                        setTimeout(() => {
+                            saveHtmlTheaterMessageForContact(responseContactId, finalTheaterHtml);
+                        }, delay + 80);
+                    }
                 }
                 
                 if (autoSummaryEnabled) {
