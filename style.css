@@ -3984,3 +3984,458 @@ input:checked + .slider:before { transform: translateX(22px); }
     font-size: 14px;
     font-weight: bold;
 }
+
+/* --- 番茄钟 App --- */
+#app-tomato {
+    background: linear-gradient(180deg, #f9e7e7 0%, #f5dfdf 100%);
+}
+
+.tomato-header {
+    background: rgba(255, 236, 236, 0.72);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.tomato-settings-btn {
+    justify-content: center;
+    width: 60px;
+    font-size: 19px;
+}
+
+.tomato-content {
+    background: transparent;
+    padding: 20px 18px 30px;
+    display: flex;
+    flex-direction: column;
+}
+
+.tomato-view {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.tomato-view.active {
+    display: flex;
+}
+
+.tomato-prompt {
+    margin-top: 70px;
+    font-size: 19px;
+    font-weight: 600;
+    color: #7b4a4a;
+    text-align: center;
+}
+
+.tomato-input-shell {
+    margin-top: 26px;
+    width: 100%;
+    max-width: 320px;
+    background: rgba(255, 255, 255, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 999px;
+    padding: 6px 6px 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 10px 24px rgba(150, 98, 98, 0.16);
+}
+
+.tomato-history-title {
+    margin-top: 22px;
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 320px;
+    color: #805454;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.tomato-history-list {
+    width: 100%;
+    max-width: 320px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 6px;
+}
+
+.tomato-history-item {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 11px 13px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 20px rgba(152, 112, 112, 0.1);
+    color: #624141;
+    font-size: 13px;
+    line-height: 1.45;
+    cursor: pointer;
+}
+
+.tomato-history-item.unfinished {
+    border-color: rgba(233, 151, 151, 0.9);
+}
+
+.tomato-history-status {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.tomato-history-item.unfinished .tomato-history-status {
+    color: #cc6666;
+}
+
+.tomato-history-item.completed .tomato-history-status {
+    color: #7d5a5a;
+}
+
+.tomato-history-empty {
+    color: #9a7777;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 12px;
+}
+
+.tomato-input-shell input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: #6a4141;
+    font-size: 14px;
+    outline: none;
+}
+
+.tomato-send-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #eb9494, #d77777);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tomato-plan-title {
+    margin-top: 6px;
+    margin-bottom: 16px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #704848;
+    text-align: center;
+}
+
+.tomato-plan-list {
+    width: 100%;
+    overflow-y: auto;
+    max-height: calc(100% - 170px);
+    padding-right: 2px;
+}
+
+.tomato-plan-item {
+    width: 100%;
+    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 18px;
+    padding: 13px 14px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 20px rgba(152, 112, 112, 0.12);
+}
+
+.tomato-plan-name {
+    display: inline-block;
+    min-width: 120px;
+    max-width: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    color: #5f3e3e;
+    outline: none;
+    border-bottom: 1px dashed rgba(126, 84, 84, 0.4);
+    padding-bottom: 2px;
+    user-select: text;
+    cursor: text;
+}
+
+.tomato-plan-time-edit {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #7d5454;
+    font-size: 13px;
+}
+
+.tomato-plan-time-edit input {
+    width: 46px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.78);
+    padding: 6px 4px;
+    text-align: center;
+    font-weight: 600;
+    color: #6a4343;
+    outline: none;
+}
+
+.tomato-total-time {
+    margin-top: 4px;
+    margin-bottom: 14px;
+    color: #7a5050;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.tomato-focus-btn,
+.tomato-break-btn {
+    width: 100%;
+    max-width: 320px;
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.42);
+    border-radius: 16px;
+    padding: 12px 16px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #704848;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+}
+
+.tomato-focus-avatar-wrap {
+    margin-top: 4px;
+}
+
+.tomato-focus-avatar {
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.45);
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 10px 26px rgba(120, 82, 82, 0.24);
+}
+
+.tomato-focus-message {
+    margin-top: 14px;
+    width: 100%;
+    max-width: 320px;
+    min-height: 72px;
+    border-radius: 18px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #6b4747;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.tomato-stage-label {
+    margin-top: 18px;
+    color: #885d5d;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.tomato-stage-countdown {
+    margin-top: 6px;
+    color: #5d3939;
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+.tomato-next-stage-btn,
+.tomato-exit-hold-tip {
+    width: 100%;
+    max-width: 320px;
+    min-height: 52px;
+    border: none;
+    border-radius: 20px;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tomato-next-stage-btn {
+    margin-top: 16px;
+    background: rgba(241, 171, 171, 0.95);
+    color: #fff;
+    box-shadow: 0 10px 20px rgba(185, 113, 113, 0.2);
+}
+
+.tomato-exit-hold-tip {
+    margin-top: 12px;
+    background: rgba(0, 0, 0, 0.88);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
+.tomato-break-title,
+.tomato-finish-title {
+    margin-top: 150px;
+    color: #7e4f4f;
+    font-size: 24px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.tomato-break-actions {
+    margin-top: 18px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.tomato-break-btn.continue {
+    color: #fff;
+    background: rgba(222, 136, 136, 0.95);
+}
+
+.tomato-break-btn.home {
+    color: #6b4343;
+}
+
+.tomato-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.28);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 50;
+}
+
+.tomato-modal.active {
+    display: flex;
+}
+
+.tomato-modal-card {
+    width: 86%;
+    background: #fff;
+    border-radius: 18px;
+    padding: 18px 16px 14px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+.tomato-modal-title {
+    text-align: center;
+    color: #4f3a3a;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.tomato-role-list {
+    max-height: 270px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.tomato-role-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 6px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+}
+
+.tomato-role-item:last-child {
+    border-bottom: none;
+}
+
+.tomato-role-item.selected {
+    background: #fff0f0;
+    border-radius: 10px;
+}
+
+.tomato-role-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f2f2f2;
+}
+
+.tomato-role-name {
+    color: #5b4141;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.tomato-modal-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.tomato-modal-btn {
+    flex: 1;
+    border: none;
+    border-radius: 12px;
+    padding: 11px 8px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tomato-modal-btn.cancel {
+    background: #efefef;
+    color: #555;
+}
+
+.tomato-modal-btn.confirm {
+    background: #ec9898;
+    color: #fff;
+}
+
+.tomato-setting-row {
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    color: #5b4141;
+    font-size: 14px;
+}
+
+.tomato-setting-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+#tomato-msg-interval-input {
+    width: 70px;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 8px 6px;
+    text-align: center;
+    font-weight: 700;
+    color: #634343;
+    outline: none;
+}

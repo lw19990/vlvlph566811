@@ -88,7 +88,7 @@
                             <!-- 右上角：四个应用 -->
                             <div class="page2-app-grid">
                                 <div class="app-icon" id="icon-app-couple" onclick="openApp('app-couple')" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
-                                <div class="app-icon" id="icon-app-tomato" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
+                                <div class="app-icon" id="icon-app-tomato" onclick="openApp('app-tomato')" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
                                 <div class="app-icon" id="icon-app-music" onclick="openApp('app-music')" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
                                 <div class="app-icon" id="icon-app-forum" onclick="openApp('app-forum')" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
                             </div>
@@ -1674,6 +1674,116 @@
             <img id="mini-player-cover" src="" alt="封面">
             <div class="mini-player-playing-indicator">
                 <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <!-- 22. 番茄钟 App -->
+        <div id="app-tomato" class="screen">
+            <div class="app-header tomato-header">
+                <div id="tomato-home-btn" class="back-btn" onclick="goHome()">Home</div>
+                <div class="app-title">番茄钟</div>
+                <div id="tomato-settings-btn" class="action-btn tomato-settings-btn" onclick="openTomatoSettingsModal()">⚙</div>
+            </div>
+            <div class="app-content tomato-content">
+                <!-- 目标输入 -->
+                <div id="tomato-goal-view" class="tomato-view active">
+                    <div class="tomato-prompt">请输入你的本次专注目标</div>
+                    <div class="tomato-input-shell">
+                        <input id="tomato-goal-input" type="text" placeholder="例如：完成产品方案初稿">
+                        <button id="tomato-goal-send" class="tomato-send-btn" onclick="submitTomatoGoal()">➤</button>
+                    </div>
+                    <div class="tomato-history-title">历史专注任务</div>
+                    <div id="tomato-history-list" class="tomato-history-list"></div>
+                </div>
+
+                <!-- 计划编辑 -->
+                <div id="tomato-plan-view" class="tomato-view">
+                    <div class="tomato-plan-title">已为您的目标制定完成计划！</div>
+                    <div id="tomato-plan-list" class="tomato-plan-list"></div>
+                    <div id="tomato-plan-total-time" class="tomato-total-time"></div>
+                    <button class="tomato-focus-btn" onclick="openTomatoRoleModal()">进入专注模式</button>
+                </div>
+
+                <!-- 专注模式 -->
+                <div id="tomato-focus-view" class="tomato-view">
+                    <div class="tomato-focus-avatar-wrap">
+                        <img id="tomato-focus-avatar" class="tomato-focus-avatar" src="" alt="角色头像">
+                    </div>
+                    <div id="tomato-focus-message" class="tomato-focus-message">准备开始专注，今天也在认真努力呢</div>
+                    <div id="tomato-current-stage" class="tomato-stage-label">正在进行 第一阶段</div>
+                    <div id="tomato-stage-countdown" class="tomato-stage-countdown">00:00:00</div>
+                    <button class="tomato-next-stage-btn" onclick="openTomatoNextConfirm()">已提前完成，进入下一阶段</button>
+                    <div id="tomato-exit-hold-tip" class="tomato-exit-hold-tip">长按退出专注模式</div>
+                </div>
+
+                <!-- 中断界面 -->
+                <div id="tomato-break-view" class="tomato-view">
+                    <div class="tomato-break-title">专注计划已中断...</div>
+                    <div class="tomato-break-actions">
+                        <button class="tomato-break-btn continue" onclick="continueTomatoFocus()">继续专注</button>
+                        <button class="tomato-break-btn home" onclick="goHome()">回到主页</button>
+                    </div>
+                </div>
+
+                <!-- 完成界面 -->
+                <div id="tomato-finish-view" class="tomato-view">
+                    <div class="tomato-finish-title">专注计划已完成，辛苦啦！</div>
+                    <div class="tomato-break-actions">
+                        <button class="tomato-break-btn home" onclick="goHome()">回到主页</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 角色选择弹窗 -->
+            <div id="tomato-role-modal" class="tomato-modal">
+                <div class="tomato-modal-card">
+                    <div class="tomato-modal-title">选择一位角色陪伴专注</div>
+                    <div id="tomato-role-list" class="tomato-role-list"></div>
+                    <div class="tomato-modal-actions">
+                        <button class="tomato-modal-btn cancel" onclick="closeTomatoRoleModal()">取消</button>
+                        <button class="tomato-modal-btn confirm" onclick="confirmTomatoRole()">确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下一阶段确认弹窗 -->
+            <div id="tomato-next-confirm-modal" class="tomato-modal">
+                <div class="tomato-modal-card">
+                    <div class="tomato-modal-title">确认要进入下一阶段吗</div>
+                    <div class="tomato-modal-actions">
+                        <button class="tomato-modal-btn cancel" onclick="closeTomatoNextConfirm()">取消</button>
+                        <button class="tomato-modal-btn confirm" onclick="confirmTomatoNextStage()">确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史任务确认弹窗 -->
+            <div id="tomato-history-confirm-modal" class="tomato-modal">
+                <div class="tomato-modal-card">
+                    <div id="tomato-history-confirm-title" class="tomato-modal-title">是否继续专注计划？</div>
+                    <div class="tomato-modal-actions">
+                        <button class="tomato-modal-btn cancel" onclick="closeTomatoHistoryConfirm()">取消</button>
+                        <button class="tomato-modal-btn confirm" onclick="confirmTomatoHistoryAction()">确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置弹窗 -->
+            <div id="tomato-settings-modal" class="tomato-modal">
+                <div class="tomato-modal-card">
+                    <div class="tomato-modal-title">番茄钟设置</div>
+                    <div class="tomato-setting-row">
+                        <span>角色留言请求频率</span>
+                        <div class="tomato-setting-input-wrap">
+                            <input id="tomato-msg-interval-input" type="number" min="1" max="180" value="10">
+                            <span>分钟/次</span>
+                        </div>
+                    </div>
+                    <div class="tomato-modal-actions">
+                        <button class="tomato-modal-btn cancel" onclick="closeTomatoSettingsModal()">取消</button>
+                        <button class="tomato-modal-btn confirm" onclick="saveTomatoSettings()">保存</button>
+                    </div>
+                </div>
             </div>
         </div>
 

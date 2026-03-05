@@ -18,7 +18,8 @@ const MEMORY_CACHE = {
     iphone_calendar_events: null,
     iphone_stickers: null,
     iphone_couple_data: null,
-    iphone_question_box: null
+    iphone_question_box: null,
+    iphone_tomato_data: null
 };
 
 // 初始化数据库
@@ -182,6 +183,9 @@ if (tempSlider && tempInput) {
 }
 
 function openApp(appId) {
+    if (appId !== 'app-tomato') {
+        pauseTomatoRuntime();
+    }
     screens.forEach(s => s.classList.remove('active'));
     document.getElementById(appId).classList.add('active');
     if(appId === 'app-contacts') renderContacts();
@@ -192,9 +196,11 @@ function openApp(appId) {
     if(appId === 'app-memos') renderMemoContacts();
     if(appId === 'app-calendar') renderCalendar();
     if(appId === 'app-couple') renderCoupleSpace();
+    if(appId === 'app-tomato') initTomatoApp();
 }
 
 function goHome() {
+    pauseTomatoRuntime();
     screens.forEach(s => s.classList.remove('active'));
     document.getElementById('home-screen').classList.add('active');
     document.getElementById('chat-interface').style.display = 'none';
@@ -297,6 +303,11 @@ const DB = {
     saveQuestionBox: (data) => {
         MEMORY_CACHE['iphone_question_box'] = data;
         saveToIndexedDB('iphone_question_box', data);
+    },
+    getTomatoData: () => MEMORY_CACHE['iphone_tomato_data'] || { history: [], settings: { messageIntervalMinutes: 10 } },
+    saveTomatoData: (data) => {
+        MEMORY_CACHE['iphone_tomato_data'] = data;
+        saveToIndexedDB('iphone_tomato_data', data);
     }
 };
 
@@ -647,7 +658,7 @@ function toggleFullscreen() { const isChecked = document.getElementById('fullscr
 function applyFullscreen(isFull) { if (isFull) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode'); }
 async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
 function selectModel(sel) { if (sel.value) document.getElementById('model-name').value = sel.value; }
-function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
+function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), tomatoData: DB.getTomatoData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importBackup(input) { 
     const file = input.files[0]; 
     if (!file) return; 
@@ -684,6 +695,7 @@ function importBackup(input) {
                 if (data.calendar) DB.saveCalendarEvents(data.calendar); 
                 if (data.coupleData) DB.saveCoupleData(data.coupleData);
                 if (data.stickers) DB.saveStickers(data.stickers);
+                if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
                 
                 alert("备份导入成功！"); 
                 location.reload(); 
@@ -737,6 +749,7 @@ function handleQuotaExceeded(data, dataSizeMB) {
             if (data.calendar) DB.saveCalendarEvents(data.calendar); 
             if (data.coupleData) DB.saveCoupleData(data.coupleData);
             if (data.stickers) DB.saveStickers(data.stickers);
+            if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
             
             alert("✅ 备份导入成功！"); 
             location.reload(); 
@@ -760,7 +773,8 @@ function openSelectiveImport(data) {
         memories: { size: JSON.stringify(data.memories || {}).length, label: '记忆' },
         calendar: { size: JSON.stringify(data.calendar || {}).length, label: '日历' },
         coupleData: { size: JSON.stringify(data.coupleData || {}).length, label: '情侣空间' },
-        stickers: { size: JSON.stringify(data.stickers || []).length, label: '表情包' }
+        stickers: { size: JSON.stringify(data.stickers || []).length, label: '表情包' },
+        tomatoData: { size: JSON.stringify(data.tomatoData || {}).length, label: '番茄钟' }
     };
     
     let message = "📦 选择性导入\n\n请选择要导入的数据（输入序号，用逗号分隔）：\n\n";
@@ -795,6 +809,7 @@ function openSelectiveImport(data) {
                 case 'calendar': if (data.calendar) DB.saveCalendarEvents(data.calendar); break;
                 case 'coupleData': if (data.coupleData) DB.saveCoupleData(data.coupleData); break;
                 case 'stickers': if (data.stickers) DB.saveStickers(data.stickers); break;
+                case 'tomatoData': if (data.tomatoData) DB.saveTomatoData(data.tomatoData); break;
             }
         });
         
@@ -1298,6 +1313,15 @@ async function triggerManualDailySummary() {
     }
 }
 
+function isImportantMemory(text) {
+    if (!text || typeof text !== 'string') return false;
+    const cleaned = text.trim();
+    if (cleaned.length < 6) return false;
+    
+    const importantPattern = /(重要决定|决定|抉择|约定|承诺|计划|目标|人生|转折|分手|结婚|订婚|离婚|怀孕|生病|住院|手术|毕业|入职|离职|辞职|搬家|考试|获奖|失败|事故|去世|家人|经历|创伤|偏好|喜好|喜欢|不喜欢|讨厌|口味|过敏|习惯|禁忌)/i;
+    return importantPattern.test(cleaned);
+}
+
 async function executeDailySummary(contact) {
     const settings = DB.getSettings();
     if (!settings.key) return;
@@ -1347,10 +1371,15 @@ ${chatText || '（无聊天记录）'}
 ${memText || '（无记忆片段）'}
 
 ===== 任务要求 =====
-1. 以【第一人称】（我...）总结这一天发生的所有重要事件
-2. 将所有记忆片段整合为一条完整的每日总结
-3. 判断是否有【重要记忆】（重要的决定、人生转折点、共同创造的甜蜜回忆、重大事件等）
-4. 如果有重要记忆，请单独提取出来
+1. 以【第一人称】（我...）进行总结
+2. 语言必须简洁、客观、直接，尽量不用修辞手法
+3. 每日总结控制在 80-150 字，合并同类信息，不要重复
+4. 只有当内容属于以下类型时，才写入 importantMemories：
+   - 重要决定/人生抉择
+   - 重要约定/长期承诺
+   - 重大经历或关键事件
+   - 需要长期记住的稳定个人偏好（如长期喜好、禁忌、过敏、习惯）
+5. 如果没有符合条件的内容，importantMemories 必须返回空数组 []
 
 严格返回JSON格式：
 {
@@ -1362,14 +1391,14 @@ ${memText || '（无记忆片段）'}
 
 注意：
 - 如果这一天没有任何有意义的内容，hasContent 返回 false，dailySummary 返回 "无"
-- importantMemories 数组可以为空，只有真正重要的事件才放入
-- 每日总结应该是一段连贯的叙述，不是简单罗列`;
+- 不要为了凑格式强行生成重要回忆
+- 只返回 JSON，不要输出任何额外说明`;
 
     try {
         const res = await fetch(`${settings.url}/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
-            body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.5 })
+            body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.3 })
         });
         
         const data = await res.json();
@@ -1397,8 +1426,11 @@ ${memText || '（无记忆片段）'}
                         isDailySummary: true
                     });
                     
-                    if (result.importantMemories && result.importantMemories.length > 0) {
-                        result.importantMemories.forEach(impMem => {
+                    const importantMemories = Array.isArray(result.importantMemories) ? result.importantMemories : [];
+                    const filteredImportantMemories = importantMemories.filter(impMem => isImportantMemory(impMem));
+                    
+                    if (filteredImportantMemories.length > 0) {
+                        filteredImportantMemories.forEach(impMem => {
                             if (impMem && impMem.trim()) {
                                 updatedMems[contact.id].important.push({
                                     content: `【${dateStr}】${impMem}`,
@@ -5851,4 +5883,657 @@ ${chatHistory || '（暂无聊天记录）'}
     }
     
     throw new Error("API 无响应");
+}
+
+// --- 番茄钟 App ---
+const TOMATO_ROLES_FALLBACK = [
+    { id: 'role-1', name: '小林', persona: '温柔细心，偶尔会分享自己的日常小事', avatar: '' },
+    { id: 'role-2', name: '阿泽', persona: '稳重靠谱，擅长拆解任务和节奏提醒', avatar: '' },
+    { id: 'role-3', name: '绵绵', persona: '轻松幽默，会在陪伴里带一点生活感', avatar: '' }
+];
+
+const tomatoState = {
+    goal: '',
+    stages: [],
+    selectedRoleId: '',
+    selectedRole: null,
+    currentStageIndex: 0,
+    remainingSeconds: 0,
+    countdownTimer: null,
+    chatTimer: null,
+    running: false,
+    initialized: false,
+    recentMessages: [],
+    holdTimer: null,
+    history: [],
+    settings: {
+        messageIntervalMinutes: 10
+    },
+    pendingHistoryAction: null,
+    activeHistoryId: null
+};
+
+function initTomatoApp() {
+    loadTomatoData();
+
+    if (!tomatoState.initialized) {
+        const goalInput = document.getElementById('tomato-goal-input');
+        if (goalInput) {
+            goalInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submitTomatoGoal();
+            });
+        }
+
+        const holdBubble = document.getElementById('tomato-exit-hold-tip');
+        if (holdBubble) {
+            const startHold = () => {
+                clearTimeout(tomatoState.holdTimer);
+                holdBubble.innerText = '按住中...';
+                tomatoState.holdTimer = setTimeout(() => {
+                    holdBubble.innerText = '长按退出专注模式';
+                    interruptTomatoFocus();
+                }, 900);
+            };
+            const endHold = () => {
+                clearTimeout(tomatoState.holdTimer);
+                holdBubble.innerText = '长按退出专注模式';
+            };
+            holdBubble.addEventListener('mousedown', startHold);
+            holdBubble.addEventListener('touchstart', startHold, { passive: true });
+            holdBubble.addEventListener('mouseup', endHold);
+            holdBubble.addEventListener('mouseleave', endHold);
+            holdBubble.addEventListener('touchend', endHold);
+            holdBubble.addEventListener('touchcancel', endHold);
+        }
+        tomatoState.initialized = true;
+    }
+
+    showTomatoView('goal');
+    const goalInput = document.getElementById('tomato-goal-input');
+    if (goalInput) goalInput.value = '';
+    renderTomatoHistoryList();
+    renderTomatoPlanList();
+}
+
+function showTomatoView(view) {
+    const views = ['goal', 'plan', 'focus', 'break', 'finish'];
+    views.forEach(v => {
+        const el = document.getElementById(`tomato-${v}-view`);
+        if (el) el.classList.remove('active');
+    });
+    const target = document.getElementById(`tomato-${view}-view`);
+    if (target) target.classList.add('active');
+    updateTomatoLockState(view);
+}
+
+function updateTomatoLockState(view) {
+    const inFocus = view === 'focus';
+    const homeBtn = document.getElementById('tomato-home-btn');
+    const settingsBtn = document.getElementById('tomato-settings-btn');
+    const globalHomeIndicator = document.querySelector('.home-indicator');
+    if (homeBtn) homeBtn.style.display = inFocus ? 'none' : 'flex';
+    if (settingsBtn) settingsBtn.style.display = inFocus ? 'none' : 'flex';
+    if (globalHomeIndicator) {
+        globalHomeIndicator.style.display = inFocus ? 'none' : 'block';
+        globalHomeIndicator.style.pointerEvents = inFocus ? 'none' : 'auto';
+    }
+}
+
+function escapeHTML(str) {
+    return (str || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function fmtHMS(totalSeconds) {
+    const sec = Math.max(0, totalSeconds);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function toDurationText(hours, minutes) {
+    const h = Math.max(0, parseInt(hours, 10) || 0);
+    const m = Math.max(0, parseInt(minutes, 10) || 0);
+    return `${h}小时${m}分钟`;
+}
+
+function cloneTomatoStages(stages) {
+    return (stages || []).map(s => ({ name: s.name, hours: s.hours, minutes: s.minutes }));
+}
+
+function loadTomatoData() {
+    const td = DB.getTomatoData();
+    tomatoState.history = Array.isArray(td.history) ? td.history : [];
+    const savedMin = parseInt(td.settings?.messageIntervalMinutes, 10);
+    tomatoState.settings.messageIntervalMinutes = Number.isNaN(savedMin) ? 10 : Math.max(1, Math.min(180, savedMin));
+}
+
+function saveTomatoData() {
+    DB.saveTomatoData({
+        history: tomatoState.history,
+        settings: tomatoState.settings
+    });
+}
+
+function formatTomatoDate(ts) {
+    const d = new Date(ts || Date.now());
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function getTomatoRoles() {
+    const contacts = DB.getContacts();
+    if (contacts.length) {
+        return contacts.map(c => ({
+            id: c.id,
+            name: c.name || '未命名角色',
+            persona: c.persona || '温和陪伴型角色',
+            avatar: c.avatar || ''
+        }));
+    }
+    return TOMATO_ROLES_FALLBACK;
+}
+
+function getDefaultTomatoStages(goal) {
+    const cleanGoal = (goal || '完成当前任务').trim();
+    return [
+        { name: `拆解需求与边界（${cleanGoal}）`, hours: 0, minutes: 30 },
+        { name: '主体执行与内容产出', hours: 1, minutes: 20 },
+        { name: '复查修订并收尾', hours: 0, minutes: 40 }
+    ];
+}
+
+function normalizeTomatoStage(raw, index) {
+    const name = (raw?.name || raw?.title || `第${index + 1}阶段`).toString().trim() || `第${index + 1}阶段`;
+    const hours = Math.max(0, parseInt(raw?.hours, 10) || 0);
+    const minutes = Math.max(0, parseInt(raw?.minutes, 10) || 0);
+    return { name, hours, minutes };
+}
+
+function parseTomatoPlanResult(content, goal) {
+    let cleaned = (content || '').trim();
+    cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
+    try {
+        const data = JSON.parse(cleaned);
+        const stages = (Array.isArray(data) ? data : data.stages || [])
+            .slice(0, 5)
+            .map(normalizeTomatoStage)
+            .filter(s => s.name);
+        if (stages.length >= 2) return stages;
+    } catch (e) {
+        console.warn('番茄钟计划解析失败，使用兜底计划', e);
+    }
+    return getDefaultTomatoStages(goal);
+}
+
+function getStageDisplayNumber(idx) {
+    const cn = ['一', '二', '三', '四', '五'];
+    return `第${cn[idx] || idx + 1}阶段`;
+}
+
+async function submitTomatoGoal() {
+    const input = document.getElementById('tomato-goal-input');
+    const sendBtn = document.getElementById('tomato-goal-send');
+    const goal = (input?.value || '').trim();
+    if (!goal) return;
+
+    tomatoState.goal = goal;
+    tomatoState.activeHistoryId = null;
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.innerText = '...';
+    }
+
+    try {
+        tomatoState.stages = await generateTomatoPlan(goal);
+        tomatoState.currentStageIndex = 0;
+        renderTomatoPlanList();
+        showTomatoView('plan');
+    } catch (e) {
+        console.error(e);
+        alert('计划生成失败：' + e.message);
+    } finally {
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerText = '➤';
+        }
+    }
+}
+
+async function generateTomatoPlan(goal) {
+    const settings = DB.getSettings();
+    if (!settings?.key || !settings?.url || !settings?.model) {
+        return getDefaultTomatoStages(goal);
+    }
+
+    const prompt = `你是专注教练。请根据用户目标拆分执行计划。
+用户目标：${goal}
+
+要求：
+1. 拆分为2-5个阶段
+2. 每阶段包含 name、hours、minutes
+3. hours 和 minutes 必须是整数
+4. minutes 建议为 0-59
+5. 返回 JSON，格式：
+{
+  "stages":[
+    {"name":"阶段名","hours":1,"minutes":20}
+  ]
+}
+只返回JSON，不要Markdown，不要解释。`;
+
+    const res = await fetch(`${settings.url}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.key}`
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.4
+        })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || '';
+    const stages = parseTomatoPlanResult(content, goal);
+    return stages.slice(0, 5);
+}
+
+function renderTomatoPlanList() {
+    const list = document.getElementById('tomato-plan-list');
+    const total = document.getElementById('tomato-plan-total-time');
+    if (!list || !total) return;
+
+    list.innerHTML = '';
+    tomatoState.stages.forEach((stage, index) => {
+        const item = document.createElement('div');
+        item.className = 'tomato-plan-item';
+        item.innerHTML = `
+            <div class="tomato-plan-name" contenteditable="true" data-idx="${index}">${escapeHTML(stage.name)}</div>
+            <div class="tomato-plan-time-edit">
+                <span>预计</span>
+                <input type="number" min="0" max="99" value="${stage.hours}" data-field="hours" data-idx="${index}">
+                <span>小时</span>
+                <input type="number" min="0" max="59" value="${stage.minutes}" data-field="minutes" data-idx="${index}">
+                <span>分钟</span>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+
+    list.querySelectorAll('.tomato-plan-name').forEach(el => {
+        el.addEventListener('input', () => {
+            const idx = parseInt(el.dataset.idx, 10);
+            if (!Number.isNaN(idx) && tomatoState.stages[idx]) {
+                tomatoState.stages[idx].name = el.innerText.trim() || `第${idx + 1}阶段`;
+                updateTomatoTotalTime();
+            }
+        });
+    });
+
+    list.querySelectorAll('input[data-field]').forEach(el => {
+        el.addEventListener('input', () => {
+            const idx = parseInt(el.dataset.idx, 10);
+            const field = el.dataset.field;
+            if (Number.isNaN(idx) || !tomatoState.stages[idx]) return;
+            let val = parseInt(el.value, 10);
+            if (Number.isNaN(val) || val < 0) val = 0;
+            if (field === 'minutes' && val > 59) val = 59;
+            if (field === 'hours' && val > 99) val = 99;
+            el.value = String(val);
+            tomatoState.stages[idx][field] = val;
+            updateTomatoTotalTime();
+        });
+    });
+
+    updateTomatoTotalTime();
+}
+
+function updateTomatoTotalTime() {
+    const total = document.getElementById('tomato-plan-total-time');
+    if (!total) return;
+    const totalMinutes = tomatoState.stages.reduce((sum, s) => sum + (s.hours * 60 + s.minutes), 0);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    total.innerText = `预计总需时间：${toDurationText(h, m)}`;
+}
+
+function renderTomatoHistoryList() {
+    const list = document.getElementById('tomato-history-list');
+    if (!list) return;
+
+    const records = [...tomatoState.history].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    if (!records.length) {
+        list.innerHTML = '<div class="tomato-history-empty">还没有历史专注任务</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    records.forEach(item => {
+        const row = document.createElement('div');
+        const statusClass = item.status === 'unfinished' ? 'unfinished' : 'completed';
+        row.className = `tomato-history-item ${statusClass}`;
+        row.innerHTML = `
+            <div>${formatTomatoDate(item.updatedAt || item.createdAt)} 专注目标：${escapeHTML(item.goal || '')}</div>
+            <div class="tomato-history-status">${item.status === 'unfinished' ? '未完成' : '已完成'}</div>
+        `;
+        row.onclick = () => openTomatoHistoryConfirm(item.id);
+        list.appendChild(row);
+    });
+}
+
+function openTomatoHistoryConfirm(itemId) {
+    const item = tomatoState.history.find(h => String(h.id) === String(itemId));
+    const modal = document.getElementById('tomato-history-confirm-modal');
+    const title = document.getElementById('tomato-history-confirm-title');
+    if (!item || !modal || !title) return;
+
+    const isUnfinished = item.status === 'unfinished';
+    title.innerText = isUnfinished ? '是否继续专注计划？' : '是否要重新开启本次专注计划？';
+    tomatoState.pendingHistoryAction = { itemId: item.id, type: isUnfinished ? 'resume' : 'restart' };
+    modal.classList.add('active');
+}
+
+function closeTomatoHistoryConfirm() {
+    const modal = document.getElementById('tomato-history-confirm-modal');
+    if (modal) modal.classList.remove('active');
+    tomatoState.pendingHistoryAction = null;
+}
+
+function confirmTomatoHistoryAction() {
+    const action = tomatoState.pendingHistoryAction;
+    if (!action) return;
+    const item = tomatoState.history.find(h => String(h.id) === String(action.itemId));
+    closeTomatoHistoryConfirm();
+    if (!item) return;
+
+    tomatoState.goal = item.goal || '';
+    tomatoState.stages = cloneTomatoStages(item.stages || []);
+    if (!tomatoState.stages.length) return;
+
+    const roles = getTomatoRoles();
+    tomatoState.selectedRoleId = item.roleId || tomatoState.selectedRoleId || String(roles[0]?.id || TOMATO_ROLES_FALLBACK[0].id);
+    tomatoState.selectedRole = roles.find(r => String(r.id) === String(tomatoState.selectedRoleId)) || roles[0] || TOMATO_ROLES_FALLBACK[0];
+
+    if (action.type === 'resume') {
+        tomatoState.currentStageIndex = Math.max(0, Math.min(item.currentStageIndex || 0, tomatoState.stages.length - 1));
+        tomatoState.remainingSeconds = Math.max(1, parseInt(item.remainingSeconds, 10) || 1);
+        tomatoState.activeHistoryId = item.id;
+        tomatoState.running = true;
+        updateTomatoAvatar();
+        showTomatoView('focus');
+        setupCurrentTomatoStage(true);
+        scheduleTomatoCharacterMessages(true);
+    } else {
+        tomatoState.currentStageIndex = 0;
+        tomatoState.remainingSeconds = 0;
+        tomatoState.activeHistoryId = null;
+        startTomatoFocus();
+    }
+}
+
+function openTomatoRoleModal() {
+    if (!tomatoState.stages.length) return;
+    const roles = getTomatoRoles();
+    const list = document.getElementById('tomato-role-list');
+    const modal = document.getElementById('tomato-role-modal');
+    if (!list || !modal) return;
+
+    if (!tomatoState.selectedRoleId && roles[0]) tomatoState.selectedRoleId = String(roles[0].id);
+    list.innerHTML = '';
+    roles.forEach(role => {
+        const item = document.createElement('div');
+        item.className = `tomato-role-item ${String(role.id) === String(tomatoState.selectedRoleId) ? 'selected' : ''}`;
+        item.dataset.roleId = String(role.id);
+        item.innerHTML = `
+            <img class="tomato-role-avatar" src="${role.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f1dede%22 width=%22100%22 height=%22100%22/></svg>'}">
+            <div class="tomato-role-name">${escapeHTML(role.name)}</div>
+        `;
+        item.onclick = () => {
+            tomatoState.selectedRoleId = String(role.id);
+            list.querySelectorAll('.tomato-role-item').forEach(el => el.classList.remove('selected'));
+            item.classList.add('selected');
+        };
+        list.appendChild(item);
+    });
+    modal.classList.add('active');
+}
+
+function closeTomatoRoleModal() {
+    const modal = document.getElementById('tomato-role-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function confirmTomatoRole() {
+    const roles = getTomatoRoles();
+    tomatoState.selectedRole = roles.find(r => String(r.id) === String(tomatoState.selectedRoleId)) || roles[0] || TOMATO_ROLES_FALLBACK[0];
+    closeTomatoRoleModal();
+    startTomatoFocus();
+}
+
+function startTomatoFocus() {
+    tomatoState.currentStageIndex = Math.max(0, tomatoState.currentStageIndex);
+    tomatoState.running = true;
+    tomatoState.recentMessages = [];
+    setupCurrentTomatoStage(false);
+    updateTomatoAvatar();
+    showTomatoView('focus');
+    scheduleTomatoCharacterMessages(true);
+}
+
+function updateTomatoAvatar() {
+    const avatar = document.getElementById('tomato-focus-avatar');
+    if (!avatar) return;
+    const role = tomatoState.selectedRole || TOMATO_ROLES_FALLBACK[0];
+    avatar.src = role.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23f2d8d8%22/></svg>';
+}
+
+function setupCurrentTomatoStage(keepRemaining) {
+    const stage = tomatoState.stages[tomatoState.currentStageIndex];
+    if (!stage) return finishTomatoFocus();
+    if (!keepRemaining || tomatoState.remainingSeconds <= 0) {
+        tomatoState.remainingSeconds = Math.max(60, stage.hours * 3600 + stage.minutes * 60);
+    }
+    updateTomatoStageText();
+    startTomatoCountdown();
+}
+
+function updateTomatoStageText() {
+    const stage = tomatoState.stages[tomatoState.currentStageIndex];
+    const stageLabel = document.getElementById('tomato-current-stage');
+    const timer = document.getElementById('tomato-stage-countdown');
+    if (!stage || !stageLabel || !timer) return;
+    stageLabel.innerText = `正在进行 ${getStageDisplayNumber(tomatoState.currentStageIndex)} ${stage.name}`;
+    timer.innerText = fmtHMS(tomatoState.remainingSeconds);
+}
+
+function startTomatoCountdown() {
+    clearInterval(tomatoState.countdownTimer);
+    tomatoState.countdownTimer = setInterval(() => {
+        if (!tomatoState.running) return;
+        tomatoState.remainingSeconds -= 1;
+        if (tomatoState.remainingSeconds <= 0) {
+            tomatoState.remainingSeconds = 0;
+            updateTomatoStageText();
+            advanceTomatoStage();
+            return;
+        }
+        updateTomatoStageText();
+    }, 1000);
+}
+
+function scheduleTomatoCharacterMessages(immediate) {
+    clearInterval(tomatoState.chatTimer);
+    if (immediate) requestTomatoCharacterMessage();
+    const intervalMinutes = Math.max(1, parseInt(tomatoState.settings.messageIntervalMinutes, 10) || 10);
+    tomatoState.chatTimer = setInterval(() => {
+        if (tomatoState.running) requestTomatoCharacterMessage();
+    }, intervalMinutes * 60 * 1000);
+}
+
+async function requestTomatoCharacterMessage() {
+    const bubble = document.getElementById('tomato-focus-message');
+    const stage = tomatoState.stages[tomatoState.currentStageIndex];
+    const role = tomatoState.selectedRole || TOMATO_ROLES_FALLBACK[0];
+    if (!bubble || !stage) return;
+
+    const settings = DB.getSettings();
+    if (!settings?.key) {
+        const fallback = [
+            `我在这陪你，先把${stage.name}做完就很棒`,
+            `我刚刚去倒了杯水，你也可以活动一下再继续`,
+            `你现在的节奏很稳，按这个速度就能拿下这阶段`,
+            `我也在处理自己的小事，我们一起并肩推进吧`
+        ];
+        const msg = fallback[Math.floor(Math.random() * fallback.length)];
+        bubble.innerText = msg.slice(0, 100);
+        return;
+    }
+
+    const recent = tomatoState.recentMessages.slice(-3).join('\n');
+    const prompt = `你正在扮演${role.name}，人设：${role.persona || '温柔陪伴'}。
+用户正在番茄钟专注阶段：${stage.name}，剩余时间约 ${fmtHMS(tomatoState.remainingSeconds)}。
+
+请写一条 100 字以内留言，要求：
+1. 像真实陪伴聊天，不要像机器人
+2. 不要每次都只说鼓励，可适当聊一点你自己的小事或感受
+3. 避免重复最近几条内容
+4. 只返回留言正文，不要任何标签
+
+最近消息（避免重复）：
+${recent || '无'}`;
+
+    try {
+        const res = await fetch(`${settings.url}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.key}`
+            },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.8
+            })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const text = (data?.choices?.[0]?.message?.content || '').trim();
+        const cleanText = text.replace(/\n+/g, ' ').slice(0, 100) || '继续保持专注，我会一直陪着你';
+        tomatoState.recentMessages.push(cleanText);
+        bubble.innerText = cleanText;
+    } catch (e) {
+        console.warn('番茄钟留言生成失败', e);
+        bubble.innerText = '我在这，先把这一小段做完，我们再一起往下走';
+    }
+}
+
+function openTomatoNextConfirm() {
+    const modal = document.getElementById('tomato-next-confirm-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeTomatoNextConfirm() {
+    const modal = document.getElementById('tomato-next-confirm-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function confirmTomatoNextStage() {
+    closeTomatoNextConfirm();
+    advanceTomatoStage();
+}
+
+function advanceTomatoStage() {
+    const isLast = tomatoState.currentStageIndex >= tomatoState.stages.length - 1;
+    if (isLast) {
+        finishTomatoFocus();
+        return;
+    }
+    tomatoState.currentStageIndex += 1;
+    tomatoState.remainingSeconds = 0;
+    setupCurrentTomatoStage(false);
+    requestTomatoCharacterMessage();
+}
+
+function interruptTomatoFocus() {
+    archiveTomatoTask('unfinished');
+    pauseTomatoRuntime();
+    showTomatoView('break');
+}
+
+function continueTomatoFocus() {
+    tomatoState.running = true;
+    showTomatoView('focus');
+    setupCurrentTomatoStage(true);
+    scheduleTomatoCharacterMessages(false);
+}
+
+function finishTomatoFocus() {
+    archiveTomatoTask('completed');
+    pauseTomatoRuntime();
+    showTomatoView('finish');
+}
+
+function archiveTomatoTask(status) {
+    if (!tomatoState.goal || !tomatoState.stages.length) return;
+    const now = Date.now();
+    const stageIdx = Math.max(0, Math.min(tomatoState.currentStageIndex, tomatoState.stages.length - 1));
+    const payload = {
+        id: tomatoState.activeHistoryId || `${now}_${Math.random().toString(36).slice(2, 8)}`,
+        goal: tomatoState.goal,
+        stages: cloneTomatoStages(tomatoState.stages),
+        status,
+        roleId: tomatoState.selectedRoleId || '',
+        currentStageIndex: stageIdx,
+        remainingSeconds: Math.max(0, parseInt(tomatoState.remainingSeconds, 10) || 0),
+        createdAt: now,
+        updatedAt: now
+    };
+
+    const existing = tomatoState.history.find(h => String(h.id) === String(payload.id));
+    if (existing) {
+        payload.createdAt = existing.createdAt || now;
+        Object.assign(existing, payload);
+    } else {
+        tomatoState.history.push(payload);
+    }
+
+    tomatoState.activeHistoryId = payload.id;
+    saveTomatoData();
+    renderTomatoHistoryList();
+}
+
+function openTomatoSettingsModal() {
+    const modal = document.getElementById('tomato-settings-modal');
+    const input = document.getElementById('tomato-msg-interval-input');
+    if (input) input.value = String(tomatoState.settings.messageIntervalMinutes || 10);
+    if (modal) modal.classList.add('active');
+}
+
+function closeTomatoSettingsModal() {
+    const modal = document.getElementById('tomato-settings-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function saveTomatoSettings() {
+    const input = document.getElementById('tomato-msg-interval-input');
+    let min = parseInt(input?.value, 10);
+    if (Number.isNaN(min)) min = 10;
+    min = Math.max(1, Math.min(180, min));
+    tomatoState.settings.messageIntervalMinutes = min;
+    if (input) input.value = String(min);
+    saveTomatoData();
+    closeTomatoSettingsModal();
+    if (tomatoState.running) scheduleTomatoCharacterMessages(false);
+}
+
+function pauseTomatoRuntime() {
+    tomatoState.running = false;
+    clearInterval(tomatoState.countdownTimer);
+    clearInterval(tomatoState.chatTimer);
+    closeTomatoRoleModal();
+    closeTomatoNextConfirm();
+    closeTomatoHistoryConfirm();
+    closeTomatoSettingsModal();
 }
