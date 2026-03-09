@@ -19,7 +19,8 @@ const MEMORY_CACHE = {
     iphone_stickers: null,
     iphone_couple_data: null,
     iphone_question_box: null,
-    iphone_tomato_data: null
+    iphone_tomato_data: null,
+    iphone_game_data: null
 };
 
 // 初始化数据库
@@ -186,6 +187,10 @@ function openApp(appId) {
     if (appId !== 'app-tomato') {
         pauseTomatoRuntime();
     }
+    if (appId !== 'app-game') {
+        pauseSuikaRuntime();
+        closeSuikaSettings();
+    }
     screens.forEach(s => s.classList.remove('active'));
     document.getElementById(appId).classList.add('active');
     if(appId === 'app-contacts') renderContacts();
@@ -197,10 +202,12 @@ function openApp(appId) {
     if(appId === 'app-calendar') renderCalendar();
     if(appId === 'app-couple') renderCoupleSpace();
     if(appId === 'app-tomato') initTomatoApp();
+    if(appId === 'app-game') initSuikaApp();
 }
 
 function goHome() {
     pauseTomatoRuntime();
+    pauseSuikaRuntime();
     screens.forEach(s => s.classList.remove('active'));
     document.getElementById('home-screen').classList.add('active');
     document.getElementById('chat-interface').style.display = 'none';
@@ -215,6 +222,7 @@ function goHome() {
     closeSpyDiaryEdit();
     exitMusicDeleteMode();
     closeMusicPlayer();
+    closeSuikaSettings();
 }
 
 function closeAllOverlays() {
@@ -308,6 +316,11 @@ const DB = {
     saveTomatoData: (data) => {
         MEMORY_CACHE['iphone_tomato_data'] = data;
         saveToIndexedDB('iphone_tomato_data', data);
+    },
+    getGameData: () => MEMORY_CACHE['iphone_game_data'] || { suika: { ballImages: {} } },
+    saveGameData: (data) => {
+        MEMORY_CACHE['iphone_game_data'] = data;
+        saveToIndexedDB('iphone_game_data', data);
     }
 };
 
@@ -658,7 +671,7 @@ function toggleFullscreen() { const isChecked = document.getElementById('fullscr
 function applyFullscreen(isFull) { if (isFull) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode'); }
 async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
 function selectModel(sel) { if (sel.value) document.getElementById('model-name').value = sel.value; }
-function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), tomatoData: DB.getTomatoData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
+function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), tomatoData: DB.getTomatoData(), gameData: DB.getGameData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importBackup(input) { 
     const file = input.files[0]; 
     if (!file) return; 
@@ -696,6 +709,7 @@ function importBackup(input) {
                 if (data.coupleData) DB.saveCoupleData(data.coupleData);
                 if (data.stickers) DB.saveStickers(data.stickers);
                 if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
+                if (data.gameData) DB.saveGameData(data.gameData);
                 
                 alert("备份导入成功！"); 
                 location.reload(); 
@@ -750,6 +764,7 @@ function handleQuotaExceeded(data, dataSizeMB) {
             if (data.coupleData) DB.saveCoupleData(data.coupleData);
             if (data.stickers) DB.saveStickers(data.stickers);
             if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
+            if (data.gameData) DB.saveGameData(data.gameData);
             
             alert("✅ 备份导入成功！"); 
             location.reload(); 
@@ -774,7 +789,8 @@ function openSelectiveImport(data) {
         calendar: { size: JSON.stringify(data.calendar || {}).length, label: '日历' },
         coupleData: { size: JSON.stringify(data.coupleData || {}).length, label: '情侣空间' },
         stickers: { size: JSON.stringify(data.stickers || []).length, label: '表情包' },
-        tomatoData: { size: JSON.stringify(data.tomatoData || {}).length, label: '番茄钟' }
+        tomatoData: { size: JSON.stringify(data.tomatoData || {}).length, label: '番茄钟' },
+        gameData: { size: JSON.stringify(data.gameData || {}).length, label: '游戏' }
     };
     
     let message = "📦 选择性导入\n\n请选择要导入的数据（输入序号，用逗号分隔）：\n\n";
@@ -810,6 +826,7 @@ function openSelectiveImport(data) {
                 case 'coupleData': if (data.coupleData) DB.saveCoupleData(data.coupleData); break;
                 case 'stickers': if (data.stickers) DB.saveStickers(data.stickers); break;
                 case 'tomatoData': if (data.tomatoData) DB.saveTomatoData(data.tomatoData); break;
+                case 'gameData': if (data.gameData) DB.saveGameData(data.gameData); break;
             }
         });
         
@@ -828,7 +845,7 @@ let currentThemeType = 'color';
 function renderThemeSettings() { const theme = DB.getTheme(); currentThemeType = theme.wallpaperType; switchThemeType(currentThemeType); if (theme.wallpaperType === 'color') document.getElementById('theme-wallpaper-color').value = theme.wallpaperValue; document.getElementById('theme-case-color').value = theme.caseColor; document.getElementById('theme-font-url').value = theme.customFontUrl || ''; document.getElementById('theme-font-color').value = theme.fontColor || '#000000'; }
 function switchThemeType(type) { currentThemeType = type; document.getElementById('theme-type-color').classList.toggle('active', type === 'color'); document.getElementById('theme-type-image').classList.toggle('active', type === 'image'); document.getElementById('theme-input-color').style.display = type === 'color' ? 'block' : 'none'; document.getElementById('theme-input-image').style.display = type === 'image' ? 'block' : 'none'; }
 function saveTheme() { const caseColor = document.getElementById('theme-case-color').value; const currentTheme = DB.getTheme(); const processSave = (val) => { currentTheme.wallpaperType = currentThemeType; currentTheme.wallpaperValue = val; currentTheme.caseColor = caseColor; DB.saveTheme(currentTheme); applyTheme(); alert('主题已应用'); }; if (currentThemeType === 'color') { processSave(document.getElementById('theme-wallpaper-color').value); } else { const urlInput = document.getElementById('theme-wallpaper-url').value; const fileInput = document.getElementById('theme-wallpaper-image'); if (urlInput) processSave(urlInput); else if (fileInput.files && fileInput.files[0]) { const r = new FileReader(); r.onload = (e) => processSave(e.target.result); r.readAsDataURL(fileInput.files[0]); } else { if (currentTheme.wallpaperType === 'image') processSave(currentTheme.wallpaperValue); else alert('请选择图片'); } } }
-function getAppLabelName(appId) { const names = { 'icon-app-vk': 'Vkontakte', 'icon-app-contacts': '通讯录', 'icon-app-memos': '备忘录', 'icon-app-calendar': '日历', 'icon-app-worldbook': '世界书', 'icon-app-spy-list': '查岗', 'icon-app-theme': '美化', 'icon-app-settings': '设置', 'icon-app-couple': '情侣空间', 'icon-app-tomato': '番茄钟', 'icon-app-music': '音乐', 'icon-app-forum': '论坛', 'icon-app-shopping': '购物', 'icon-app-game': '小游戏', 'icon-app-accounting': '记账', 'icon-app-wallet': '钱包', 'spy-icon-browser': '浏览器', 'spy-icon-diary': '日记' }; return names[appId] || 'App'; }
+function getAppLabelName(appId) { const names = { 'icon-app-vk': 'Vkontakte', 'icon-app-contacts': '通讯录', 'icon-app-memos': '备忘录', 'icon-app-calendar': '日历', 'icon-app-worldbook': '世界书', 'icon-app-spy-list': '查岗', 'icon-app-theme': '美化', 'icon-app-settings': '设置', 'icon-app-couple': '情侣空间', 'icon-app-tomato': '番茄钟', 'icon-app-music': '音乐', 'icon-app-forum': '论坛', 'icon-app-shopping': '购物', 'icon-app-game': '游戏', 'icon-app-accounting': '记账', 'icon-app-wallet': '钱包', 'spy-icon-browser': '浏览器', 'spy-icon-diary': '日记' }; return names[appId] || 'App'; }
 function applyTheme() { const theme = DB.getTheme(); document.documentElement.style.setProperty('--case-color', theme.caseColor); document.documentElement.style.setProperty('--wallpaper', theme.wallpaperType === 'color' ? theme.wallpaperValue : `url(${theme.wallpaperValue})`); document.documentElement.style.setProperty('--global-text-color', theme.fontColor || '#000000'); const widget = document.getElementById('home-widget'); const widgetImg = document.getElementById('home-widget-img'); if (theme.widgetImage) { widgetImg.src = theme.widgetImage; widget.classList.add('has-image'); } else { widget.classList.remove('has-image'); } if (theme.appIcons) { for (const [id, iconUrl] of Object.entries(theme.appIcons)) { const el = document.getElementById(id); if (el && iconUrl) { el.style.background = 'none'; el.style.backgroundColor = 'transparent'; el.style.backgroundImage = `url(${iconUrl})`; el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center'; el.innerHTML = `<div class="app-label">${getAppLabelName(id)}</div>`; } } } const fontStyle = document.getElementById('custom-font-style'); if (theme.customFontUrl) { fontStyle.innerHTML = ` @font-face { font-family: 'UserCustomFont'; src: url('${theme.customFontUrl}'); font-display: swap; } body, input, textarea, button, select { font-family: 'UserCustomFont', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; } `; } else { fontStyle.innerHTML = ''; } }
 function saveFont() { const url = document.getElementById('theme-font-url').value; const theme = DB.getTheme(); theme.customFontUrl = url; DB.saveTheme(theme); applyTheme(); alert('字体已更新'); }
 function resetFont() { const theme = DB.getTheme(); theme.customFontUrl = ''; DB.saveTheme(theme); applyTheme(); document.getElementById('theme-font-url').value = ''; alert('已恢复默认字体'); }
@@ -6536,4 +6553,529 @@ function pauseTomatoRuntime() {
     closeTomatoNextConfirm();
     closeTomatoHistoryConfirm();
     closeTomatoSettingsModal();
+}
+
+// --- 游戏 App：合成大西瓜 ---
+const SUIKA_RADII = [16, 22, 30, 40, 52, 66, 82, 100];
+const SUIKA_COLORS = ['#ffd166', '#ffb347', '#ffa552', '#ff8f66', '#ff7676', '#ef6f9b', '#d17dd7', '#86d06c'];
+const suikaState = {
+    initialized: false,
+    running: false,
+    gameOver: false,
+    boardW: 0,
+    boardH: 0,
+    failLineY: 92,
+    score: 0,
+    nextType: 1,
+    readyBall: null,
+    balls: [],
+    dragging: false,
+    pointerId: null,
+    rafId: null,
+    lastTs: 0,
+    overflowTimer: 0,
+    idSeed: 1,
+    ballImages: {},
+    imageCache: {}
+};
+
+function initSuikaApp() {
+    if (!suikaState.initialized) {
+        bindSuikaEvents();
+        loadSuikaGameData();
+        suikaState.initialized = true;
+    }
+    openGameSelectView();
+}
+
+function syncGameHeaderView(inSuikaView) {
+    const backBtn = document.getElementById('game-header-back-btn');
+    const settingsBtn = document.getElementById('game-header-settings-btn');
+    if (backBtn) {
+        if (inSuikaView) {
+            backBtn.innerText = '返回';
+            backBtn.onclick = openGameSelectView;
+        } else {
+            backBtn.innerText = 'Home';
+            backBtn.onclick = goHome;
+        }
+    }
+    if (settingsBtn) {
+        settingsBtn.style.visibility = inSuikaView ? 'visible' : 'hidden';
+        settingsBtn.style.pointerEvents = inSuikaView ? 'auto' : 'none';
+    }
+}
+
+function openGameSelectView() {
+    pauseSuikaRuntime();
+    const select = document.getElementById('game-select-view');
+    const suika = document.getElementById('game-suika-view');
+    if (select) select.classList.add('active');
+    if (suika) suika.classList.remove('active');
+    syncGameHeaderView(false);
+}
+
+function startSuikaGame() {
+    const select = document.getElementById('game-select-view');
+    const suika = document.getElementById('game-suika-view');
+    if (select) select.classList.remove('active');
+    if (suika) suika.classList.add('active');
+    syncGameHeaderView(true);
+    restartSuikaGame();
+}
+
+function restartSuikaGame() {
+    const over = document.getElementById('suika-game-over');
+    if (over) over.classList.remove('active');
+    suikaState.score = 0;
+    suikaState.gameOver = false;
+    suikaState.balls = [];
+    suikaState.readyBall = null;
+    suikaState.overflowTimer = 0;
+    suikaState.nextType = randomSuikaType();
+    updateSuikaScore();
+    ensureSuikaBoardSize();
+    spawnReadySuikaBall();
+    suikaState.running = true;
+    suikaState.lastTs = 0;
+    startSuikaLoop();
+}
+
+function pauseSuikaRuntime() {
+    suikaState.running = false;
+    suikaState.dragging = false;
+    suikaState.pointerId = null;
+    if (suikaState.rafId) {
+        cancelAnimationFrame(suikaState.rafId);
+        suikaState.rafId = null;
+    }
+}
+
+function startSuikaLoop() {
+    if (suikaState.rafId) cancelAnimationFrame(suikaState.rafId);
+    const tick = (ts) => {
+        if (!suikaState.running) return;
+        if (!suikaState.lastTs) suikaState.lastTs = ts;
+        const dt = Math.min(0.033, (ts - suikaState.lastTs) / 1000);
+        suikaState.lastTs = ts;
+        updateSuikaPhysics(dt);
+        drawSuikaBoard();
+        if (suikaState.running) {
+            suikaState.rafId = requestAnimationFrame(tick);
+        } else {
+            suikaState.rafId = null;
+        }
+    };
+    suikaState.rafId = requestAnimationFrame(tick);
+}
+
+function bindSuikaEvents() {
+    const wrap = document.getElementById('suika-board-wrap');
+    if (!wrap) return;
+
+    const onPointerDown = (e) => {
+        if (!suikaState.running || suikaState.gameOver || !suikaState.readyBall) return;
+        suikaState.dragging = true;
+        suikaState.pointerId = e.pointerId;
+        wrap.setPointerCapture(e.pointerId);
+        moveReadyBallToPointer(e);
+    };
+    const onPointerMove = (e) => {
+        if (!suikaState.dragging || suikaState.pointerId !== e.pointerId) return;
+        moveReadyBallToPointer(e);
+    };
+    const onPointerUp = (e) => {
+        if (!suikaState.dragging || suikaState.pointerId !== e.pointerId) return;
+        suikaState.dragging = false;
+        suikaState.pointerId = null;
+        dropReadySuikaBall();
+    };
+    wrap.addEventListener('pointerdown', onPointerDown);
+    wrap.addEventListener('pointermove', onPointerMove);
+    wrap.addEventListener('pointerup', onPointerUp);
+    wrap.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('resize', ensureSuikaBoardSize);
+}
+
+function ensureSuikaBoardSize() {
+    const wrap = document.getElementById('suika-board-wrap');
+    const canvas = document.getElementById('suika-canvas');
+    if (!wrap || !canvas) return;
+    const w = Math.max(260, wrap.clientWidth);
+    const h = Math.max(320, wrap.clientHeight);
+    suikaState.boardW = w;
+    suikaState.boardH = h;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (suikaState.readyBall) {
+        suikaState.readyBall.y = suikaState.failLineY - suikaState.readyBall.r - 8;
+        suikaState.readyBall.x = clamp(suikaState.readyBall.x, suikaState.readyBall.r, w - suikaState.readyBall.r);
+    }
+    drawSuikaBoard();
+}
+
+function randomSuikaType() {
+    return Math.floor(Math.random() * 4) + 1;
+}
+
+function spawnReadySuikaBall() {
+    const type = suikaState.nextType || randomSuikaType();
+    const r = SUIKA_RADII[type - 1];
+    suikaState.readyBall = {
+        type,
+        r,
+        x: suikaState.boardW / 2,
+        y: suikaState.failLineY - r - 8,
+        angle: 0
+    };
+    suikaState.nextType = randomSuikaType();
+    updateSuikaNextTip();
+}
+
+function moveReadyBallToPointer(e) {
+    if (!suikaState.readyBall) return;
+    const wrap = document.getElementById('suika-board-wrap');
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    suikaState.readyBall.x = clamp(x, suikaState.readyBall.r, suikaState.boardW - suikaState.readyBall.r);
+    drawSuikaBoard();
+}
+
+function dropReadySuikaBall() {
+    if (!suikaState.readyBall || suikaState.gameOver) return;
+    const b = suikaState.readyBall;
+    suikaState.balls.push({
+        id: suikaState.idSeed++,
+        type: b.type,
+        r: b.r,
+        x: b.x,
+        y: b.y,
+        vx: 0,
+        vy: 0,
+        angle: b.angle || 0,
+        angularVelocity: 0,
+        mergeCooldown: 0.12
+    });
+    suikaState.readyBall = null;
+    setTimeout(() => {
+        if (suikaState.running && !suikaState.gameOver) spawnReadySuikaBall();
+    }, 160);
+}
+
+function updateSuikaPhysics(dt) {
+    const gravity = 1650;
+    const balls = suikaState.balls;
+    const w = suikaState.boardW;
+    const h = suikaState.boardH;
+
+    for (let i = 0; i < balls.length; i++) {
+        const b = balls[i];
+        b.mergeCooldown = Math.max(0, (b.mergeCooldown || 0) - dt);
+        b.vy += gravity * dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.vx *= 0.995;
+        b.vy *= 0.998;
+        b.angularVelocity = (b.angularVelocity || 0) * 0.996;
+        const rollingOmega = b.vx / Math.max(10, b.r);
+        const isNearGround = (b.y + b.r) >= (h - 0.8);
+        const grip = isNearGround ? 0.22 : 0.04;
+        b.angularVelocity += (rollingOmega - b.angularVelocity) * grip;
+        b.angle = ((b.angle || 0) + b.angularVelocity * dt) % (Math.PI * 2);
+
+        if (b.x - b.r < 0) {
+            b.x = b.r;
+            b.vx = Math.abs(b.vx) * 0.36;
+            b.angularVelocity *= 0.82;
+        } else if (b.x + b.r > w) {
+            b.x = w - b.r;
+            b.vx = -Math.abs(b.vx) * 0.36;
+            b.angularVelocity *= 0.82;
+        }
+        if (b.y + b.r > h) {
+            b.y = h - b.r;
+            b.vy = -Math.abs(b.vy) * 0.2;
+            if (Math.abs(b.vy) < 20) b.vy = 0;
+        }
+    }
+
+    const removeIds = new Set();
+    const adds = [];
+    for (let i = 0; i < balls.length; i++) {
+        const a = balls[i];
+        if (removeIds.has(a.id)) continue;
+        for (let j = i + 1; j < balls.length; j++) {
+            if (removeIds.has(a.id)) break;
+            const b = balls[j];
+            if (removeIds.has(b.id)) continue;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+            const minDist = a.r + b.r;
+            if (dist >= minDist) continue;
+
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const overlap = minDist - dist;
+            const push = overlap * 0.5;
+            a.x -= nx * push;
+            a.y -= ny * push;
+            b.x += nx * push;
+            b.y += ny * push;
+
+            const rvx = b.vx - a.vx;
+            const rvy = b.vy - a.vy;
+            const velAlongNormal = rvx * nx + rvy * ny;
+            if (velAlongNormal < 0) {
+                const restitution = 0.08;
+                const impulse = (-(1 + restitution) * velAlongNormal) / 2;
+                a.vx -= impulse * nx;
+                a.vy -= impulse * ny;
+                b.vx += impulse * nx;
+                b.vy += impulse * ny;
+            }
+            const tx = -ny;
+            const ty = nx;
+            const velAlongTangent = rvx * tx + rvy * ty;
+            const spinImpulse = velAlongTangent * 0.015;
+            a.angularVelocity = (a.angularVelocity || 0) - (spinImpulse / Math.max(10, a.r));
+            b.angularVelocity = (b.angularVelocity || 0) + (spinImpulse / Math.max(10, b.r));
+
+            const canMerge = a.type === b.type && a.type < 8 && a.mergeCooldown <= 0 && b.mergeCooldown <= 0;
+            if (canMerge) {
+                removeIds.add(a.id);
+                removeIds.add(b.id);
+                const mergedType = a.type + 1;
+                adds.push({
+                    id: suikaState.idSeed++,
+                    type: mergedType,
+                    r: SUIKA_RADII[mergedType - 1],
+                    x: (a.x + b.x) / 2,
+                    y: (a.y + b.y) / 2,
+                    vx: (a.vx + b.vx) * 0.2,
+                    vy: (a.vy + b.vy) * 0.2,
+                    angle: ((a.angle || 0) + (b.angle || 0)) * 0.5,
+                    angularVelocity: ((a.angularVelocity || 0) + (b.angularVelocity || 0)) * 0.45,
+                    mergeCooldown: 0.16
+                });
+                suikaState.score += a.type;
+                break;
+            }
+        }
+    }
+    if (removeIds.size > 0) {
+        suikaState.balls = balls.filter(b => !removeIds.has(b.id)).concat(adds);
+        updateSuikaScore();
+    }
+
+    const overflow = suikaState.balls.some(b => (b.y - b.r) < suikaState.failLineY && Math.abs(b.vy) < 95);
+    suikaState.overflowTimer = overflow ? (suikaState.overflowTimer + dt) : 0;
+    if (suikaState.overflowTimer > 1.05) {
+        suikaGameLose();
+    }
+}
+
+function suikaGameLose() {
+    suikaState.gameOver = true;
+    suikaState.running = false;
+    const over = document.getElementById('suika-game-over');
+    const finalScore = document.getElementById('suika-final-score');
+    if (finalScore) finalScore.innerText = String(suikaState.score);
+    if (over) over.classList.add('active');
+}
+
+function drawSuikaBoard() {
+    const canvas = document.getElementById('suika-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, suikaState.boardW, suikaState.boardH);
+
+    for (let i = 0; i < suikaState.balls.length; i++) {
+        drawSuikaBall(ctx, suikaState.balls[i], false);
+    }
+    if (suikaState.readyBall) {
+        const b = suikaState.readyBall;
+        ctx.save();
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = 'rgba(210, 140, 72, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(b.x, 0);
+        ctx.lineTo(b.x, b.y - b.r - 2);
+        ctx.stroke();
+        ctx.restore();
+        drawSuikaBall(ctx, b, true);
+    }
+}
+
+function drawSuikaBall(ctx, ball, isPreview) {
+    const img = suikaState.imageCache[ball.type];
+    const x = ball.x;
+    const y = ball.y;
+    const r = ball.r;
+    const angle = ball.angle || 0;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+
+    if (img && img.complete) {
+        const iw = img.naturalWidth || img.width || 1;
+        const ih = img.naturalHeight || img.height || 1;
+        let sx = 0;
+        let sy = 0;
+        let sw = iw;
+        let sh = ih;
+        if (iw > ih) {
+            sw = ih;
+            sx = (iw - ih) * 0.5;
+        } else if (ih > iw) {
+            sh = iw;
+            sy = (ih - iw) * 0.5;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, -r, -r, r * 2, r * 2);
+    } else {
+        const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.15, 0, 0, r);
+        grad.addColorStop(0, '#fff8dd');
+        grad.addColorStop(1, SUIKA_COLORS[ball.type - 1]);
+        ctx.fillStyle = grad;
+        ctx.fillRect(-r, -r, r * 2, r * 2);
+    }
+    if (!(img && img.complete)) {
+        ctx.fillStyle = 'rgba(120, 84, 20, 0.78)';
+        ctx.font = `${Math.max(11, Math.round(r * 0.55))}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const label = ball.type === 8 ? '🍉' : String(ball.type);
+        ctx.fillText(label, 0, 0);
+    }
+    ctx.restore();
+    if (isPreview) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 1, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+function updateSuikaScore() {
+    const scoreEl = document.getElementById('suika-score');
+    if (scoreEl) scoreEl.innerText = String(suikaState.score);
+}
+
+function updateSuikaNextTip() {
+    const tip = document.getElementById('suika-next-ball-tip');
+    if (!tip) return;
+    tip.innerText = `下一球：${suikaState.nextType}号`;
+}
+
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+}
+
+function loadSuikaGameData() {
+    const gd = DB.getGameData();
+    const imgs = gd?.suika?.ballImages || {};
+    suikaState.ballImages = {};
+    for (let i = 1; i <= 8; i++) {
+        if (imgs[i]) suikaState.ballImages[i] = imgs[i];
+    }
+    rebuildSuikaImageCache();
+    renderSuikaSettingsList();
+}
+
+function saveSuikaGameData() {
+    const next = DB.getGameData();
+    next.suika = next.suika || {};
+    next.suika.ballImages = { ...suikaState.ballImages };
+    DB.saveGameData(next);
+}
+
+function rebuildSuikaImageCache() {
+    suikaState.imageCache = {};
+    for (let i = 1; i <= 8; i++) {
+        const src = suikaState.ballImages[i];
+        if (!src) continue;
+        const img = new Image();
+        img.src = src;
+        suikaState.imageCache[i] = img;
+    }
+}
+
+function openSuikaSettings() {
+    const modal = document.getElementById('suika-settings-modal');
+    if (!modal) return;
+    renderSuikaSettingsList();
+    modal.classList.add('active');
+}
+
+function closeSuikaSettings() {
+    const modal = document.getElementById('suika-settings-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function renderSuikaSettingsList() {
+    const list = document.getElementById('suika-ball-settings-list');
+    if (!list) return;
+    list.innerHTML = '';
+    for (let i = 1; i <= 8; i++) {
+        const row = document.createElement('div');
+        row.className = 'suika-ball-upload-row';
+        const previewSrc = suikaState.ballImages[i] || getSuikaDefaultPreview(i);
+        row.innerHTML = `
+            <img class="suika-ball-upload-preview" src="${previewSrc}">
+            <div class="suika-ball-upload-label">${i}号球</div>
+            <div class="suika-ball-upload-actions">
+                <input type="file" accept="image/*" data-type="${i}">
+                <button type="button" class="suika-clear-upload-btn" data-type="${i}">清除图片</button>
+            </div>
+        `;
+        const input = row.querySelector('input');
+        const clearBtn = row.querySelector('.suika-clear-upload-btn');
+        input.addEventListener('change', (e) => handleSuikaBallImageUpload(e, i));
+        clearBtn.addEventListener('click', () => clearSuikaBallImage(i));
+        list.appendChild(row);
+    }
+}
+
+function getSuikaDefaultPreview(type) {
+    const c = SUIKA_COLORS[type - 1];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="30%" cy="30%"><stop offset="0%" stop-color="#fff9e8"/><stop offset="100%" stop-color="${c}"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#g)"/><text x="32" y="39" text-anchor="middle" font-size="24" fill="rgba(120,84,20,0.8)" font-family="sans-serif">${type === 8 ? '8' : type}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function handleSuikaBallImageUpload(evt, type) {
+    const file = evt.target.files && evt.target.files[0];
+    if (!file) return;
+    // Keep original data URL without client-side recompression.
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        suikaState.ballImages[type] = dataUrl;
+        rebuildSuikaImageCache();
+        saveSuikaGameData();
+        renderSuikaSettingsList();
+        drawSuikaBoard();
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearSuikaBallImage(type) {
+    if (!suikaState.ballImages[type]) return;
+    delete suikaState.ballImages[type];
+    rebuildSuikaImageCache();
+    saveSuikaGameData();
+    renderSuikaSettingsList();
+    drawSuikaBoard();
 }

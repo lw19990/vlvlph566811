@@ -96,7 +96,7 @@
                             <!-- 左下角：四个应用 -->
                             <div class="page2-app-grid">
                                 <div class="app-icon" id="icon-app-shopping" style="background: linear-gradient(135deg, #ff9500, #ff8c00);">🛒<div class="app-label">购物</div></div>
-                                <div class="app-icon" id="icon-app-game" style="background: linear-gradient(135deg, #34c759, #30d158);">🎮<div class="app-label">小游戏</div></div>
+                                <div class="app-icon" id="icon-app-game" onclick="openApp('app-game')" style="background: linear-gradient(135deg, #ffd166, #ffb347);">🎮<div class="app-label">游戏</div></div>
                                 <div class="app-icon" id="icon-app-accounting" style="background: linear-gradient(135deg, #007aff, #0a84ff);">📊<div class="app-label">记账</div></div>
                                 <div class="app-icon" id="icon-app-wallet" style="background: linear-gradient(135deg, #ffcc00, #ffd60a);">💰<div class="app-label">钱包</div></div>
                             </div>
@@ -503,7 +503,7 @@
                         <option value="icon-app-music">音乐</option>
                         <option value="icon-app-forum">论坛</option>
                         <option value="icon-app-shopping">购物</option>
-                        <option value="icon-app-game">小游戏</option>
+                        <option value="icon-app-game">游戏</option>
                         <option value="icon-app-accounting">记账</option>
                         <option value="icon-app-wallet">钱包</option>
                     </select>
@@ -1783,6 +1783,59 @@
                         <button class="tomato-modal-btn cancel" onclick="closeTomatoSettingsModal()">取消</button>
                         <button class="tomato-modal-btn confirm" onclick="saveTomatoSettings()">保存</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 23. 游戏 App -->
+        <div id="app-game" class="screen">
+            <div class="app-header game-header">
+                <div class="back-btn" id="game-header-back-btn" onclick="goHome()">Home</div>
+                <div class="app-title">游戏</div>
+                <div class="action-btn game-settings-top-btn" id="game-header-settings-btn" onclick="openSuikaSettings()">⚙</div>
+            </div>
+            <div class="app-content game-content">
+                <div id="game-select-view" class="game-view active">
+                    <div class="game-select-title">选择游戏</div>
+                    <button class="suika-entry-card" onclick="startSuikaGame()">
+                        <span class="suika-entry-emoji">🍉</span>
+                        <span class="suika-entry-text">
+                            <strong>合成大西瓜</strong>
+                        </span>
+                    </button>
+                </div>
+
+                <div id="game-suika-view" class="game-view">
+                    <div class="suika-topbar">
+                        <div class="suika-score-box">分数：<span id="suika-score">0</span></div>
+                        <button class="suika-small-btn" onclick="restartSuikaGame()">重开</button>
+                    </div>
+
+                    <div class="suika-board-wrap" id="suika-board-wrap">
+                        <canvas id="suika-canvas"></canvas>
+                        <div class="suika-overflow-line">失败线</div>
+                        <div id="suika-next-ball-tip" class="suika-next-ball-tip"></div>
+                        <div id="suika-game-over" class="suika-game-over">
+                            <div class="suika-game-over-card">
+                                <div class="suika-game-over-title">游戏失败</div>
+                                <div class="suika-game-over-score">本局得分：<span id="suika-final-score">0</span></div>
+                                <div class="suika-game-over-actions">
+                                    <button class="suika-small-btn" onclick="restartSuikaGame()">再来一局</button>
+                                    <button class="suika-small-btn" onclick="openGameSelectView()">返回选择</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="suika-settings-modal" class="suika-settings-modal">
+                <div class="suika-settings-card">
+                    <div class="suika-settings-head">
+                        <span>球图片设置（1号到8号）</span>
+                        <button class="suika-close-btn" onclick="closeSuikaSettings()">×</button>
+                    </div>
+                    <div id="suika-ball-settings-list" class="suika-ball-settings-list"></div>
                 </div>
             </div>
         </div>
