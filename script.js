@@ -671,7 +671,27 @@ function toggleFullscreen() { const isChecked = document.getElementById('fullscr
 function applyFullscreen(isFull) { if (isFull) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode'); }
 async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
 function selectModel(sel) { if (sel.value) document.getElementById('model-name').value = sel.value; }
-function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), tomatoData: DB.getTomatoData(), gameData: DB.getGameData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
+function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), questionBoxData: DB.getQuestionBox(), musicData: DB.getMusicList(), forumData: DB.getForumData(), tomatoData: DB.getTomatoData(), gameData: DB.getGameData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
+function importBackupDataToDB(data) {
+    if (data.settings) DB.saveSettings(data.settings);
+    if (data.contacts) DB.saveContacts(data.contacts);
+    if (data.chats) DB.saveChats(data.chats);
+    if (data.worldbook) DB.saveWorldBook(data.worldbook);
+    if (data.spyData) DB.saveSpyData(data.spyData);
+    if (data.theme) DB.saveTheme(data.theme);
+    if (data.memories) DB.saveMemories(data.memories);
+    if (data.calendar) DB.saveCalendarEvents(data.calendar);
+    if (data.coupleData) DB.saveCoupleData(data.coupleData);
+    if (data.stickers) DB.saveStickers(data.stickers);
+
+    // 新版备份中将 App 数据独立导出；若旧版无这些字段，仍可通过 theme 回退（音乐/论坛）
+    if (data.questionBoxData) DB.saveQuestionBox(data.questionBoxData);
+    if (data.musicData) DB.saveMusicList(data.musicData);
+    if (data.forumData) DB.saveForumData(data.forumData);
+
+    if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
+    if (data.gameData) DB.saveGameData(data.gameData);
+}
 function importBackup(input) { 
     const file = input.files[0]; 
     if (!file) return; 
@@ -698,18 +718,7 @@ function importBackup(input) {
             
             // 尝试导入，使用 try-catch 捕获配额错误
             try {
-                if (data.settings) DB.saveSettings(data.settings); 
-                if (data.contacts) DB.saveContacts(data.contacts); 
-                if (data.chats) DB.saveChats(data.chats); 
-                if (data.worldbook) DB.saveWorldBook(data.worldbook); 
-                if (data.spyData) DB.saveSpyData(data.spyData); 
-                if (data.theme) DB.saveTheme(data.theme); 
-                if (data.memories) DB.saveMemories(data.memories); 
-                if (data.calendar) DB.saveCalendarEvents(data.calendar); 
-                if (data.coupleData) DB.saveCoupleData(data.coupleData);
-                if (data.stickers) DB.saveStickers(data.stickers);
-                if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
-                if (data.gameData) DB.saveGameData(data.gameData);
+                importBackupDataToDB(data);
                 
                 alert("备份导入成功！"); 
                 location.reload(); 
@@ -738,7 +747,12 @@ function handleQuotaExceeded(data, dataSizeMB) {
         spyData: JSON.stringify(data.spyData || {}).length,
         theme: JSON.stringify(data.theme || {}).length,
         memories: JSON.stringify(data.memories || {}).length,
-        calendar: JSON.stringify(data.calendar || {}).length
+        calendar: JSON.stringify(data.calendar || {}).length,
+        questionBoxData: JSON.stringify(data.questionBoxData || {}).length,
+        musicData: JSON.stringify(data.musicData || []).length,
+        forumData: JSON.stringify(data.forumData || {}).length,
+        tomatoData: JSON.stringify(data.tomatoData || {}).length,
+        gameData: JSON.stringify(data.gameData || {}).length
     };
     
     const sortedSizes = Object.entries(sizes)
@@ -753,18 +767,7 @@ function handleQuotaExceeded(data, dataSizeMB) {
         
         // 重新尝试导入
         try {
-            if (data.settings) DB.saveSettings(data.settings); 
-            if (data.contacts) DB.saveContacts(data.contacts); 
-            if (data.chats) DB.saveChats(data.chats); 
-            if (data.worldbook) DB.saveWorldBook(data.worldbook); 
-            if (data.spyData) DB.saveSpyData(data.spyData); 
-            if (data.theme) DB.saveTheme(data.theme); 
-            if (data.memories) DB.saveMemories(data.memories); 
-            if (data.calendar) DB.saveCalendarEvents(data.calendar); 
-            if (data.coupleData) DB.saveCoupleData(data.coupleData);
-            if (data.stickers) DB.saveStickers(data.stickers);
-            if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
-            if (data.gameData) DB.saveGameData(data.gameData);
+            importBackupDataToDB(data);
             
             alert("✅ 备份导入成功！"); 
             location.reload(); 
@@ -789,6 +792,9 @@ function openSelectiveImport(data) {
         calendar: { size: JSON.stringify(data.calendar || {}).length, label: '日历' },
         coupleData: { size: JSON.stringify(data.coupleData || {}).length, label: '情侣空间' },
         stickers: { size: JSON.stringify(data.stickers || []).length, label: '表情包' },
+        questionBoxData: { size: JSON.stringify(data.questionBoxData || {}).length, label: '提问箱' },
+        musicData: { size: JSON.stringify(data.musicData || []).length, label: '音乐' },
+        forumData: { size: JSON.stringify(data.forumData || {}).length, label: '论坛' },
         tomatoData: { size: JSON.stringify(data.tomatoData || {}).length, label: '番茄钟' },
         gameData: { size: JSON.stringify(data.gameData || {}).length, label: '游戏' }
     };
@@ -825,6 +831,9 @@ function openSelectiveImport(data) {
                 case 'calendar': if (data.calendar) DB.saveCalendarEvents(data.calendar); break;
                 case 'coupleData': if (data.coupleData) DB.saveCoupleData(data.coupleData); break;
                 case 'stickers': if (data.stickers) DB.saveStickers(data.stickers); break;
+                case 'questionBoxData': if (data.questionBoxData) DB.saveQuestionBox(data.questionBoxData); break;
+                case 'musicData': if (data.musicData) DB.saveMusicList(data.musicData); break;
+                case 'forumData': if (data.forumData) DB.saveForumData(data.forumData); break;
                 case 'tomatoData': if (data.tomatoData) DB.saveTomatoData(data.tomatoData); break;
                 case 'gameData': if (data.gameData) DB.saveGameData(data.gameData); break;
             }
@@ -2375,7 +2384,70 @@ function startCall() {
     renderChatHistory(); 
 }
 function endCall() { if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; } document.getElementById('call-screen').classList.remove('active'); if (callSeconds > 0 && currentChatContact) { const userName = currentChatContact.userSettings?.userName || "用户"; const c = DB.getChats(); if (!c[currentChatContact.id]) c[currentChatContact.id] = []; c[currentChatContact.id].push({ role: 'system', type: 'call_end', content: `通话已结束，${userName} 已挂断电话`, timestamp: Date.now(), mode: 'online' }); DB.saveChats(c); renderChatHistory(); } callSeconds = 0; }
-async function triggerCallStartResponse() { const settings = DB.getSettings(); let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${currentChatContact.name}\n人设：${currentChatContact.persona}`; const userSettings = currentChatContact.userSettings || {}; if (userSettings.userName) systemContent += `\n\n[用户信息]\n名字：${userSettings.userName}`; systemContent += `\n\n===== 【语音通话接听模式】 =====\n用户刚刚给你拨打了语音电话，你接通了电话。\n请生成一段接听电话时的回复。回复必须包含心声。\n**重要规则**：\n1. 现在是语音通话，请像打电话一样回复。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n格式：[THOUGHTS: 心声内容] ||| 你的口语回复。`; const messages = [{ role: "system", content: systemContent }]; try { const temp = settings.temperature !== undefined ? settings.temperature : 0.7; const response = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp }) }); const data = await response.json(); if (data.choices && data.choices.length > 0) { let content = data.choices[0].message.content; let extractedThought = null; const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s); if (thoughtMatch) { extractedThought = thoughtMatch[1].trim(); content = content.replace(thoughtMatch[0], '').trim(); content = content.replace(/^\|\|\|\s*/, '').trim(); } document.getElementById('call-status').innerText = "通话中"; if (content && content.trim()) { saveMessage('assistant', content, null, extractedThought); } } } catch (error) { document.getElementById('call-status').innerText = "连接失败"; alert('通话连接错误: ' + error.message); } }
+async function triggerCallStartResponse() {
+    const settings = DB.getSettings();
+    const userSettings = currentChatContact.userSettings || {};
+    const allChats = DB.getChats();
+    const history = allChats[currentChatContact.id] || [];
+    const contextLimit = userSettings.contextLimit || 100;
+    const limitedHistory = history.slice(-contextLimit);
+
+    const apiMessages = limitedHistory.map(msg => {
+        if (msg.isRetracted) {
+            if (msg.role === 'user') {
+                return { role: 'system', content: `[系统提示：用户撤回了一条消息。你虽然看不到内容，但知道用户撤回了。请根据情况做出反应，比如询问"你撤回了什么？"]` };
+            }
+            return { role: 'assistant', content: `[已撤回的消息]` };
+        }
+        if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
+        if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
+        if (msg.type === 'couple_invite_req') return { role: 'user', content: `[用户向你发送了“情侣空间”开通邀请]` };
+        if (msg.type === 'couple_invite_accept') return { role: 'assistant', content: `[我已同意你的情侣空间邀请]` };
+        if (msg.type === 'couple_invite_reject') return { role: 'assistant', content: `[我已拒绝你的情侣空间邀请]` };
+        if (msg.type === 'call_end') return { role: 'system', content: msg.content };
+        if (msg.type === 'sticker') {
+            return { role: msg.role, content: `[图片表情：${msg.stickerDesc || '表情'}]` };
+        }
+        return { role: msg.role, content: msg.content };
+    });
+
+    let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${currentChatContact.name}\n人设：${currentChatContact.persona}`;
+    if (userSettings.userName) systemContent += `\n\n[用户信息]\n名字：${userSettings.userName}`;
+    systemContent += `\n\n===== 【语音通话接听模式】 =====\n用户刚刚给你拨打了语音电话，你接通了电话。\n请结合你们最近的聊天上下文，生成一段接听电话时的回复。回复必须包含心声。\n**重要规则**：\n1. 现在是语音通话，请像打电话一样回复。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n格式：[THOUGHTS: 心声内容] ||| 你的口语回复。`;
+
+    const messages = [
+        { role: "system", content: systemContent },
+        ...apiMessages,
+        { role: "user", content: "[系统提示：电话刚接通，请先说第一句话并自然衔接上文。]" }
+    ];
+
+    try {
+        const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
+        const response = await fetch(`${settings.url}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+            body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp })
+        });
+        const data = await response.json();
+        if (data.choices && data.choices.length > 0) {
+            let content = data.choices[0].message.content;
+            let extractedThought = null;
+            const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s);
+            if (thoughtMatch) {
+                extractedThought = thoughtMatch[1].trim();
+                content = content.replace(thoughtMatch[0], '').trim();
+                content = content.replace(/^\|\|\|\s*/, '').trim();
+            }
+            document.getElementById('call-status').innerText = "通话中";
+            if (content && content.trim()) {
+                saveMessage('assistant', content, null, extractedThought);
+            }
+        }
+    } catch (error) {
+        document.getElementById('call-status').innerText = "连接失败";
+        alert('通话连接错误: ' + error.message);
+    }
+}
 function openOfflineMode() { if (!currentChatContact) return; document.getElementById('offline-mode').classList.add('active'); const settings = currentChatContact.offlineSettings || {}; if (settings.bg) { document.getElementById('offline-mode').style.backgroundImage = `url(${settings.bg})`; } else { document.getElementById('offline-mode').style.backgroundImage = 'none'; } renderChatHistory(); }
 function exitOfflineMode() { document.getElementById('offline-mode').classList.remove('active'); document.getElementById('offline-typing-indicator').style.display = 'none'; closeOfflineSettings(); }
 function openOfflineSettings() { 
