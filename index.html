@@ -610,7 +610,9 @@
 
             <!-- 线下模式界面 -->
             <div id="offline-mode">
-                <div class="app-header" style="background: rgba(255,255,255,0.8); border-bottom: 1px solid #e0e0e0; backdrop-filter: blur(10px);">
+                <div id="offline-bg-photo" aria-hidden="true"></div>
+                <div id="offline-rain-gl" aria-hidden="true"></div>
+                <div class="app-header offline-header-glass">
                     <div class="back-btn" onclick="exitOfflineMode()">退出</div>
                     <div class="app-title">线下见面</div>
                     <div class="action-btn" onclick="openOfflineSettings()">⚙️</div>
@@ -618,7 +620,7 @@
                 <div id="offline-history"></div>
                 
                 <!-- 线下模式状态提示 -->
-                <div id="offline-typing-indicator" class="typing-indicator" style="background: transparent; color: #888; margin-bottom: 5px;">对方正在行动中...</div>
+                <div id="offline-typing-indicator" class="typing-indicator offline-typing">对方正在行动中...</div>
                 
                 <div class="offline-input-area">
                     <input type="text" class="chat-input" id="offline-message-input" placeholder="描述你的动作或语言..." onkeydown="handleEnterKey(event)">
@@ -642,12 +644,87 @@
                 <div class="sticker-grid" id="sticker-grid"></div>
             </div>
 
-            <div class="chat-tools-bar">
-                <button class="tool-btn" onclick="toggleStickerPanel()">😊 表情包</button>
-                <button class="tool-btn" onclick="regenerateLastResponse()">🔄 刷新</button>
-                <button class="tool-btn" onclick="continueChat()">⏩ 继续</button>
-                <button class="tool-btn" onclick="openTransferModal()">💰 转账</button>
-                <button class="tool-btn" onclick="openOfflineMode()">📴 线下模式</button>
+            <div class="chat-tools-bar" id="chat-tools-bar">
+                <button class="tool-btn" onclick="toggleStickerPanel()">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="8"></circle>
+                            <circle cx="9" cy="10" r="0.9"></circle>
+                            <circle cx="15" cy="10" r="0.9"></circle>
+                            <path d="M8.5 14c.9 1.2 2.2 1.8 3.5 1.8s2.6-.6 3.5-1.8"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">表情包</span>
+                </button>
+                <button class="tool-btn" onclick="regenerateLastResponse()">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 7v5h-5"></path>
+                            <path d="M20 12a8 8 0 1 1-2.2-5.5L20 7"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">刷新</span>
+                </button>
+                <button class="tool-btn" onclick="continueChat()">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5.5 7.5L11 12l-5.5 4.5z"></path>
+                            <path d="M13 7.5l5.5 4.5L13 16.5z"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">继续</span>
+                </button>
+                <button class="tool-btn" onclick="openTransferModal()">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="4.5" y="7" width="15" height="10" rx="2"></rect>
+                            <path d="M12 9.8v4.4"></path>
+                            <path d="M9.5 11h5"></path>
+                            <path d="M9.5 13h5"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">转账</span>
+                </button>
+                <button class="tool-btn" onclick="openOfflineMode()">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M8 8a6 6 0 0 1 8 8"></path>
+                            <path d="M5 5a10 10 0 0 1 14 14"></path>
+                            <line x1="5" y1="19" x2="19" y2="5"></line>
+                        </svg>
+                    </span>
+                    <span class="tool-label">线下模式</span>
+                </button>
+                <button class="tool-btn tool-placeholder-btn" type="button">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="5" y="6.5" width="14" height="11" rx="1.8"></rect>
+                            <path d="M8.5 6.5V5h7v1.5"></path>
+                            <path d="M9 11h6"></path>
+                            <path d="M10.2 13h3.6"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">红包</span>
+                </button>
+                <button class="tool-btn tool-placeholder-btn" type="button">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M14 8v7.5a2.5 2.5 0 1 1-1-2"></path>
+                            <path d="M14 8l5-1.5v7a2.5 2.5 0 1 1-1-2"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">语音</span>
+                </button>
+                <button class="tool-btn tool-placeholder-btn" type="button">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="5" y="6.5" width="14" height="11" rx="2"></rect>
+                            <path d="M7.5 15l3.2-3.5 2.5 2.6 2.3-2.1 1.5 3"></path>
+                            <circle cx="9" cy="9.5" r="1"></circle>
+                        </svg>
+                    </span>
+                    <span class="tool-label">图片</span>
+                </button>
             </div>
 
             <div id="quote-preview-area">
@@ -656,9 +733,10 @@
             </div>
 
             <div class="chat-input-area">
-                <button class="icon-btn trigger-ai-btn" onclick="triggerAIResponse()">✨</button>
+                <button class="icon-btn tools-toggle-btn" id="toggle-tools-btn" onclick="toggleChatToolsBar()" aria-label="展开工具栏">+</button>
                 <input type="text" class="chat-input" id="message-input" placeholder="输入消息..." onkeydown="handleEnterKey(event)">
                 <button class="icon-btn send-btn" onclick="sendMessage()">➤</button>
+                <button class="icon-btn trigger-ai-btn" onclick="triggerAIResponse()">✨</button>
             </div>
 
             <div class="ctx-overlay" id="ctx-overlay" onclick="closeAllOverlays()"></div>
@@ -902,6 +980,15 @@
                         <input type="file" id="offline-bg-file" accept="image/*">
                         <input type="text" id="offline-bg-url" placeholder="或者输入图片URL" style="margin-top:5px;">
                     </div>
+                    <div class="settings-section-title" style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">文字颜色设置（仅线下模式）</div>
+                    <div class="form-group">
+                        <label>正文文字颜色</label>
+                        <input type="color" id="offline-body-color" value="#f9fcff">
+                    </div>
+                    <div class="form-group">
+                        <label>对话文字颜色（双引号内）</label>
+                        <input type="color" id="offline-dialog-color" value="#bbbfd3">
+                    </div>
                     <button class="save-btn" onclick="saveOfflineSettings()">保存</button>
                 </div>
             </div>
@@ -936,6 +1023,12 @@
                 <div class="app-title" id="memo-detail-title">Memories</div>
                 <div class="action-btn" onclick="openMemoSettings()">⚙️</div>
             </div>
+            <div class="memo-top-tabs">
+                <button id="memo-zone-btn-longTerm" class="memo-top-tab active" onclick="switchMemoZone('longTerm')">长效记忆</button>
+                <button id="memo-zone-btn-shortTerm" class="memo-top-tab" onclick="switchMemoZone('shortTerm')">短效记忆</button>
+                <button id="memo-zone-btn-schedule" class="memo-top-tab" onclick="switchMemoZone('schedule')">日程记忆</button>
+                <button id="memo-zone-btn-impression" class="memo-top-tab" onclick="switchMemoZone('impression')">用户印象</button>
+            </div>
             <div class="app-content memo-list" id="memo-detail-list"></div>
             
             <!-- 备忘录设置弹窗 -->
@@ -945,8 +1038,11 @@
                     <span style="color:#007aff; cursor:pointer;" onclick="closeMemoSettings()">完成</span>
                 </div>
                 <div class="settings-modal-content">
-                    <div class="settings-section-title" style="margin-top:0">手动添加</div>
-                    <button class="save-btn" style="background:#34c759; margin-bottom:20px;" onclick="addImportantMemoryFromSettings()">+ 添加重要回忆</button>
+                    <div class="settings-section-title" style="margin-top:0">四区记忆管理</div>
+                    <button class="save-btn" style="background:#ff9500; margin-bottom:10px;" onclick="addImportantMemoryFromSettings()">+ 添加长效记忆</button>
+                    <button class="save-btn" style="background:#34c759; margin-bottom:10px;" onclick="addShortMemoryFromSettings()">+ 添加短效记忆</button>
+                    <button class="save-btn" style="background:#007aff; margin-bottom:10px;" onclick="addScheduleMemoryFromSettings()">+ 添加日程记忆</button>
+                    <button class="save-btn" style="background:#af52de; margin-bottom:20px;" onclick="editImpressionFromSettings()">+ 编辑用户印象</button>
                     
                     <div class="settings-section-title">每日总结设置</div>
                     
@@ -969,6 +1065,54 @@
                     
                     <button class="save-btn" style="background:#007aff; margin-top:10px;" onclick="triggerManualDailySummary()">立即执行每日总结</button>
                     <div style="font-size:11px; color:#888; margin-top:5px;">手动触发一次每日总结，总结过去24小时的内容。</div>
+                </div>
+            </div>
+
+            <!-- 备忘录编辑弹窗 -->
+            <div id="memo-editor-modal">
+                <div class="settings-modal-header">
+                    <span id="memo-editor-title">编辑记忆</span>
+                    <span style="color:#007aff; cursor:pointer;" onclick="closeMemoEditor()">完成</span>
+                </div>
+                <div class="settings-modal-content">
+                    <div id="memo-editor-impression-tabs" class="memo-impression-tabs" style="display:none;">
+                        <button id="memo-impression-btn-profile" class="memo-impression-tab active" onclick="switchImpressionSection('profile')">基本画像</button>
+                        <button id="memo-impression-btn-personality" class="memo-impression-tab" onclick="switchImpressionSection('personality')">性格认知</button>
+                        <button id="memo-impression-btn-relationship" class="memo-impression-tab" onclick="switchImpressionSection('relationship')">我们的关系</button>
+                        <button id="memo-impression-btn-attitude" class="memo-impression-tab" onclick="switchImpressionSection('attitude')">我对TA的态度</button>
+                        <button id="memo-impression-btn-notes" class="memo-impression-tab" onclick="switchImpressionSection('notes')">互动备注</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label id="memo-editor-content-label">内容</label>
+                        <textarea id="memo-editor-content" rows="8" style="width:100%; border:1px solid #ddd; border-radius:12px; padding:12px; font-size:15px; line-height:1.6; resize:vertical;" placeholder="请输入内容"></textarea>
+                    </div>
+
+                    <div class="form-group" id="memo-editor-keywords-group">
+                        <label>关键词（逗号分隔）</label>
+                        <input id="memo-editor-keywords" type="text" placeholder="例如：考试, 面试, 搬家">
+                    </div>
+
+                    <div class="form-group" id="memo-editor-source-group">
+                        <label>来源</label>
+                        <select id="memo-editor-source" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; font-size:14px;">
+                            <option value="chat">chat</option>
+                            <option value="user_moment">user_moment</option>
+                            <option value="char_moment">char_moment</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="memo-editor-event-date-group">
+                        <label>开始时间</label>
+                        <input id="memo-editor-event-date" type="datetime-local">
+                    </div>
+
+                    <div class="form-group" id="memo-editor-end-date-group">
+                        <label>结束时间（可选）</label>
+                        <input id="memo-editor-end-date" type="datetime-local">
+                    </div>
+
+                    <button class="save-btn" onclick="saveMemoEditor()">保存</button>
                 </div>
             </div>
         </div>

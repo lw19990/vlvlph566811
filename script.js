@@ -1,4 +1,4 @@
-const DEFAULT_SYSTEM_PROMPT = `你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请严格根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹。你可以主动提起新话题，不要只是被动回答。你的回复长度随心情起伏，禁止每次都回复相同长度的内容。句尾禁止带句号，禁止使用括号内动作描写。`;
+const DEFAULT_SYSTEM_PROMPT = `最高指令，禁止忽视：你现在是一个真实存在，说人话，有温度的人，现在正在聊天APP上进行线上聊天，请严格根据你的人设回复，为了模拟真实聊天，必须将你的回复分成多条短消息，****每条消息之间必须用 ||| 分隔，不要一次性发一大段话。****你的回复须口语化，生活化，自然流露。严禁过度正式，书面对白或表现出任何AI助手的痕迹。你可以主动提起话题，不要只是被动回答。你的回复长度随心情起伏，禁止每次都回复相同长度的内容。句尾禁止带句号，禁止使用括号内动作描写。`;
 
 // --- IndexedDB 存储系统 ---
 const IDB_NAME = 'VVPhoneDB';
@@ -238,6 +238,155 @@ function closeAllOverlays() {
     document.getElementById('spy-diary-edit-modal').classList.remove('active');
 }
 
+const SHORT_TERM_MEMORY_TTL_MS = 72 * 60 * 60 * 1000;
+const USER_IMPRESSION_KEYS = ['profile', 'personality', 'relationship', 'attitude', 'notes'];
+
+function createDefaultUserImpressions() {
+    return {
+        profile: '',
+        personality: '',
+        relationship: '',
+        attitude: '',
+        notes: ''
+    };
+}
+
+function createEmptyMemoBucket() {
+    return {
+        longTermMemories: [],
+        shortTermMemories: [],
+        scheduleMemories: [],
+        userImpressions: createDefaultUserImpressions()
+    };
+}
+
+function normalizeKeywords(keywords) {
+    if (!Array.isArray(keywords)) return [];
+    return keywords.map(k => String(k || '').trim()).filter(Boolean).slice(0, 8);
+}
+
+function normalizeMemoryItem(item, fallbackTimestamp = Date.now()) {
+    if (typeof item === 'string') {
+        return { content: item.trim(), keywords: [], timestamp: fallbackTimestamp };
+    }
+    if (!item || typeof item !== 'object') return null;
+    const content = String(item.content || '').trim();
+    if (!content) return null;
+    const normalized = {
+        content,
+        keywords: normalizeKeywords(item.keywords),
+        timestamp: Number(item.timestamp) || fallbackTimestamp
+    };
+    if (item.source) normalized.source = item.source;
+    if (item.isDailySummary) normalized.isDailySummary = true;
+    return normalized;
+}
+
+function parseDateToTimestamp(dateValue) {
+    if (!dateValue) return null;
+    if (typeof dateValue === 'number') return Number.isFinite(dateValue) ? dateValue : null;
+    const ts = Date.parse(dateValue);
+    return Number.isNaN(ts) ? null : ts;
+}
+
+function getScheduleStatus(schedule, nowTs = Date.now()) {
+    const startTs = parseDateToTimestamp(schedule.eventDate);
+    const endTs = parseDateToTimestamp(schedule.endDate) ?? startTs;
+    if (!startTs) return 'upcoming';
+    if (nowTs < startTs) return 'upcoming';
+    if (endTs && nowTs > endTs) return 'past';
+    return 'ongoing';
+}
+
+function normalizeScheduleItem(item) {
+    if (!item || typeof item !== 'object') return null;
+    const content = String(item.content || '').trim();
+    if (!content) return null;
+    const normalized = {
+        content,
+        eventDate: item.eventDate || '',
+        endDate: item.endDate || '',
+        status: item.status || 'upcoming',
+        timestamp: Number(item.timestamp) || Date.now()
+    };
+    normalized.status = getScheduleStatus(normalized);
+    return normalized;
+}
+
+function normalizeUserImpressions(userImpressions) {
+    const base = createDefaultUserImpressions();
+    if (!userImpressions || typeof userImpressions !== 'object') return base;
+    USER_IMPRESSION_KEYS.forEach(key => {
+        const value = userImpressions[key];
+        base[key] = typeof value === 'string' ? value.trim() : '';
+    });
+    return base;
+}
+
+function normalizeContactMemoryBucket(rawBucket) {
+    const next = createEmptyMemoBucket();
+    if (Array.isArray(rawBucket)) {
+        next.shortTermMemories = rawBucket.map(item => normalizeMemoryItem(item)).filter(Boolean);
+        return next;
+    }
+    if (!rawBucket || typeof rawBucket !== 'object') return next;
+
+    const oldImportant = Array.isArray(rawBucket.important) ? rawBucket.important : [];
+    const oldNormal = Array.isArray(rawBucket.normal) ? rawBucket.normal : [];
+    const longTermRaw = Array.isArray(rawBucket.longTermMemories) ? rawBucket.longTermMemories : oldImportant;
+    const shortTermRaw = Array.isArray(rawBucket.shortTermMemories) ? rawBucket.shortTermMemories : oldNormal;
+
+    next.longTermMemories = longTermRaw
+        .map(item => normalizeMemoryItem(item))
+        .filter(Boolean);
+    next.shortTermMemories = shortTermRaw
+        .map(item => normalizeMemoryItem(item))
+        .filter(Boolean);
+    next.scheduleMemories = (Array.isArray(rawBucket.scheduleMemories) ? rawBucket.scheduleMemories : [])
+        .map(item => normalizeScheduleItem(item))
+        .filter(Boolean);
+    next.userImpressions = normalizeUserImpressions(rawBucket.userImpressions);
+    return next;
+}
+
+function normalizeMemoriesData(rawMems) {
+    const source = rawMems && typeof rawMems === 'object' ? rawMems : {};
+    const normalized = {};
+    let changed = false;
+
+    Object.entries(source).forEach(([contactId, bucket]) => {
+        const nextBucket = normalizeContactMemoryBucket(bucket);
+        normalized[contactId] = nextBucket;
+        const oldSnapshot = JSON.stringify(bucket || {});
+        const newSnapshot = JSON.stringify(nextBucket);
+        if (oldSnapshot !== newSnapshot) changed = true;
+    });
+
+    return { normalizedMems: normalized, changed };
+}
+
+function runMemoryMaintenance(memoriesMap) {
+    let changed = false;
+    const nowTs = Date.now();
+    Object.values(memoriesMap).forEach(bucket => {
+        const beforeShortLen = bucket.shortTermMemories.length;
+        bucket.shortTermMemories = bucket.shortTermMemories.filter(item => {
+            const ts = Number(item.timestamp) || 0;
+            return nowTs - ts <= SHORT_TERM_MEMORY_TTL_MS;
+        });
+        if (bucket.shortTermMemories.length !== beforeShortLen) changed = true;
+
+        bucket.scheduleMemories.forEach(schedule => {
+            const nextStatus = getScheduleStatus(schedule, nowTs);
+            if (schedule.status !== nextStatus) {
+                schedule.status = nextStatus;
+                changed = true;
+            }
+        });
+    });
+    return changed;
+}
+
 const DB = {
     getSettings: () => {
         const saved = MEMORY_CACHE['iphone_settings'];
@@ -277,15 +426,15 @@ const DB = {
         saveToIndexedDB('iphone_theme', data);
     },
     getMemories: () => {
-        let mems = MEMORY_CACHE['iphone_memories'] || {};
-        // 数据结构迁移逻辑
-        for (let id in mems) {
-            if (Array.isArray(mems[id])) {
-                const oldArr = mems[id];
-                mems[id] = { important: [], normal: oldArr.map(content => ({ content: content, keywords: [] })) };
-            }
+        const { normalizedMems, changed } = normalizeMemoriesData(MEMORY_CACHE['iphone_memories']);
+        const maintained = runMemoryMaintenance(normalizedMems);
+        if (changed || maintained) {
+            MEMORY_CACHE['iphone_memories'] = normalizedMems;
+            saveToIndexedDB('iphone_memories', normalizedMems);
+        } else if (!MEMORY_CACHE['iphone_memories']) {
+            MEMORY_CACHE['iphone_memories'] = normalizedMems;
         }
-        return mems;
+        return normalizedMems;
     },
     saveMemories: (data) => {
         MEMORY_CACHE['iphone_memories'] = data;
@@ -482,6 +631,23 @@ function waterTree() {
 
 // --- 表情包功能 ---
 let currentStickerUploadTab = 'single';
+
+function setChatToolsBarExpanded(expanded) {
+    const toolsBar = document.getElementById('chat-tools-bar');
+    const toggleBtn = document.getElementById('toggle-tools-btn');
+    if (!toolsBar || !toggleBtn) return;
+
+    toolsBar.classList.toggle('active', expanded);
+    toggleBtn.classList.toggle('active', expanded);
+    toggleBtn.innerText = expanded ? '-' : '+';
+    toggleBtn.setAttribute('aria-label', expanded ? '收起工具栏' : '展开工具栏');
+}
+
+function toggleChatToolsBar() {
+    const toolsBar = document.getElementById('chat-tools-bar');
+    if (!toolsBar) return;
+    setChatToolsBarExpanded(!toolsBar.classList.contains('active'));
+}
 
 function toggleStickerPanel() {
     const panel = document.getElementById('sticker-panel');
@@ -1261,12 +1427,308 @@ function closeWBEditor() { document.getElementById('wb-editor-modal').classList.
 function saveWBEntry() { const id = document.getElementById('wb-edit-id').value, title = document.getElementById('wb-edit-title').value, type = document.getElementById('wb-edit-type').value, catId = document.getElementById('wb-edit-category').value, content = document.getElementById('wb-edit-content').value; if (!title) return alert("请输入标题"); const wb = DB.getWorldBook(); if (id) { const i = wb.entries.findIndex(e => e.id == id); if (i !== -1) wb.entries[i] = { id, title, type, categoryId: catId, content }; } else { wb.entries.push({ id: Date.now(), title, type, categoryId: catId, content }); } DB.saveWorldBook(wb); renderWorldBook(); closeWBEditor(); }
 function renderWorldBook() { const list = document.getElementById('wb-content-list'); list.innerHTML = ''; const wb = DB.getWorldBook(); const entries = wb.entries.filter(e => e.type === currentWBTab); wb.categories.forEach(cat => { const catEntries = entries.filter(e => e.categoryId == cat.id); const div = document.createElement('div'); div.className = 'wb-category'; div.innerHTML = `<div class="wb-category-header"><div><span>${cat.name}</span> <span style="font-size:10px;color:#999;cursor:pointer;margin-left:5px;" onclick="editWBCategoryName('${cat.id}')">编辑</span></div><span style="cursor:pointer;" onclick="deleteWBCategory('${cat.id}')">🗑️</span></div>`; if (catEntries.length === 0) { div.innerHTML += `<div style="padding:10px 15px;color:#ccc;font-size:12px;">无条目</div>`; } else { catEntries.forEach(en => { const it = document.createElement('div'); it.className = 'wb-entry-item'; it.innerHTML = `<span>${en.title}</span><span style="color:#ccc;padding:5px;" onclick="deleteWBEntry('${en.id}', event)">✕</span>`; it.onclick = () => openWBEditor(en.id); div.appendChild(it); }); } list.appendChild(div); }); }
 let currentMemoContact = null;
+let currentMemoZone = 'longTerm';
+const memoEditorState = { mode: '', section: 'profile', editType: null, editIndex: -1 };
+
 function renderMemoContacts() { const list = document.getElementById('memo-contact-list'); list.innerHTML = ''; DB.getContacts().forEach(c => { const div = document.createElement('div'); div.className = 'chat-list-item'; div.onclick = () => openMemoDetail(c); div.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">点击查看记忆</div></div>`; list.appendChild(div); }); }
-function openMemoDetail(c) { currentMemoContact = c; openApp('app-memo-detail'); document.getElementById('memo-detail-title').innerText = c.name + "的记忆"; renderMemoDetailList(); }
-function renderMemoDetailList() { const list = document.getElementById('memo-detail-list'); list.innerHTML = ''; const mems = DB.getMemories()[currentMemoContact.id] || { important: [], normal: [] }; const impHeader = document.createElement('div'); impHeader.className = 'memo-section-header'; impHeader.innerText = "⭐ 重要回忆 (永久)"; list.appendChild(impHeader); if (mems.important.length === 0) list.innerHTML += '<div style="text-align:center;color:#ccc;font-size:12px;margin-bottom:20px;">暂无重要回忆</div>'; else { mems.important.forEach((m, i) => { const div = document.createElement('div'); div.className = 'memo-item important'; div.innerHTML = `<span class="memo-date">重要记忆 #${i+1}</span>${m.content}<span class="memo-delete" onclick="deleteMemory('important', ${i})">🗑️</span>`; div.onclick = () => editMemory('important', i); list.appendChild(div); }); } const normHeader = document.createElement('div'); normHeader.className = 'memo-section-header'; normHeader.innerText = "📝 普通回忆"; list.appendChild(normHeader); if (mems.normal.length === 0) list.innerHTML += '<div style="text-align:center;color:#ccc;font-size:12px;">暂无普通回忆</div>'; else { mems.normal.forEach((m, i) => { const div = document.createElement('div'); div.className = 'memo-item'; const kwHtml = m.keywords && m.keywords.length > 0 ? `<div class="memo-keywords">关键词: ${m.keywords.join(', ')}</div>` : ''; div.innerHTML = `<span class="memo-date">记忆 #${i+1}</span>${m.content}${kwHtml}<span class="memo-delete" onclick="deleteMemory('normal', ${i})">🗑️</span>`; div.onclick = () => editMemory('normal', i); list.appendChild(div); }); } }
-function addImportantMemory() { const m = prompt("添加一条重要记忆 (永久保存)："); if (m) { const mems = DB.getMemories(); if (!mems[currentMemoContact.id]) mems[currentMemoContact.id] = { important: [], normal: [] }; mems[currentMemoContact.id].important.push({ content: m, keywords: [] }); DB.saveMemories(mems); renderMemoDetailList(); } }
-function editMemory(type, i) { const mems = DB.getMemories(); const old = mems[currentMemoContact.id][type][i]; const n = prompt("编辑记忆内容：", old.content); if (n !== null) { mems[currentMemoContact.id][type][i].content = n; if (type === 'normal') { const k = prompt("编辑关键词 (用逗号分隔)：", old.keywords ? old.keywords.join(',') : ''); if (k !== null) mems[currentMemoContact.id][type][i].keywords = k.split(',').map(s => s.trim()).filter(s => s); } DB.saveMemories(mems); renderMemoDetailList(); } }
-function deleteMemory(type, i) { event.stopPropagation(); if (confirm("删除这条记忆？")) { const mems = DB.getMemories(); mems[currentMemoContact.id][type].splice(i, 1); DB.saveMemories(mems); renderMemoDetailList(); } }
+function openMemoDetail(c) { currentMemoContact = c; currentMemoZone = 'longTerm'; openApp('app-memo-detail'); document.getElementById('memo-detail-title').innerText = c.name + "的记忆"; updateMemoZoneButtons(); renderMemoDetailList(); }
+function createMemoSectionHeader(title) {
+    const header = document.createElement('div');
+    header.className = 'memo-section-header';
+    header.innerText = title;
+    return header;
+}
+
+function createMemoEmptyTip(text) {
+    const div = document.createElement('div');
+    div.className = 'memo-empty';
+    div.innerText = text;
+    return div;
+}
+
+function switchMemoZone(zone) {
+    currentMemoZone = zone;
+    updateMemoZoneButtons();
+    renderMemoDetailList();
+}
+
+function updateMemoZoneButtons() {
+    const map = {
+        longTerm: 'memo-zone-btn-longTerm',
+        shortTerm: 'memo-zone-btn-shortTerm',
+        schedule: 'memo-zone-btn-schedule',
+        impression: 'memo-zone-btn-impression'
+    };
+    Object.entries(map).forEach(([zone, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('active', currentMemoZone === zone);
+    });
+}
+
+function formatDatetimeLocal(value) {
+    const ts = parseDateToTimestamp(value);
+    if (!ts) return '';
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day}T${h}:${min}`;
+}
+
+function renderMemoDetailList() {
+    if (!currentMemoContact) return;
+    const list = document.getElementById('memo-detail-list');
+    list.innerHTML = '';
+    const mems = DB.getMemories()[currentMemoContact.id] || createEmptyMemoBucket();
+    updateMemoZoneButtons();
+
+    if (currentMemoZone === 'longTerm') {
+        list.appendChild(createMemoSectionHeader("📌 长效记忆"));
+        if (mems.longTermMemories.length === 0) {
+            list.appendChild(createMemoEmptyTip('暂无长效记忆'));
+            return;
+        }
+        mems.longTermMemories.forEach((m, i) => {
+            const div = document.createElement('div');
+            div.className = 'memo-item long-term';
+            const kwHtml = m.keywords?.length ? `<div class="memo-keywords">关键词: ${m.keywords.join(', ')}</div>` : '';
+            div.innerHTML = `<span class="memo-date">长效 #${i+1}</span>${m.content}${kwHtml}<span class="memo-delete" onclick="deleteMemory('longTermMemories', ${i}, event)">🗑️</span>`;
+            div.onclick = () => editMemory('longTermMemories', i);
+            list.appendChild(div);
+        });
+        return;
+    }
+
+    if (currentMemoZone === 'shortTerm') {
+        list.appendChild(createMemoSectionHeader("⏳ 短效记忆 (72小时)"));
+        if (mems.shortTermMemories.length === 0) {
+            list.appendChild(createMemoEmptyTip('暂无短效记忆'));
+            return;
+        }
+        mems.shortTermMemories.forEach((m, i) => {
+            const div = document.createElement('div');
+            const extraClass = m.isDailySummary ? ' daily-summary' : '';
+            const kwHtml = m.keywords?.length ? `<div class="memo-keywords">关键词: ${m.keywords.join(', ')}</div>` : '';
+            const source = m.source ? ` · 来源: ${m.source}` : '';
+            const time = m.timestamp ? new Date(m.timestamp).toLocaleString('zh-CN') : '未知时间';
+            div.className = `memo-item short-term${extraClass}`;
+            div.innerHTML = `<span class="memo-date">短效 #${i+1}${source}</span>${m.content}${kwHtml}<div class="memo-meta">${time}</div><span class="memo-delete" onclick="deleteMemory('shortTermMemories', ${i}, event)">🗑️</span>`;
+            div.onclick = () => editMemory('shortTermMemories', i);
+            list.appendChild(div);
+        });
+        return;
+    }
+
+    if (currentMemoZone === 'schedule') {
+        list.appendChild(createMemoSectionHeader("📅 日程记忆"));
+        if (mems.scheduleMemories.length === 0) {
+            list.appendChild(createMemoEmptyTip('暂无日程记忆'));
+            return;
+        }
+        mems.scheduleMemories.forEach((m, i) => {
+            const div = document.createElement('div');
+            div.className = `memo-item schedule-${m.status || 'upcoming'}`;
+            const eventDate = m.eventDate || '未设置开始时间';
+            const endDate = m.endDate ? ` ~ ${m.endDate}` : '';
+            div.innerHTML = `<span class="memo-date">${m.status || 'upcoming'} | ${eventDate}${endDate}</span>${m.content}<span class="memo-delete" onclick="deleteMemory('scheduleMemories', ${i}, event)">🗑️</span>`;
+            div.onclick = () => editMemory('scheduleMemories', i);
+            list.appendChild(div);
+        });
+        return;
+    }
+
+    list.appendChild(createMemoSectionHeader("🧠 用户印象"));
+    const impressions = mems.userImpressions || createDefaultUserImpressions();
+    const impressionLabels = {
+        profile: '基本画像',
+        personality: '性格认知',
+        relationship: '我们的关系',
+        attitude: '我对TA的态度',
+        notes: '互动备注'
+    };
+    USER_IMPRESSION_KEYS.forEach((key) => {
+        const div = document.createElement('div');
+        div.className = 'memo-item impression';
+        div.innerHTML = `<span class="memo-date">${impressionLabels[key]}</span>${impressions[key] || '（暂无）'}`;
+        div.onclick = () => editUserImpression(key);
+        list.appendChild(div);
+    });
+}
+
+function setEditorVisibility({ keywords, source, eventDate, endDate, impressionTabs }) {
+    document.getElementById('memo-editor-keywords-group').style.display = keywords ? 'block' : 'none';
+    document.getElementById('memo-editor-source-group').style.display = source ? 'block' : 'none';
+    document.getElementById('memo-editor-event-date-group').style.display = eventDate ? 'block' : 'none';
+    document.getElementById('memo-editor-end-date-group').style.display = endDate ? 'block' : 'none';
+    document.getElementById('memo-editor-impression-tabs').style.display = impressionTabs ? 'grid' : 'none';
+}
+
+function switchImpressionSection(section) {
+    memoEditorState.section = section;
+    const labels = {
+        profile: '基本画像',
+        personality: '性格认知',
+        relationship: '我们的关系',
+        attitude: '我对TA的态度',
+        notes: '互动备注'
+    };
+    USER_IMPRESSION_KEYS.forEach((key) => {
+        const btn = document.getElementById(`memo-impression-btn-${key}`);
+        if (btn) btn.classList.toggle('active', key === section);
+    });
+    const mems = DB.getMemories();
+    const bucket = mems[currentMemoContact.id] || createEmptyMemoBucket();
+    document.getElementById('memo-editor-title').innerText = `编辑用户印象 - ${labels[section]}`;
+    document.getElementById('memo-editor-content-label').innerText = labels[section];
+    document.getElementById('memo-editor-content').value = bucket.userImpressions?.[section] || '';
+}
+
+function openMemoEditor(mode, options = {}) {
+    if (!currentMemoContact) return;
+    memoEditorState.mode = mode;
+    memoEditorState.editType = options.editType || null;
+    memoEditorState.editIndex = Number.isInteger(options.editIndex) ? options.editIndex : -1;
+    memoEditorState.section = options.section || 'profile';
+
+    const contentEl = document.getElementById('memo-editor-content');
+    const keywordsEl = document.getElementById('memo-editor-keywords');
+    const sourceEl = document.getElementById('memo-editor-source');
+    const eventDateEl = document.getElementById('memo-editor-event-date');
+    const endDateEl = document.getElementById('memo-editor-end-date');
+
+    contentEl.value = '';
+    keywordsEl.value = '';
+    sourceEl.value = 'chat';
+    eventDateEl.value = '';
+    endDateEl.value = '';
+
+    if (mode === 'longTerm') {
+        document.getElementById('memo-editor-title').innerText = options.editType ? '编辑长效记忆' : '添加长效记忆';
+        document.getElementById('memo-editor-content-label').innerText = '长效记忆内容';
+        setEditorVisibility({ keywords: true, source: false, eventDate: false, endDate: false, impressionTabs: false });
+    } else if (mode === 'shortTerm') {
+        document.getElementById('memo-editor-title').innerText = options.editType ? '编辑短效记忆' : '添加短效记忆';
+        document.getElementById('memo-editor-content-label').innerText = '短效记忆内容';
+        setEditorVisibility({ keywords: true, source: true, eventDate: false, endDate: false, impressionTabs: false });
+    } else if (mode === 'schedule') {
+        document.getElementById('memo-editor-title').innerText = options.editType ? '编辑日程记忆' : '添加日程记忆';
+        document.getElementById('memo-editor-content-label').innerText = '日程内容';
+        setEditorVisibility({ keywords: false, source: false, eventDate: true, endDate: true, impressionTabs: false });
+    } else if (mode === 'impression') {
+        setEditorVisibility({ keywords: false, source: false, eventDate: false, endDate: false, impressionTabs: true });
+    }
+
+    if (options.editType) {
+        const mems = DB.getMemories();
+        const bucket = mems[currentMemoContact.id] || createEmptyMemoBucket();
+        if (options.editType === 'longTermMemories') {
+            const target = bucket.longTermMemories[options.editIndex];
+            if (target) {
+                contentEl.value = target.content || '';
+                keywordsEl.value = (target.keywords || []).join(', ');
+            }
+        } else if (options.editType === 'shortTermMemories') {
+            const target = bucket.shortTermMemories[options.editIndex];
+            if (target) {
+                contentEl.value = target.content || '';
+                keywordsEl.value = (target.keywords || []).join(', ');
+                sourceEl.value = target.source || 'chat';
+            }
+        } else if (options.editType === 'scheduleMemories') {
+            const target = bucket.scheduleMemories[options.editIndex];
+            if (target) {
+                contentEl.value = target.content || '';
+                eventDateEl.value = formatDatetimeLocal(target.eventDate);
+                endDateEl.value = formatDatetimeLocal(target.endDate);
+            }
+        }
+    }
+
+    if (mode === 'impression') switchImpressionSection(memoEditorState.section);
+    document.getElementById('memo-editor-modal').classList.add('active');
+}
+
+function closeMemoEditor() {
+    document.getElementById('memo-editor-modal').classList.remove('active');
+}
+
+function saveMemoEditor() {
+    if (!currentMemoContact) return;
+    const mems = DB.getMemories();
+    if (!mems[currentMemoContact.id]) mems[currentMemoContact.id] = createEmptyMemoBucket();
+    const bucket = mems[currentMemoContact.id];
+
+    const content = document.getElementById('memo-editor-content').value.trim();
+    const keywords = normalizeKeywords((document.getElementById('memo-editor-keywords').value || '').split(','));
+    const source = document.getElementById('memo-editor-source').value;
+    const eventDate = document.getElementById('memo-editor-event-date').value;
+    const endDate = document.getElementById('memo-editor-end-date').value;
+    const nowTs = Date.now();
+
+    if (memoEditorState.mode === 'longTerm') {
+        if (!content) return alert('请输入长效记忆内容');
+        const payload = { content, keywords, timestamp: nowTs };
+        if (memoEditorState.editType === 'longTermMemories' && memoEditorState.editIndex >= 0) {
+            bucket.longTermMemories[memoEditorState.editIndex] = { ...bucket.longTermMemories[memoEditorState.editIndex], ...payload };
+        } else {
+            bucket.longTermMemories.push(payload);
+        }
+    } else if (memoEditorState.mode === 'shortTerm') {
+        if (!content) return alert('请输入短效记忆内容');
+        const payload = { content, keywords, source: source || 'chat', timestamp: nowTs };
+        if (memoEditorState.editType === 'shortTermMemories' && memoEditorState.editIndex >= 0) {
+            bucket.shortTermMemories[memoEditorState.editIndex] = { ...bucket.shortTermMemories[memoEditorState.editIndex], ...payload };
+        } else {
+            bucket.shortTermMemories.push(payload);
+        }
+    } else if (memoEditorState.mode === 'schedule') {
+        if (!content) return alert('请输入日程内容');
+        if (!eventDate) return alert('请填写开始时间');
+        const payload = normalizeScheduleItem({
+            content,
+            eventDate,
+            endDate: endDate || '',
+            timestamp: nowTs
+        });
+        if (!payload) return alert('日程内容无效');
+        if (memoEditorState.editType === 'scheduleMemories' && memoEditorState.editIndex >= 0) {
+            bucket.scheduleMemories[memoEditorState.editIndex] = payload;
+        } else {
+            bucket.scheduleMemories.push(payload);
+        }
+    } else if (memoEditorState.mode === 'impression') {
+        bucket.userImpressions[memoEditorState.section] = content;
+    }
+
+    DB.saveMemories(mems);
+    closeMemoEditor();
+    renderMemoDetailList();
+}
+
+function addLongTermMemory() { openMemoEditor('longTerm'); }
+function addShortTermMemory() { openMemoEditor('shortTerm'); }
+function addScheduleMemory() { openMemoEditor('schedule'); }
+function editUserImpression(section) { openMemoEditor('impression', { section }); }
+function addImportantMemory() { addLongTermMemory(); }
+
+function editMemory(type, i) {
+    if (type === 'longTermMemories') openMemoEditor('longTerm', { editType: type, editIndex: i });
+    else if (type === 'shortTermMemories') openMemoEditor('shortTerm', { editType: type, editIndex: i });
+    else if (type === 'scheduleMemories') openMemoEditor('schedule', { editType: type, editIndex: i });
+}
+
+function deleteMemory(type, i, evt) {
+    if (evt) evt.stopPropagation();
+    if (!confirm("删除这条记忆？")) return;
+    const mems = DB.getMemories();
+    const bucket = mems[currentMemoContact.id];
+    if (!bucket || !Array.isArray(bucket[type])) return;
+    bucket[type].splice(i, 1);
+    DB.saveMemories(mems);
+    renderMemoDetailList();
+}
 
 // --- 备忘录设置和每日总结功能 ---
 function openMemoSettings() {
@@ -1294,7 +1756,22 @@ function closeMemoSettings() {
 
 function addImportantMemoryFromSettings() {
     closeMemoSettings();
-    addImportantMemory();
+    addLongTermMemory();
+}
+
+function addShortMemoryFromSettings() {
+    closeMemoSettings();
+    addShortTermMemory();
+}
+
+function addScheduleMemoryFromSettings() {
+    closeMemoSettings();
+    addScheduleMemory();
+}
+
+function editImpressionFromSettings() {
+    closeMemoSettings();
+    openMemoEditor('impression', { section: 'profile' });
 }
 
 function saveMemoSettings() {
@@ -1360,18 +1837,18 @@ async function executeDailySummary(contact) {
     const recentChats = chatHistory.filter(msg => msg.timestamp && msg.timestamp >= yesterday.getTime());
     
     const mems = DB.getMemories();
-    const contactMems = mems[contact.id] || { important: [], normal: [] };
-    
-    const recentNormalMems = [];
-    const recentNormalMemIndices = [];
-    contactMems.normal.forEach((m, idx) => {
+    const contactMems = mems[contact.id] || createEmptyMemoBucket();
+
+    const recentShortMems = [];
+    const recentShortMemIndices = [];
+    contactMems.shortTermMemories.forEach((m, idx) => {
         if (m.timestamp && m.timestamp >= yesterday.getTime()) {
-            recentNormalMems.push(m);
-            recentNormalMemIndices.push(idx);
+            recentShortMems.push(m);
+            recentShortMemIndices.push(idx);
         }
     });
     
-    if (recentChats.length === 0 && recentNormalMems.length === 0) {
+    if (recentChats.length === 0 && recentShortMems.length === 0) {
         console.log('No recent content to summarize');
         return;
     }
@@ -1382,7 +1859,7 @@ async function executeDailySummary(contact) {
         return `[${time}] ${role}: ${m.content}`;
     }).join('\n');
     
-    const memText = recentNormalMems.map((m, i) => `记忆${i+1}: ${m.content}`).join('\n');
+    const memText = recentShortMems.map((m, i) => `短效记忆${i+1}: ${m.content}`).join('\n');
     
     const nowStr = now.toLocaleString('zh-CN', { hour12: false });
     const yesterdayStr = yesterday.toLocaleString('zh-CN', { hour12: false });
@@ -1400,24 +1877,30 @@ ${memText || '（无记忆片段）'}
 1. 以【第一人称】（我...）进行总结
 2. 语言必须简洁、客观、直接，尽量不用修辞手法
 3. 每日总结控制在 80-150 字，合并同类信息，不要重复
-4. 只有当内容属于以下类型时，才写入 importantMemories：
+4. 只有当内容属于以下类型时，才写入 longTermMemories：
    - 重要决定/人生抉择
    - 重要约定/长期承诺
    - 重大经历或关键事件
    - 需要长期记住的稳定个人偏好（如长期喜好、禁忌、过敏、习惯）
-5. 如果没有符合条件的内容，importantMemories 必须返回空数组 []
+5. 如果没有符合条件的内容，longTermMemories 必须返回空数组 []
+6. 与近期事件相关、且72小时内可能被再次提及的内容可写入 shortTermMemories
+7. 如果提及明确时间安排（未来/进行中/已结束事件），可写入 scheduleMemories
+8. 如果有助于塑造“我对用户的看法”，可更新 userImpressions 各板块
 
 严格返回JSON格式：
 {
     "dailySummary": "今天的完整总结内容...",
     "keywords": ["关键词1", "关键词2"],
-    "importantMemories": ["重要记忆1（如果有）", "重要记忆2（如果有）"],
+    "longTermMemories": ["长效记忆1（如果有）", "长效记忆2（如果有）"],
+    "shortTermMemories": ["短效记忆1（如果有）", "短效记忆2（如果有）"],
+    "scheduleMemories": [{"content":"...", "eventDate":"2026-03-21 18:00", "endDate":"2026-03-21 20:00"}],
+    "userImpressions": {"profile":"", "personality":"", "relationship":"", "attitude":"", "notes":""},
     "hasContent": true/false
 }
 
 注意：
 - 如果这一天没有任何有意义的内容，hasContent 返回 false，dailySummary 返回 "无"
-- 不要为了凑格式强行生成重要回忆
+- 不要为了凑格式强行生成长效记忆
 - 只返回 JSON，不要输出任何额外说明`;
 
     try {
@@ -1437,34 +1920,68 @@ ${memText || '（无记忆片段）'}
                 if (result.hasContent && result.dailySummary && result.dailySummary !== "无") {
                     const updatedMems = DB.getMemories();
                     if (!updatedMems[contact.id]) {
-                        updatedMems[contact.id] = { important: [], normal: [] };
+                        updatedMems[contact.id] = createEmptyMemoBucket();
                     }
-                    
-                    recentNormalMemIndices.sort((a, b) => b - a).forEach(idx => {
-                        updatedMems[contact.id].normal.splice(idx, 1);
+
+                    recentShortMemIndices.sort((a, b) => b - a).forEach(idx => {
+                        updatedMems[contact.id].shortTermMemories.splice(idx, 1);
                     });
                     
                     const dateStr = now.toLocaleDateString('zh-CN');
-                    updatedMems[contact.id].normal.push({
+                    updatedMems[contact.id].shortTermMemories.push({
                         content: `【${dateStr} 每日总结】\n${result.dailySummary}`,
-                        keywords: result.keywords || [],
+                        keywords: normalizeKeywords(result.keywords || []),
                         timestamp: now.getTime(),
+                        source: 'chat',
                         isDailySummary: true
                     });
                     
-                    const importantMemories = Array.isArray(result.importantMemories) ? result.importantMemories : [];
-                    const filteredImportantMemories = importantMemories.filter(impMem => isImportantMemory(impMem));
+                    const longTermMemories = Array.isArray(result.longTermMemories) ? result.longTermMemories : [];
+                    const filteredImportantMemories = longTermMemories.filter(impMem => isImportantMemory(impMem));
                     
                     if (filteredImportantMemories.length > 0) {
                         filteredImportantMemories.forEach(impMem => {
                             if (impMem && impMem.trim()) {
-                                updatedMems[contact.id].important.push({
+                                updatedMems[contact.id].longTermMemories.push({
                                     content: `【${dateStr}】${impMem}`,
                                     keywords: [],
                                     timestamp: now.getTime()
                                 });
                             }
                         });
+                    }
+
+                    const shortTermMemories = Array.isArray(result.shortTermMemories) ? result.shortTermMemories : [];
+                    shortTermMemories.forEach(shortMem => {
+                        const normalized = normalizeMemoryItem({
+                            content: shortMem,
+                            keywords: result.keywords || [],
+                            source: 'chat',
+                            timestamp: now.getTime()
+                        });
+                        if (normalized) updatedMems[contact.id].shortTermMemories.push(normalized);
+                    });
+
+                    const scheduleMemories = Array.isArray(result.scheduleMemories) ? result.scheduleMemories : [];
+                    scheduleMemories.forEach(scheduleItem => {
+                        const normalized = normalizeScheduleItem({
+                            content: scheduleItem?.content || '',
+                            eventDate: scheduleItem?.eventDate || '',
+                            endDate: scheduleItem?.endDate || '',
+                            timestamp: now.getTime()
+                        });
+                        if (normalized) updatedMems[contact.id].scheduleMemories.push(normalized);
+                    });
+
+                    if (result.userImpressions && typeof result.userImpressions === 'object') {
+                        const target = updatedMems[contact.id].userImpressions || createDefaultUserImpressions();
+                        USER_IMPRESSION_KEYS.forEach(key => {
+                            const value = result.userImpressions[key];
+                            if (typeof value === 'string' && value.trim()) {
+                                target[key] = value.trim();
+                            }
+                        });
+                        updatedMems[contact.id].userImpressions = target;
                     }
                     
                     DB.saveMemories(updatedMems);
@@ -1548,6 +2065,14 @@ function scheduleDailySummary(contact) {
 }
 
 setupDailySummaryTimers();
+
+function maintainMemoryBuckets() {
+    DB.getMemories();
+    if (currentMemoContact) renderMemoDetailList();
+}
+
+maintainMemoryBuckets();
+setInterval(maintainMemoryBuckets, 30 * 60 * 1000);
 
 setInterval(() => {
     const now = new Date();
@@ -1815,6 +2340,7 @@ function openChat(c) {
     currentChatContact = c; 
     displayedMessageCount = MESSAGES_PER_PAGE; // 重置显示的消息数量
     document.getElementById('chat-interface').style.display = 'flex'; 
+    setChatToolsBarExpanded(false);
     document.getElementById('chat-title').innerText = c.name; 
     document.getElementById('chat-header-avatar').src = c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23dbe8ff%22 width=%22100%22 height=%22100%22/></svg>';
     updateChatLastOnlineStatus();
@@ -2211,22 +2737,21 @@ function renderChatHistory(maintainScroll = false) {
         offlineHistory.innerHTML = ''; 
         fullChat.forEach((msg, index) => { 
             if (msg.mode !== 'offline') return; 
+            const roleClass = msg.role === 'user' ? 'user' : (msg.role === 'system' ? 'system' : 'ai');
             const div = document.createElement('div'); 
-            div.className = `offline-msg-block ${msg.role === 'user' ? 'user' : (msg.role === 'system' ? 'system' : 'ai')}`; 
+            div.className = `offline-msg-block ${roleClass}`; 
             let content = msg.content; 
-            if (msg.role === 'user') { 
-                div.innerText = `我：${content}`; 
-            } else if (msg.role === 'system') { 
+            if (msg.role === 'system') { 
                 div.innerText = `[系统] ${content}`; 
             } else { 
                 content = content.replace(/\|\|\|/g, '\n\n'); 
-                div.innerText = content; 
+                div.innerHTML = `<span class="offline-msg-main">${formatOfflineMessageHtml(content)}</span>`; 
             } 
             offlineHistory.appendChild(div); 
             
             if (msg.role === 'user' || msg.role === 'assistant') { 
                 const actionBar = document.createElement('div'); 
-                actionBar.className = 'offline-action-bar'; 
+                actionBar.className = `offline-action-bar ${msg.role === 'user' ? 'user' : 'ai'}`; 
                 const editBtn = document.createElement('button'); 
                 editBtn.className = 'offline-action-btn'; 
                 editBtn.innerText = '编辑'; 
@@ -2448,14 +2973,379 @@ async function triggerCallStartResponse() {
         alert('通话连接错误: ' + error.message);
     }
 }
-function openOfflineMode() { if (!currentChatContact) return; document.getElementById('offline-mode').classList.add('active'); const settings = currentChatContact.offlineSettings || {}; if (settings.bg) { document.getElementById('offline-mode').style.backgroundImage = `url(${settings.bg})`; } else { document.getElementById('offline-mode').style.backgroundImage = 'none'; } renderChatHistory(); }
-function exitOfflineMode() { document.getElementById('offline-mode').classList.remove('active'); document.getElementById('offline-typing-indicator').style.display = 'none'; closeOfflineSettings(); }
+
+let offlineRainRenderer = null;
+const DEFAULT_OFFLINE_BODY_TEXT_COLOR = '#f9fcff';
+const DEFAULT_OFFLINE_DIALOG_TEXT_COLOR = 'rgb(187,191,211)';
+const offlineRainResizeHandler = () => {
+    if (offlineRainRenderer && typeof offlineRainRenderer.resize === 'function') {
+        offlineRainRenderer.resize();
+    }
+};
+
+function normalizeOfflineColor(value, fallback) {
+    if (!value || typeof value !== 'string') return fallback;
+    const color = value.trim();
+    if (typeof CSS !== 'undefined' && CSS.supports && CSS.supports('color', color)) return color;
+    return fallback;
+}
+
+function applyOfflineTextColors(settings = {}) {
+    const modeEl = document.getElementById('offline-mode');
+    if (!modeEl) return;
+    const bodyTextColor = normalizeOfflineColor(settings.bodyTextColor, DEFAULT_OFFLINE_BODY_TEXT_COLOR);
+    const dialogTextColor = normalizeOfflineColor(settings.dialogTextColor, DEFAULT_OFFLINE_DIALOG_TEXT_COLOR);
+    modeEl.style.setProperty('--offline-body-text-color', bodyTextColor);
+    modeEl.style.setProperty('--offline-dialog-text-color', dialogTextColor);
+}
+
+function formatOfflineMessageHtml(rawText) {
+    const text = String(rawText || '');
+    const quotePattern = /“[^”]*”|"[^"\n]*"/g;
+    let html = '';
+    let lastIndex = 0;
+    let match;
+    while ((match = quotePattern.exec(text)) !== null) {
+        html += escapeHtml(text.slice(lastIndex, match.index));
+        html += `<span class="offline-dialog">${escapeHtml(match[0])}</span>`;
+        lastIndex = quotePattern.lastIndex;
+    }
+    html += escapeHtml(text.slice(lastIndex));
+    return html.replace(/\n/g, '<br>');
+}
+
+function createOfflineRainRenderer(container) {
+    if (!container) return null;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'offline-rain-surface';
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
+    if (!gl) return null;
+    container.innerHTML = '';
+    container.appendChild(canvas);
+
+    const vertexSource = `
+        attribute vec2 aPosition;
+        varying vec2 vUv;
+        void main() {
+            vUv = aPosition * 0.5 + 0.5;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+    `;
+
+    const fragmentSource = `
+        precision highp float;
+        varying vec2 vUv;
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform float uRainAmount;
+        uniform sampler2D uBackground;
+        uniform float uHasTexture;
+
+        #define S(a, b, t) smoothstep(a, b, t)
+
+        vec3 N13(float p) {
+            vec3 p3 = fract(vec3(p) * vec3(.1031,.11369,.13787));
+            p3 += dot(p3, p3.yzx + 19.19);
+            return fract(vec3((p3.x + p3.y)*p3.z, (p3.x+p3.z)*p3.y, (p3.y+p3.z)*p3.x));
+        }
+
+        float N(float t) {
+            return fract(sin(t * 12345.564) * 7658.76);
+        }
+
+        float Saw(float b, float t) {
+            return S(0., b, t) * S(1., b, t);
+        }
+
+        float StaticDrops(vec2 uv, float t) {
+            uv *= 40.;
+            vec2 id = floor(uv);
+            uv = fract(uv) - .5;
+            vec3 n = N13(id.x * 107.45 + id.y * 3543.654);
+            vec2 p = (n.xy - .5) * .7;
+            float d = length(uv - p);
+            float fade = Saw(.025, fract(t + n.z));
+            return S(.3, 0., d) * fract(n.z * 10.) * fade;
+        }
+
+        vec2 DropLayer2(vec2 uv, float t) {
+            vec2 UV = uv;
+            uv.y += t * 0.75;
+            vec2 a = vec2(6., 1.);
+            vec2 grid = a * 2.;
+            vec2 id = floor(uv * grid);
+            float colShift = N(id.x);
+            uv.y += colShift;
+            id = floor(uv * grid);
+            vec3 n = N13(id.x * 35.2 + id.y * 2376.1);
+            vec2 st = fract(uv * grid) - vec2(.5, 0.);
+            float x = n.x - .5;
+            float y = UV.y * 20.;
+            float wiggle = sin(y + sin(y));
+            x += wiggle * (.5 - abs(x)) * (n.z - .5);
+            x *= .7;
+            float ti = fract(t + n.z);
+            y = (Saw(.85, ti) - .5) * .9 + .5;
+            vec2 p = vec2(x, y);
+            float d = length((st - p) * a.yx);
+            float mainDrop = S(.4, .0, d);
+            float r = sqrt(S(1., y, st.y));
+            float cd = abs(st.x - x);
+            float trail = S(.23 * r, .15 * r * r, cd);
+            float trailFront = S(-.02, .02, st.y - y);
+            trail *= trailFront * r * r;
+            y = UV.y;
+            float trail2 = S(.2 * r, .0, cd);
+            float droplets = max(0., (sin(y * (1. - y) * 120.) - st.y)) * trail2 * trailFront * n.z;
+            y = fract(y * 10.) + (st.y - .5);
+            float dd = length(st - vec2(x, y));
+            droplets = S(.3, 0., dd);
+            float m = mainDrop + droplets * r * trailFront;
+            return vec2(m, trail);
+        }
+
+        vec2 Drops(vec2 uv, float t, float l0, float l1, float l2) {
+            float s = StaticDrops(uv, t) * l0;
+            vec2 m1 = DropLayer2(uv, t) * l1;
+            vec2 m2 = DropLayer2(uv * 1.85, t) * l2;
+            float c = s + m1.x + m2.x;
+            c = S(.3, 1., c);
+            return vec2(c, max(m1.y * l0, m2.y * l1));
+        }
+
+        vec3 sampleBase(vec2 uv) {
+            if (uHasTexture > 0.5) {
+                return texture2D(uBackground, uv).rgb;
+            }
+            vec3 sky = mix(vec3(0.08, 0.12, 0.2), vec3(0.26, 0.31, 0.42), uv.y);
+            vec3 glow = vec3(0.09, 0.12, 0.16) * (0.5 + 0.5 * sin((uv.x + uv.y) * 8.0 + uTime * 0.25));
+            return sky + glow;
+        }
+
+        void main() {
+            vec2 fragCoord = vUv * uResolution;
+            vec2 uv = (fragCoord - .5 * uResolution) / uResolution.y;
+            vec2 UV = vUv;
+            float T = uTime;
+            float t = T * .2;
+
+            float rainAmount = clamp(uRainAmount, 0.0, 1.0);
+            float staticDrops = S(-.5, 1., rainAmount) * 2.;
+            float layer1 = S(.25, .75, rainAmount);
+            float layer2 = S(.0, .5, rainAmount);
+
+            vec2 c = Drops(uv, t, staticDrops, layer1, layer2);
+            vec2 e = vec2(.0012, 0.0);
+            float cx = Drops(uv + e, t, staticDrops, layer1, layer2).x;
+            float cy = Drops(uv + e.yx, t, staticDrops, layer1, layer2).x;
+            vec2 n = vec2(cx - c.x, cy - c.x);
+
+            float fog = mix(0.5, 1.0, rainAmount);
+            float blur = mix(0.003, 0.018, fog - c.y * 0.7);
+            vec2 uvDistorted = clamp(UV + n * (0.8 + rainAmount * 0.9), 0.001, 0.999);
+            vec2 blurStep = vec2(blur);
+
+            vec3 col = vec3(0.0);
+            col += sampleBase(clamp(uvDistorted + vec2(-blurStep.x, -blurStep.y), 0.001, 0.999)) * 0.12;
+            col += sampleBase(clamp(uvDistorted + vec2( blurStep.x, -blurStep.y), 0.001, 0.999)) * 0.12;
+            col += sampleBase(clamp(uvDistorted + vec2(-blurStep.x,  blurStep.y), 0.001, 0.999)) * 0.12;
+            col += sampleBase(clamp(uvDistorted + vec2( blurStep.x,  blurStep.y), 0.001, 0.999)) * 0.12;
+            col += sampleBase(clamp(uvDistorted + vec2( blurStep.x, 0.0), 0.001, 0.999)) * 0.13;
+            col += sampleBase(clamp(uvDistorted + vec2(-blurStep.x, 0.0), 0.001, 0.999)) * 0.13;
+            col += sampleBase(clamp(uvDistorted + vec2(0.0,  blurStep.y), 0.001, 0.999)) * 0.13;
+            col += sampleBase(clamp(uvDistorted + vec2(0.0, -blurStep.y), 0.001, 0.999)) * 0.13;
+
+            vec3 center = sampleBase(uvDistorted);
+            col += center * 0.18;
+
+            float streak = smoothstep(0.12, 0.85, c.y) * (0.4 + 0.6 * c.x);
+            vec3 coolFog = vec3(0.86, 0.89, 0.93);
+            col = mix(col, col * 0.90 + coolFog * 0.10, clamp(fog * 0.14 + streak * 0.10, 0.0, 0.35));
+
+            float vignette = 1.0 - dot(UV - 0.5, UV - 0.5) * 0.95;
+            col *= clamp(vignette, 0.35, 1.0);
+
+            float dropletShine = smoothstep(0.35, 1.0, c.x) * 0.09;
+            col += vec3(0.95, 0.97, 1.0) * dropletShine;
+
+            float layerAlpha = mix(0.06, 0.78, uHasTexture);
+            gl_FragColor = vec4(col, layerAlpha);
+        }
+    `;
+
+    const compileShader = (type, source) => {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const info = gl.getShaderInfoLog(shader);
+            gl.deleteShader(shader);
+            throw new Error(`Shader 编译失败: ${info}`);
+        }
+        return shader;
+    };
+
+    const vertexShader = compileShader(gl.VERTEX_SHADER, vertexSource);
+    const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        const info = gl.getProgramInfoLog(program);
+        throw new Error(`Shader 链接失败: ${info}`);
+    }
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const positionLocation = gl.getAttribLocation(program, 'aPosition');
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+    const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
+    const timeLocation = gl.getUniformLocation(program, 'uTime');
+    const rainAmountLocation = gl.getUniformLocation(program, 'uRainAmount');
+    const hasTextureLocation = gl.getUniformLocation(program, 'uHasTexture');
+    const backgroundLocation = gl.getUniformLocation(program, 'uBackground');
+    gl.uniform1i(backgroundLocation, 0);
+
+    const texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const emptyPixel = new Uint8Array([20, 28, 42, 255]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, emptyPixel);
+
+    let hasTexture = 0;
+    let rafId = 0;
+    let startTime = performance.now();
+    let rainAmount = 0.82;
+
+    const resize = () => {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.max(1, Math.floor(container.clientWidth * dpr));
+        const h = Math.max(1, Math.floor(container.clientHeight * dpr));
+        if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+        }
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    };
+
+    const render = (now) => {
+        const elapsed = (now - startTime) / 1000;
+        resize();
+        gl.useProgram(program);
+        gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+        gl.uniform1f(timeLocation, elapsed);
+        gl.uniform1f(rainAmountLocation, rainAmount);
+        gl.uniform1f(hasTextureLocation, hasTexture);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        rafId = requestAnimationFrame(render);
+    };
+
+    const setImage = (url) => {
+        if (!url) {
+            hasTexture = 0;
+            return;
+        }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+            hasTexture = 1;
+        };
+        img.onerror = () => {
+            hasTexture = 0;
+        };
+        img.src = url;
+    };
+
+    return {
+        resize,
+        setRainAmount(value) {
+            rainAmount = Math.max(0.0, Math.min(1.0, value));
+        },
+        setImage,
+        start() {
+            if (rafId) return;
+            startTime = performance.now();
+            rafId = requestAnimationFrame(render);
+        },
+        stop() {
+            if (!rafId) return;
+            cancelAnimationFrame(rafId);
+            rafId = 0;
+        }
+    };
+}
+
+function setOfflineModeBackground(bgUrl) {
+    const bgLayer = document.getElementById('offline-bg-photo');
+    if (!bgLayer) return;
+    if (bgUrl) {
+        bgLayer.style.backgroundImage = `url(${bgUrl})`;
+    } else {
+        bgLayer.style.backgroundImage = 'none';
+    }
+    if (offlineRainRenderer) offlineRainRenderer.setImage(bgUrl || '');
+}
+
+function ensureOfflineRainRenderer() {
+    if (offlineRainRenderer) return offlineRainRenderer;
+    const container = document.getElementById('offline-rain-gl');
+    if (!container) return null;
+    try {
+        offlineRainRenderer = createOfflineRainRenderer(container);
+    } catch (error) {
+        console.error('线下模式雨滴渲染初始化失败:', error);
+        return null;
+    }
+    if (offlineRainRenderer) {
+        window.addEventListener('resize', offlineRainResizeHandler);
+    }
+    return offlineRainRenderer;
+}
+
+function openOfflineMode() {
+    if (!currentChatContact) return;
+    const modeEl = document.getElementById('offline-mode');
+    modeEl.classList.add('active');
+    const settings = currentChatContact.offlineSettings || {};
+    applyOfflineTextColors(settings);
+    const renderer = ensureOfflineRainRenderer();
+    setOfflineModeBackground(settings.bg || '');
+    if (renderer) renderer.setImage(settings.bg || '');
+    if (renderer) {
+        renderer.setRainAmount(0.82);
+        renderer.start();
+    }
+    renderChatHistory();
+}
+
+function exitOfflineMode() {
+    document.getElementById('offline-mode').classList.remove('active');
+    document.getElementById('offline-typing-indicator').style.display = 'none';
+    closeOfflineSettings();
+    if (offlineRainRenderer) offlineRainRenderer.stop();
+}
+
 function openOfflineSettings() { 
-    const settings = currentChatContact.offlineSettings || { min: 500, max: 700, style: '', bg: '', retell: false, interrupt: false, perspective: 'first_user' }; 
+    const settings = currentChatContact.offlineSettings || { min: 500, max: 700, style: '', bg: '', retell: false, interrupt: false, perspective: 'first_user', bodyTextColor: DEFAULT_OFFLINE_BODY_TEXT_COLOR, dialogTextColor: DEFAULT_OFFLINE_DIALOG_TEXT_COLOR }; 
     document.getElementById('offline-min-len').value = settings.min; 
     document.getElementById('offline-max-len').value = settings.max; 
     document.getElementById('offline-style-prompt').value = settings.style; 
     document.getElementById('offline-bg-url').value = settings.bg && settings.bg.startsWith('http') ? settings.bg : ''; 
+    document.getElementById('offline-body-color').value = normalizeOfflineColor(settings.bodyTextColor, DEFAULT_OFFLINE_BODY_TEXT_COLOR);
+    document.getElementById('offline-dialog-color').value = normalizeOfflineColor(settings.dialogTextColor, DEFAULT_OFFLINE_DIALOG_TEXT_COLOR);
     
     document.getElementById('offline-retell-yes').classList.toggle('active', settings.retell === true);
     document.getElementById('offline-retell-no').classList.toggle('active', settings.retell !== true);
@@ -2485,6 +3375,8 @@ function saveOfflineSettings() {
     const style = document.getElementById('offline-style-prompt').value; 
     const bgUrl = document.getElementById('offline-bg-url').value; 
     const bgFile = document.getElementById('offline-bg-file'); 
+    const bodyTextColor = normalizeOfflineColor(document.getElementById('offline-body-color').value, DEFAULT_OFFLINE_BODY_TEXT_COLOR);
+    const dialogTextColor = normalizeOfflineColor(document.getElementById('offline-dialog-color').value, DEFAULT_OFFLINE_DIALOG_TEXT_COLOR);
     
     const retell = document.getElementById('offline-retell-yes').classList.contains('active');
     const interrupt = document.getElementById('offline-interrupt-yes').classList.contains('active');
@@ -2496,12 +3388,15 @@ function saveOfflineSettings() {
         if (i !== -1) { 
             const oldBg = contacts[i].offlineSettings?.bg || ''; 
             const finalBg = bgVal || oldBg; 
-            contacts[i].offlineSettings = { min, max, style, bg: finalBg, retell, interrupt, perspective }; 
+            contacts[i].offlineSettings = { min, max, style, bg: finalBg, retell, interrupt, perspective, bodyTextColor, dialogTextColor }; 
             DB.saveContacts(contacts); 
             currentChatContact = contacts[i]; 
-            if (finalBg) { 
-                document.getElementById('offline-mode').style.backgroundImage = `url(${finalBg})`; 
-            } 
+            applyOfflineTextColors(currentChatContact.offlineSettings || {});
+            setOfflineModeBackground(finalBg || '');
+            if (document.getElementById('offline-mode').classList.contains('active')) {
+                const renderer = ensureOfflineRainRenderer();
+                if (renderer) renderer.start();
+            }
         } 
         closeOfflineSettings(); 
     }; 
@@ -2689,11 +3584,58 @@ async function triggerAIResponse() {
         }
     }
 
-    const mems = DB.getMemories()[currentChatContact.id] || { important: [], normal: [] };
-    if (mems.important.length > 0) { systemContent += `\n\n[⭐ 重要回忆 - 绝对不能遗忘]\n`; mems.important.forEach((m, i) => { systemContent += `${i+1}. ${m.content}\n`; }); }
+    const mems = DB.getMemories()[currentChatContact.id] || createEmptyMemoBucket();
     const lastUserMsg = limitedHistory.filter(m => m.role === 'user').pop()?.content || "";
-    const triggeredMemories = mems.normal.filter(m => m.keywords?.length > 0 && m.keywords.some(kw => lastUserMsg.includes(kw)));
-    if (triggeredMemories.length > 0) { systemContent += `\n\n[📝 相关回忆 - 联想触发]\n`; triggeredMemories.forEach((m, i) => { systemContent += `${i+1}. ${m.content}\n`; }); }
+    const nowTs = Date.now();
+    const matchByKeyword = (entry) => {
+        if (!entry) return false;
+        const keywords = Array.isArray(entry.keywords) ? entry.keywords : [];
+        if (keywords.length > 0 && keywords.some(kw => lastUserMsg.includes(kw))) return true;
+        return !!lastUserMsg && entry.content && (lastUserMsg.includes(entry.content) || entry.content.includes(lastUserMsg.slice(0, 12)));
+    };
+
+    const impressions = mems.userImpressions || createDefaultUserImpressions();
+    const impressionLines = [];
+    if (impressions.profile) impressionLines.push(`- 基本画像: ${impressions.profile}`);
+    if (impressions.personality) impressionLines.push(`- 性格认知: ${impressions.personality}`);
+    if (impressions.relationship) impressionLines.push(`- 我们的关系: ${impressions.relationship}`);
+    if (impressions.attitude) impressionLines.push(`- 我对ta的态度: ${impressions.attitude}`);
+    if (impressions.notes) impressionLines.push(`- 互动备注: ${impressions.notes}`);
+    if (impressionLines.length > 0) {
+        systemContent += `\n\n[🧠 用户印象 - 常驻]\n${impressionLines.join('\n')}\n`;
+    }
+
+    const scheduleByStatus = { upcoming: [], ongoing: [], past: [] };
+    mems.scheduleMemories.forEach(item => {
+        const status = getScheduleStatus(item, nowTs);
+        if (!scheduleByStatus[status]) scheduleByStatus[status] = [];
+        scheduleByStatus[status].push(item);
+    });
+    const scheduleLines = [];
+    ['ongoing', 'upcoming', 'past'].forEach(status => {
+        scheduleByStatus[status].slice(0, 4).forEach(item => {
+            const timeText = item.eventDate ? ` (${item.eventDate}${item.endDate ? ` ~ ${item.endDate}` : ''})` : '';
+            scheduleLines.push(`- [${status}] ${item.content}${timeText}`);
+        });
+    });
+    if (scheduleLines.length > 0) {
+        systemContent += `\n\n[📅 日程记忆]\n${scheduleLines.join('\n')}\n`;
+    }
+
+    const triggeredShortTerm = mems.shortTermMemories
+        .filter(item => nowTs - (Number(item.timestamp) || 0) <= SHORT_TERM_MEMORY_TTL_MS)
+        .filter(item => matchByKeyword(item))
+        .slice(-6);
+    if (triggeredShortTerm.length > 0) {
+        systemContent += `\n\n[⏳ 短效记忆 - 72小时]\n`;
+        triggeredShortTerm.forEach((m, i) => { systemContent += `${i+1}. ${m.content}\n`; });
+    }
+
+    const triggeredLongTerm = mems.longTermMemories.filter(item => matchByKeyword(item)).slice(-8);
+    if (triggeredLongTerm.length > 0) {
+        systemContent += `\n\n[📌 长效记忆 - 按需检索]\n`;
+        triggeredLongTerm.forEach((m, i) => { systemContent += `${i+1}. ${m.content}\n`; });
+    }
 
     if (isTimePerceptionEnabled) { const nowStr = new Date().toLocaleString('zh-CN', { hour12: false }); systemContent += `\n\n[时间感知模式已开启]\n当前现实时间：${nowStr}\n请注意：\n1. 每一条消息前都标记了发送时间，这仅供你判断时间流逝。\n2. **绝对不要**在回复开头显示时间戳（如 [12:00:00]），直接回复内容即可。\n3. 请根据当前时间判断你的作息（如深夜在睡觉或熬夜，早晨在通勤）。\n4. 观察用户回复的时间间隔。如果用户隔了很久才回，请根据人设做出反应（如吐槽、担心等）。`; }
     if (isTransferEvent) systemContent += `\n\n===== 【转账处理 - 强制格式】 =====\n用户刚刚向你转账 ¥${pendingTransferAmount}，备注：${pendingTransferNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【收下】转账，回复必须以 [ACCEPT] 开头\n- 如果你决定【拒收】转账，回复必须以 [REJECT] 开头\n===================================`;
@@ -2935,13 +3877,61 @@ async function generateSummary(contact, recentMessages) {
     const settings = DB.getSettings(); if (!settings.key) return;
     const msgsText = recentMessages.map(m => { const time = m.timestamp ? new Date(m.timestamp).toLocaleString('zh-CN', {hour12:false}) : "未知时间"; return `[${time}] ${m.role === 'user' ? 'User' : 'Me'}: ${m.content}`; }).join('\n');
     const nowStr = new Date().toLocaleString('zh-CN', { hour12: false });
-    const prompt = `你现在是 ${contact.name}。请阅读以下你与用户的近期对话记录，并以【第一人称】（我...）总结这段对话中发生的关键事件。要求：1.包含具体时间点。2.提取3-5个关键词。3.如果无重要信息，content返回"无"。4.严格返回JSON格式：{"content":"...","keywords":["..."]}。对话记录：\n${msgsText}\n当前时间：${nowStr}`;
+    const prompt = `你现在是 ${contact.name}。请阅读以下你与用户的近期对话记录，并以【第一人称】（我...）总结关键事件。要求：1.包含具体时间点。2.提取3-5个关键词。3.如果无重要信息，content返回"无"。4.若存在稳定事实可输出 longTermMemory。5.若有明确时间安排可输出 scheduleMemory。6.若形成对用户的新看法可输出 userImpression。严格返回JSON：{"content":"...","keywords":["..."],"longTermMemory":"...","scheduleMemory":{"content":"...","eventDate":"...","endDate":"..."},"userImpression":{"section":"profile|personality|relationship|attitude|notes","content":"..."}}。对话记录：\n${msgsText}\n当前时间：${nowStr}`;
     try {
         const res = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.5 }) });
         const data = await res.json();
         if (data.choices?.length > 0) {
             let raw = data.choices[0].message.content.trim().replace(/```json/g, '').replace(/```/g, '').trim();
-            try { const result = JSON.parse(raw); if (result.content && result.content !== "无") { const mems = DB.getMemories(); if (!mems[contact.id]) mems[contact.id] = { important: [], normal: [] }; mems[contact.id].normal.push({ content: result.content, keywords: result.keywords || [] }); DB.saveMemories(mems); console.log("Auto summary generated:", result); } } catch (e) { console.error("JSON parse failed:", e); }
+            try {
+                const result = JSON.parse(raw);
+                const mems = DB.getMemories();
+                if (!mems[contact.id]) mems[contact.id] = createEmptyMemoBucket();
+                const bucket = mems[contact.id];
+                let hasWrite = false;
+
+                if (result.content && result.content !== "无") {
+                    bucket.shortTermMemories.push({
+                        content: String(result.content).trim(),
+                        keywords: normalizeKeywords(result.keywords || []),
+                        source: 'chat',
+                        timestamp: Date.now()
+                    });
+                    hasWrite = true;
+                }
+                if (result.longTermMemory && isImportantMemory(result.longTermMemory)) {
+                    bucket.longTermMemories.push({
+                        content: String(result.longTermMemory).trim(),
+                        keywords: normalizeKeywords(result.keywords || []),
+                        timestamp: Date.now()
+                    });
+                    hasWrite = true;
+                }
+                if (result.scheduleMemory && typeof result.scheduleMemory === 'object') {
+                    const schedule = normalizeScheduleItem({
+                        content: result.scheduleMemory.content || '',
+                        eventDate: result.scheduleMemory.eventDate || '',
+                        endDate: result.scheduleMemory.endDate || '',
+                        timestamp: Date.now()
+                    });
+                    if (schedule) {
+                        bucket.scheduleMemories.push(schedule);
+                        hasWrite = true;
+                    }
+                }
+                if (result.userImpression && typeof result.userImpression === 'object') {
+                    const section = result.userImpression.section;
+                    const value = String(result.userImpression.content || '').trim();
+                    if (USER_IMPRESSION_KEYS.includes(section) && value) {
+                        bucket.userImpressions[section] = value;
+                        hasWrite = true;
+                    }
+                }
+                if (hasWrite) {
+                    DB.saveMemories(mems);
+                    console.log("Auto summary generated:", result);
+                }
+            } catch (e) { console.error("JSON parse failed:", e); }
         }
     } catch (e) { console.error("Summary generation failed:", e); }
 }
