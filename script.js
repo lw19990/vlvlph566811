@@ -20,7 +20,11 @@ const MEMORY_CACHE = {
     iphone_couple_data: null,
     iphone_question_box: null,
     iphone_tomato_data: null,
-    iphone_game_data: null
+    iphone_game_data: null,
+    iphone_user_accounts: null,
+    iphone_wallet_data: null,
+    iphone_shopping_data: null,
+    iphone_accounting_data: null
 };
 
 // 初始化数据库
@@ -76,6 +80,7 @@ async function loadAllDataToCache() {
             }
 
             // 数据加载完成，执行初始化逻辑
+            if (typeof ensureUserAccountsUpgraded === 'function') ensureUserAccountsUpgraded();
             if (typeof loadSettings === 'function') loadSettings();
             if (typeof applyTheme === 'function') applyTheme();
             if (typeof applyPage2Images === 'function') applyPage2Images();
@@ -144,6 +149,25 @@ initDatabase();
 
 let currentCalDate = new Date();
 let currentCallStartTime = 0;
+const KEEP_ALIVE_AUDIO_URL = 'https://img.heliar.top/file/1772516513350_30min-osbvow_2.mp4';
+const BACKGROUND_MESSAGE_CHECK_MS = 30000;
+const backgroundMessageLastRunMap = {};
+const backgroundMessageInFlight = new Set();
+let backgroundMessageTimer = null;
+const DEFAULT_LOCK_PASSCODE = '5168';
+let lockPasscodeInputValue = '';
+let lockPasscodeResetTimer = null;
+let hasResolvedInitialEntryScreen = false;
+const CHAT_CURRENCY_MAP = {
+    cny: { code: 'cny', label: '人民币¥', symbol: '¥', cnyPerUnit: 1 },
+    twd: { code: 'twd', label: '台币NT$', symbol: 'NT$', cnyPerUnit: 5 },
+    hkd: { code: 'hkd', label: '港币HK$', symbol: 'HK$', cnyPerUnit: 1 / 0.9 },
+    usd: { code: 'usd', label: '美元$', symbol: '$', cnyPerUnit: 7 },
+    eur: { code: 'eur', label: '欧元€', symbol: '€', cnyPerUnit: 8 },
+    jpy: { code: 'jpy', label: '日元¥', symbol: '¥', cnyPerUnit: 0.04 },
+    gbp: { code: 'gbp', label: '英镑£', symbol: '£', cnyPerUnit: 9 },
+    rub: { code: 'rub', label: '卢布₽', symbol: '₽', cnyPerUnit: 1 / 0.09 }
+};
 
 function updateTime() {
     const now = new Date();
@@ -158,13 +182,102 @@ function updateTime() {
 setInterval(updateTime, 1000); updateTime();
 
 const screens = document.querySelectorAll('.screen');
-document.getElementById('unlock-slider').addEventListener('input', function() {
-    if (this.value > 90) {
-        document.getElementById('lock-screen').classList.remove('active');
-        document.getElementById('home-screen').classList.add('active');
-        this.value = 0;
-    } else setTimeout(() => { if(this.value < 90) this.value = 0; }, 300);
-});
+function normalizeLockPasscode(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    return /^\d{4}$/.test(digits) ? digits : DEFAULT_LOCK_PASSCODE;
+}
+function getCurrentLockPasscode() {
+    return normalizeLockPasscode(DB.getSettings().lockPasscode);
+}
+function isLockPasscodeDisabled(settings = DB.getSettings()) {
+    return settings.lockPasscodeDisabled === true;
+}
+function setActiveScreen(screenId) {
+    screens.forEach(s => s.classList.remove('active'));
+    const target = document.getElementById(screenId);
+    if (target) target.classList.add('active');
+}
+function resetLockPasscodeEntry(clearError = true) {
+    lockPasscodeInputValue = '';
+    if (lockPasscodeResetTimer) {
+        clearTimeout(lockPasscodeResetTimer);
+        lockPasscodeResetTimer = null;
+    }
+    if (clearError) {
+        const errorEl = document.getElementById('lock-passcode-error');
+        const dotsEl = document.getElementById('lock-passcode-dots');
+        if (errorEl) errorEl.classList.remove('show');
+        if (dotsEl) dotsEl.classList.remove('shake');
+    }
+    updateLockPasscodeDots();
+}
+function updateLockPasscodeDots() {
+    const dots = document.querySelectorAll('#lock-passcode-dots .lock-passcode-dot');
+    dots.forEach((dot, index) => {
+        dot.classList.toggle('filled', index < lockPasscodeInputValue.length);
+    });
+}
+function unlockToHomeScreen() {
+    resetLockPasscodeEntry();
+    setActiveScreen('home-screen');
+}
+function showLockScreen() {
+    resetLockPasscodeEntry();
+    setActiveScreen('lock-screen');
+}
+function resolveInitialEntryScreen() {
+    if (isLockPasscodeDisabled()) unlockToHomeScreen();
+    else showLockScreen();
+}
+function showLockPasscodeError() {
+    const errorEl = document.getElementById('lock-passcode-error');
+    const dotsEl = document.getElementById('lock-passcode-dots');
+    if (errorEl) errorEl.classList.add('show');
+    if (dotsEl) {
+        dotsEl.classList.remove('shake');
+        void dotsEl.offsetWidth;
+        dotsEl.classList.add('shake');
+    }
+    lockPasscodeResetTimer = setTimeout(() => resetLockPasscodeEntry(), 650);
+}
+function validateLockPasscodeEntry() {
+    if (lockPasscodeInputValue !== getCurrentLockPasscode()) {
+        showLockPasscodeError();
+        return;
+    }
+    unlockToHomeScreen();
+}
+function pressLockPasscodeDigit(digit) {
+    if (isLockPasscodeDisabled()) {
+        unlockToHomeScreen();
+        return;
+    }
+    if (!/^\d$/.test(String(digit)) || lockPasscodeInputValue.length >= 4) return;
+    const errorEl = document.getElementById('lock-passcode-error');
+    const dotsEl = document.getElementById('lock-passcode-dots');
+    if (errorEl) errorEl.classList.remove('show');
+    if (dotsEl) dotsEl.classList.remove('shake');
+    lockPasscodeInputValue += String(digit);
+    updateLockPasscodeDots();
+    if (lockPasscodeInputValue.length === 4) {
+        setTimeout(validateLockPasscodeEntry, 120);
+    }
+}
+function deleteLockPasscodeDigit() {
+    if (lockPasscodeInputValue.length === 0) return;
+    lockPasscodeInputValue = lockPasscodeInputValue.slice(0, -1);
+    updateLockPasscodeDots();
+}
+function handleLockPasscodeKeyboard(event) {
+    const lockScreen = document.getElementById('lock-screen');
+    if (!lockScreen || !lockScreen.classList.contains('active') || isLockPasscodeDisabled()) return;
+    if (/^\d$/.test(event.key)) {
+        pressLockPasscodeDigit(event.key);
+    } else if (event.key === 'Backspace' || event.key === 'Delete') {
+        deleteLockPasscodeDigit();
+    }
+}
+document.addEventListener('keydown', handleLockPasscodeKeyboard);
 
 // Temperature Slider Synchronization
 const tempSlider = document.getElementById('temperature-slider');
@@ -191,9 +304,12 @@ function openApp(appId) {
         pauseSuikaRuntime();
         closeSuikaSettings();
     }
+    if (appId !== 'app-tarot') {
+        pauseTarotRuntime();
+    }
     screens.forEach(s => s.classList.remove('active'));
     document.getElementById(appId).classList.add('active');
-    if(appId === 'app-contacts') renderContacts();
+    if(appId === 'app-contacts') renderContactsPanel();
     if(appId === 'app-vk') renderVKList();
     if(appId === 'app-worldbook') renderWorldBook();
     if(appId === 'app-spy-list') renderSpyContactList();
@@ -201,13 +317,439 @@ function openApp(appId) {
     if(appId === 'app-memos') renderMemoContacts();
     if(appId === 'app-calendar') renderCalendar();
     if(appId === 'app-couple') renderCoupleSpace();
+    if(appId === 'app-settings') loadSettings();
     if(appId === 'app-tomato') initTomatoApp();
     if(appId === 'app-game') initSuikaApp();
+    if(appId === 'app-wallet') initWalletApp();
+    if(appId === 'app-accounting') initAccountingApp();
+    if(appId === 'app-shopping') renderShoppingApp();
+    if(appId === 'app-kitchen') initKitchenApp();
+    if(appId === 'app-tarot') initTarotApp();
+}
+
+const kitchenToolIcons = {
+    pot: `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M194.214818 505.126452l0 239.856833c0 64.299445 52.157917 116.4195 116.456339 116.4195l397.912615 0c64.317864 0 116.476805-52.120055 116.476805-116.4195L825.060577 505.126452 194.214818 505.126452z" fill="#CAB28E"></path><path d="M206.244806 582.620407 63.836399 542.055526 75.267752 501.891781 217.677183 542.456662Z" fill="#CAB28E"></path><path d="M957.254342 546.308387 812.845371 578.9846 803.613102 538.239618 948.060959 505.59922Z" fill="#CAB28E"></path><path d="M759.487116 376.22978c4.270257 28.314883-139.355885 54.05922-307.135122 79.283718-167.741375 25.224498-296.122301 40.417525-300.374138 12.103666-4.252861-28.314883 128.269385-71.721485 296.048623-96.966449C615.78832 345.425194 755.236302 347.913874 759.487116 376.22978" fill="#CAB28E"></path><path d="M488.228085 416.71996 432.943968 425.044556 420.858722 344.534917 476.088604 336.211345Z" fill="#CAB28E"></path></svg>`,
+    pan: `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M941.9 891.5L801.3 758.4c27.9-33.5 50.5-70.7 67.5-111.1 22-52.5 33.4-108 34-165.1 0.6-57.1-9.6-112.9-30.4-165.8-21.5-54.8-53.5-104.1-95-146.6-41.5-42.4-90.1-75.5-144.4-98.2-52.5-22-108-33.4-165.1-34C410.8 36.8 355 47 302 67.8c-54.8 21.5-104.1 53.5-146.6 95C113 204.3 80 252.9 57.2 307.2c-22 52.5-33.4 108-34 165.1-0.6 57.1 9.6 112.9 30.4 165.8 21.5 54.8 53.5 104.1 95 146.6 41.5 42.4 90.1 75.5 144.4 98.2 52.5 22 108 33.4 165.1 34h5c55.4 0 109.4-10.2 160.8-30.4 43-16.9 82.6-40.2 118.2-69.5l142.4 134.9c8.1 7.6 18.4 11.4 28.6 11.4 11 0 22.1-4.4 30.3-13 16-16.6 15.2-42.9-1.5-58.8z" fill="#333333"></path></svg>`,
+    board: `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M952.9 617.65H71.1l51.89-240.3h778.02z" fill="#AD8C78"></path><path d="M959.84 623.25H64.16l54.31-251.5h787.06l54.31 251.5z m-881.8-11.21h867.91l-49.47-229.09H127.51L78.04 612.04z" fill="#020202"></path><path d="M71.1 617.65v28.98l881.8-2.45v-26.53z" fill="#AD8C78"></path><path d="M65.5 652.25v-40.21h893v37.73l-893 2.48z m11.2-29v17.76l870.59-2.42v-15.34H76.7z" fill="#020202"></path></svg>`,
+    cup: `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M647.4 764c-7.7 0-14-6.3-14-14V631c0-7.7 6.3-14 14-14s14 6.3 14 14v119c0 7.7-6.3 14-14 14zM647.4 595.4c-7.7 0-14-6.3-14-14v-19.8c0-7.7 6.3-14 14-14s14 6.3 14 14v19.8c0 7.8-6.3 14-14 14z" fill="currentColor"></path><path d="M687.1 883H290.4c-29.6 0-53.7-24.1-53.7-53.7V278.2L168 175.1c-4.5-6.7-4.9-15.3-1.1-22.5 3.8-7.1 11.2-11.6 19.3-11.6h554.5v688.3c0 29.6-24.1 53.7-53.6 53.7zM197.5 169l63.5 95.2c2.4 3.6 3.7 7.8 3.7 12.2v552.9c0 14.2 11.5 25.7 25.7 25.7h396.7c14.2 0 25.7-11.5 25.7-25.7V169H197.5z" fill="currentColor"></path><path d="M726.7 526h-14V141H806c29.6 0 53.7 24.1 53.7 53.7V393c0 73.3-59.6 133-133 133z m14-357v328.1c51.3-6.9 91-50.9 91-104.1V194.7c0-14.2-11.5-25.7-25.7-25.7h-65.3z" fill="currentColor"></path></svg>`,
+    bowl: `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M154 450h716c0 210-160 364-358 364S154 660 154 450z" fill="#d9a067"></path><path d="M132 420h760c0 24-18 44-42 44H174c-24 0-42-20-42-44z" fill="#bf7f43"></path><path d="M228 812h568v50H228z" fill="#b37b47"></path></svg>`
+};
+const kitchenTools = [
+    { id: 'pot', name: '锅' },
+    { id: 'pan', name: '平底锅' },
+    { id: 'board', name: '菜板' },
+    { id: 'cup', name: '水杯' },
+    { id: 'bowl', name: '碗' }
+];
+const kitchenIngredientDB = {
+    veg: ['🥬', '🍅', '🥑', '🥒', '🌽'],
+    fruit: [],
+    drink: ['🥛', '🍵'],
+    staple: ['🍚', '🍞'],
+    meat: ['🥩', '🥓'],
+    condiments: [],
+    others: ['🐟', '🧀', '🧈', '🧊']
+};
+const kitchenIngredientNames = {
+    '🍚': '米饭',
+    '🍞': '面包',
+    '🧀': '芝士',
+    '🥩': '肉',
+    '🥬': '生菜',
+    '🥓': '培根',
+    '🍅': '番茄',
+    '🥑': '牛油果',
+    '🥒': '黄瓜',
+    '🌽': '玉米',
+    '🧈': '黄油',
+    '🥛': '牛奶',
+    '🍵': '茶',
+    '🧊': '冰块',
+    '🐟': '鱼'
+};
+const kitchenRecipeConfigs = [
+    { ingredients: ['🍞', '🧀', '🥩', '🥬'], tool: 'board', resultEmoji: '🍔', resultName: '汉堡' },
+    { ingredients: ['🍞', '🥓', '🥬'], tool: 'board', resultEmoji: '🥪', resultName: '三明治' },
+    { ingredients: ['🥬', '🍅', '🥑', '🥒'], tool: 'bowl', resultEmoji: '🥗', resultName: '沙拉' },
+    { ingredients: ['🍞', '🥩'], tool: 'pan', resultEmoji: '🌭', resultName: '热狗' },
+    { ingredients: ['🌽', '🧈'], tool: 'pan', resultEmoji: '🍿', resultName: '爆米花' },
+    { ingredients: ['🍞', '🧈'], tool: 'pan', resultEmoji: '🥞', resultName: '烙饼' },
+    { ingredients: ['🥛', '🍵', '🧊'], tool: 'cup', resultEmoji: '🧋', resultName: '冰奶茶' },
+    { ingredients: ['🐟', '🍚'], tool: 'board', resultEmoji: '🍣', resultName: '寿司' },
+    { ingredients: ['🍚'], tool: 'board', resultEmoji: '🍙', resultName: '饭团' }
+];
+const kitchenRecipeBook = kitchenRecipeConfigs.reduce((acc, recipe) => {
+    const key = `${recipe.tool}::${[...recipe.ingredients].sort().join('|')}`;
+    acc[key] = { emoji: recipe.resultEmoji, name: recipe.resultName };
+    return acc;
+}, {});
+let kitchenCurrentTab = 'staple';
+let kitchenCurrentTool = 'pot';
+let kitchenPotIngredients = [];
+let kitchenCookTimer = null;
+let kitchenLastCookedDish = null;
+let kitchenGiftTargetId = '';
+
+function getKitchenToolName(toolId) {
+    const tool = kitchenTools.find((item) => item.id === toolId);
+    return tool ? tool.name : '锅';
+}
+
+function renderKitchenCurrentTool() {
+    const toolIcon = document.getElementById('kitchen-current-tool-icon');
+    const toolName = document.getElementById('kitchen-current-tool-name');
+    if (toolIcon) toolIcon.innerHTML = kitchenToolIcons[kitchenCurrentTool] || kitchenToolIcons.pot;
+    if (toolName) toolName.textContent = getKitchenToolName(kitchenCurrentTool);
+}
+
+function renderKitchenToolOptions() {
+    const list = document.getElementById('kitchen-tool-option-list');
+    if (!list) return;
+    list.innerHTML = kitchenTools.map((tool) => (
+        `<button class="kitchen-tool-option ${tool.id === kitchenCurrentTool ? 'active' : ''}" type="button" onclick="selectKitchenTool('${tool.id}')"><span class="kitchen-tool-option-icon">${kitchenToolIcons[tool.id] || ''}</span><span class="kitchen-tool-option-name">${tool.name}</span></button>`
+    )).join('');
+}
+
+function openKitchenToolModal() {
+    const modal = document.getElementById('kitchen-tool-modal');
+    if (!modal) return;
+    renderKitchenToolOptions();
+    modal.classList.add('active');
+}
+
+function closeKitchenToolModal() {
+    const modal = document.getElementById('kitchen-tool-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openKitchenRecipeModal() {
+    const modal = document.getElementById('kitchen-recipe-modal');
+    if (!modal) return;
+    renderKitchenRecipeList();
+    modal.classList.add('active');
+}
+
+function closeKitchenRecipeModal() {
+    const modal = document.getElementById('kitchen-recipe-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function renderKitchenRecipeList() {
+    const list = document.getElementById('kitchen-recipe-list');
+    if (!list) return;
+    list.innerHTML = kitchenRecipeConfigs.map((recipe) => {
+        const ingredientsText = recipe.ingredients
+            .map((emoji) => `${emoji}${kitchenIngredientNames[emoji] || ''}`)
+            .join('＋');
+        const toolText = `（${getKitchenToolName(recipe.tool)}）`;
+        return `<div class="kitchen-recipe-item">${ingredientsText}＋${toolText}＝${recipe.resultEmoji}${recipe.resultName}</div>`;
+    }).join('');
+}
+
+function selectKitchenTool(toolId) {
+    if (!kitchenToolIcons[toolId]) return;
+    kitchenCurrentTool = toolId;
+    renderKitchenCurrentTool();
+    renderKitchenToolOptions();
+    renderKitchenPot();
+    closeKitchenToolModal();
+}
+
+function initKitchenApp() {
+    kitchenCurrentTab = 'staple';
+    kitchenCurrentTool = 'pot';
+    kitchenGiftTargetId = '';
+    kitchenLastCookedDish = null;
+    closeKitchenOverlay();
+    closeKitchenToolModal();
+    closeKitchenRecipeModal();
+    closeKitchenGiftModal();
+    renderKitchenCurrentTool();
+    renderKitchenToolOptions();
+    renderKitchenRecipeList();
+    switchKitchenTab(kitchenCurrentTab);
+    renderKitchenPot();
+}
+
+function switchKitchenTab(category) {
+    kitchenCurrentTab = category;
+    document.querySelectorAll('#app-kitchen .kitchen-tab-btn').forEach((btn) => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`kitchen-tab-${category}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const grid = document.getElementById('kitchen-shelf-grid');
+    if (!grid) return;
+    const ingredients = kitchenIngredientDB[category] || [];
+    if (ingredients.length === 0) {
+        grid.innerHTML = '<div class="kitchen-empty-shelf">这里空空如也</div>';
+        return;
+    }
+
+    grid.innerHTML = ingredients.map((emoji) => (
+        `<button class="kitchen-ing-item" type="button" title="${kitchenIngredientNames[emoji] || '食材'}" onclick="addToKitchenPot('${emoji}')">${emoji}</button>`
+    )).join('');
+}
+
+function addToKitchenPot(emoji) {
+    if (kitchenPotIngredients.length >= 8) {
+        alert('食材已满，先合成再继续添加。');
+        return;
+    }
+    kitchenPotIngredients.push(emoji);
+    renderKitchenPot();
+}
+
+function removeFromKitchenPot(index) {
+    kitchenPotIngredients.splice(index, 1);
+    renderKitchenPot();
+}
+
+function renderKitchenPot() {
+    const display = document.getElementById('kitchen-pot-display');
+    if (!display) return;
+    if (kitchenPotIngredients.length === 0) {
+        display.innerHTML = `<span class="kitchen-pot-placeholder">点击下方食材加入${getKitchenToolName(kitchenCurrentTool)}</span>`;
+        return;
+    }
+
+    display.innerHTML = kitchenPotIngredients.map((emoji, index) => (
+        `<div class="kitchen-pot-item" onclick="removeFromKitchenPot(${index})">${emoji}</div>`
+    )).join('');
+}
+
+function clearKitchenPot() {
+    kitchenPotIngredients = [];
+    renderKitchenPot();
+}
+
+function getKitchenRecipeKey(ingredients, toolId) {
+    return `${toolId}::${[...ingredients].sort().join('|')}`;
+}
+
+function openKitchenGiftModal() {
+    if (!kitchenLastCookedDish) {
+        alert('请先合成成功一道料理，再赠送给 TA。');
+        return;
+    }
+    const modal = document.getElementById('kitchen-gift-modal');
+    if (!modal) return;
+    kitchenGiftTargetId = '';
+    renderKitchenGiftList();
+    modal.classList.add('active');
+}
+
+function closeKitchenGiftModal() {
+    const modal = document.getElementById('kitchen-gift-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function renderKitchenGiftList() {
+    const list = document.getElementById('kitchen-gift-list');
+    if (!list) return;
+    const contacts = DB.getContacts();
+    if (!contacts.length) {
+        list.innerHTML = '<div class="kitchen-gift-empty">通讯录暂无角色</div>';
+        return;
+    }
+
+    const defaultAvatar = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23d4d4d4%22 width=%22100%22 height=%22100%22/></svg>';
+    list.innerHTML = contacts.map((contact) => `
+        <div class="kitchen-gift-item ${String(kitchenGiftTargetId) === String(contact.id) ? 'active' : ''}" onclick="selectKitchenGiftTarget('${String(contact.id)}')">
+            <img class="kitchen-gift-avatar" src="${contact.avatar || defaultAvatar}" alt="${contact.name}">
+            <div class="kitchen-gift-name">${contact.name}</div>
+            <div class="kitchen-gift-check"></div>
+        </div>
+    `).join('');
+}
+
+function selectKitchenGiftTarget(contactId) {
+    kitchenGiftTargetId = String(contactId);
+    renderKitchenGiftList();
+}
+
+function mapKitchenGiftChatMessage(msg) {
+    if (msg.isRetracted) return '[已撤回消息]';
+    if (msg.type === 'food_gift') {
+        if (msg.isDark) return '[用户向你赠送了黑暗料理。请结合人设自然表达惊讶、吐槽或犹豫。]';
+        return `[用户赠送你食物：${msg.foodEmoji || ''}${msg.foodName || '料理'}]`;
+    }
+    if (msg.type === 'image') return `[图片：${msg.imageDesc || '未描述'}]`;
+    if (msg.type === 'video') return `[视频：${msg.videoDesc || '未描述'}]`;
+    if (msg.type === 'voice') return `[语音：${msg.voiceText || msg.content || ''}]`;
+    if (msg.type === 'sticker') return `[图片表情：${msg.stickerDesc || '表情'}]`;
+    if (msg.type === 'html_theater') return '[HTML 小剧场]';
+    return msg.content || '';
+}
+
+function confirmKitchenGift() {
+    if (!kitchenLastCookedDish) {
+        alert('暂无可赠送的食物。');
+        return;
+    }
+    if (!kitchenGiftTargetId) {
+        alert('请选择一位角色。');
+        return;
+    }
+    const contacts = DB.getContacts();
+    const contact = contacts.find((item) => String(item.id) === String(kitchenGiftTargetId));
+    if (!contact) {
+        alert('角色不存在，请重试。');
+        return;
+    }
+
+    const chats = DB.getChats();
+    if (!chats[contact.id]) chats[contact.id] = [];
+    const isDarkDish = kitchenLastCookedDish.isDark === true;
+    const giftText = isDarkDish
+        ? '向你赠送了黑暗料理...'
+        : `向你赠送了${kitchenLastCookedDish.emoji}${kitchenLastCookedDish.name}`;
+    chats[contact.id].push({
+        role: 'user',
+        type: 'food_gift',
+        foodEmoji: kitchenLastCookedDish.emoji,
+        foodName: kitchenLastCookedDish.name,
+        isDark: isDarkDish,
+        content: giftText,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(chats);
+
+    closeKitchenGiftModal();
+    closeKitchenOverlay();
+    openApp('app-vk');
+    openChat(contact);
+}
+
+function startKitchenCooking() {
+    if (kitchenPotIngredients.length === 0) {
+        alert('还没有放入食材，先添加一点吧。');
+        return;
+    }
+
+    const overlay = document.getElementById('kitchen-overlay');
+    const loadingState = document.getElementById('kitchen-loading-state');
+    const resultState = document.getElementById('kitchen-result-state');
+    const resultEmoji = document.getElementById('kitchen-result-emoji');
+    const resultText = document.getElementById('kitchen-result-text');
+    if (!overlay || !loadingState || !resultState || !resultEmoji || !resultText) return;
+
+    if (kitchenCookTimer) {
+        clearTimeout(kitchenCookTimer);
+        kitchenCookTimer = null;
+    }
+
+    closeKitchenToolModal();
+    overlay.classList.add('active');
+    loadingState.style.display = 'block';
+    resultState.style.display = 'none';
+
+    kitchenCookTimer = setTimeout(() => {
+        loadingState.style.display = 'none';
+        resultState.style.display = 'block';
+        const recipeKey = getKitchenRecipeKey(kitchenPotIngredients, kitchenCurrentTool);
+        const matchedRecipe = kitchenRecipeBook[recipeKey];
+
+        if (matchedRecipe) {
+            resultEmoji.textContent = matchedRecipe.emoji;
+            resultText.innerHTML = `已成功制作 <b>${matchedRecipe.name}</b>`;
+            kitchenLastCookedDish = { emoji: matchedRecipe.emoji, name: matchedRecipe.name, isDark: false };
+        } else {
+            resultEmoji.textContent = '🤢';
+            resultText.innerHTML = `当前${getKitchenToolName(kitchenCurrentTool)}不适合这份配方，做成了 <b>黑暗料理</b>...`;
+            kitchenLastCookedDish = { emoji: '🤢', name: '黑暗料理', isDark: true };
+        }
+        kitchenCookTimer = null;
+    }, 2000);
+}
+
+function closeKitchenOverlay() {
+    const overlay = document.getElementById('kitchen-overlay');
+    const loadingState = document.getElementById('kitchen-loading-state');
+    const resultState = document.getElementById('kitchen-result-state');
+    if (overlay) overlay.classList.remove('active');
+    if (loadingState) loadingState.style.display = 'block';
+    if (resultState) resultState.style.display = 'none';
+
+    if (kitchenCookTimer) {
+        clearTimeout(kitchenCookTimer);
+        kitchenCookTimer = null;
+    }
+}
+
+function resetKitchenApp() {
+    closeKitchenOverlay();
+    closeKitchenGiftModal();
+    clearKitchenPot();
+}
+
+function showComingSoonNotice() {
+    const existing = document.getElementById('coming-soon-overlay');
+    if (existing) {
+        existing.remove();
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'coming-soon-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        width: min(88vw, 320px);
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 20px 18px;
+        color: #222;
+        text-align: center;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        line-height: 1.6;
+        font-size: 15px;
+    `;
+
+    const message = document.createElement('div');
+    message.textContent = '该应用制作中，将于一周内上线，敬请期待';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '我知道了';
+    closeBtn.style.cssText = `
+        margin-top: 14px;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        background: #f2f2f2;
+        color: #333;
+        cursor: pointer;
+        font-size: 14px;
+    `;
+    closeBtn.onclick = () => overlay.remove();
+
+    dialog.appendChild(message);
+    dialog.appendChild(closeBtn);
+    dialog.onclick = (e) => e.stopPropagation();
+    overlay.onclick = () => overlay.remove();
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
 }
 
 function goHome() {
     pauseTomatoRuntime();
     pauseSuikaRuntime();
+    pauseTarotRuntime();
+    closeKitchenOverlay();
+    closeKitchenToolModal();
+    closeKitchenRecipeModal();
+    closeKitchenGiftModal();
     screens.forEach(s => s.classList.remove('active'));
     document.getElementById('home-screen').classList.add('active');
     document.getElementById('chat-interface').style.display = 'none';
@@ -223,6 +765,7 @@ function goHome() {
     exitMusicDeleteMode();
     closeMusicPlayer();
     closeSuikaSettings();
+    if (typeof cancelShoppingDeleteMode === 'function') cancelShoppingDeleteMode();
 }
 
 function closeAllOverlays() {
@@ -231,22 +774,62 @@ function closeAllOverlays() {
     document.getElementById('chat-settings-modal').classList.remove('active');
     document.getElementById('wb-create-menu').classList.remove('active');
     document.getElementById('transfer-modal').classList.remove('active');
+    document.getElementById('redpacket-modal')?.classList.remove('active');
+    document.getElementById('image-modal')?.classList.remove('active');
+    document.getElementById('video-modal')?.classList.remove('active');
+    document.getElementById('video-detail-modal')?.classList.remove('active');
+    document.getElementById('voice-modal')?.classList.remove('active');
+    stopVoiceRecognition();
     document.getElementById('thoughts-modal').classList.remove('active');
+    document.getElementById('offline-status-panel')?.classList.remove('active');
     document.getElementById('offline-settings-modal').classList.remove('active');
+    document.getElementById('offline-bagua-modal')?.classList.remove('active');
     document.getElementById('calendar-event-modal').classList.remove('active');
     document.getElementById('offline-edit-modal').classList.remove('active');
+    document.getElementById('memo-transfer-modal')?.classList.remove('active');
     document.getElementById('spy-diary-edit-modal').classList.remove('active');
+    const accountEditor = document.getElementById('user-account-editor-modal');
+    if (accountEditor) accountEditor.classList.remove('active');
+    const widgetModal = document.getElementById('widget-upload-modal');
+    if (widgetModal) widgetModal.classList.remove('active');
+    const walletModal = document.getElementById('wallet-action-modal');
+    if (walletModal) walletModal.classList.remove('active');
+    const accountingBalanceModal = document.getElementById('accounting-balance-modal');
+    if (accountingBalanceModal) accountingBalanceModal.classList.remove('active');
+    const accountingRoleModal = document.getElementById('accounting-role-modal');
+    if (accountingRoleModal) accountingRoleModal.classList.remove('active');
+    if (typeof closeAccountingDetailView === 'function') closeAccountingDetailView();
+    const shoppingEntryModal = document.getElementById('shopping-entry-modal');
+    if (shoppingEntryModal) shoppingEntryModal.classList.remove('active');
+    const shoppingRoleModal = document.getElementById('shopping-role-modal');
+    if (shoppingRoleModal) shoppingRoleModal.classList.remove('active');
+    const shoppingCustomModal = document.getElementById('shopping-custom-modal');
+    if (shoppingCustomModal) shoppingCustomModal.classList.remove('active');
+    const shoppingDetailModal = document.getElementById('shopping-detail-modal');
+    if (shoppingDetailModal) shoppingDetailModal.classList.remove('active');
+    const shoppingCartModal = document.getElementById('shopping-cart-modal');
+    if (shoppingCartModal) shoppingCartModal.classList.remove('active');
+    const shoppingCheckoutView = document.getElementById('shopping-checkout-view');
+    if (shoppingCheckoutView) shoppingCheckoutView.classList.remove('active');
+    const shoppingAgentPayModal = document.getElementById('shopping-agent-pay-modal');
+    if (shoppingAgentPayModal) shoppingAgentPayModal.classList.remove('active');
+    const shoppingGiftModal = document.getElementById('shopping-gift-modal');
+    if (shoppingGiftModal) shoppingGiftModal.classList.remove('active');
+    const shoppingPurchasedView = document.getElementById('shopping-purchased-view');
+    if (shoppingPurchasedView) shoppingPurchasedView.classList.remove('active');
+    closeKitchenToolModal();
+    closeKitchenRecipeModal();
+    closeKitchenGiftModal();
 }
 
 const SHORT_TERM_MEMORY_TTL_MS = 72 * 60 * 60 * 1000;
-const USER_IMPRESSION_KEYS = ['profile', 'personality', 'relationship', 'attitude', 'notes'];
+const USER_IMPRESSION_KEYS = ['profile', 'relationship', 'notes'];
+const AUTO_SUMMARY_LOCKS = {};
 
 function createDefaultUserImpressions() {
     return {
         profile: '',
-        personality: '',
         relationship: '',
-        attitude: '',
         notes: ''
     };
 }
@@ -255,7 +838,6 @@ function createEmptyMemoBucket() {
     return {
         longTermMemories: [],
         shortTermMemories: [],
-        scheduleMemories: [],
         userImpressions: createDefaultUserImpressions()
     };
 }
@@ -316,10 +898,20 @@ function normalizeScheduleItem(item) {
 function normalizeUserImpressions(userImpressions) {
     const base = createDefaultUserImpressions();
     if (!userImpressions || typeof userImpressions !== 'object') return base;
+    const legacyNotes = [];
+    if (typeof userImpressions.personality === 'string' && userImpressions.personality.trim()) {
+        legacyNotes.push(`性格认知：${userImpressions.personality.trim()}`);
+    }
+    if (typeof userImpressions.attitude === 'string' && userImpressions.attitude.trim()) {
+        legacyNotes.push(`我对TA的态度：${userImpressions.attitude.trim()}`);
+    }
     USER_IMPRESSION_KEYS.forEach(key => {
         const value = userImpressions[key];
         base[key] = typeof value === 'string' ? value.trim() : '';
     });
+    if (legacyNotes.length > 0) {
+        base.notes = [base.notes, ...legacyNotes].filter(Boolean).join('\n');
+    }
     return base;
 }
 
@@ -342,9 +934,6 @@ function normalizeContactMemoryBucket(rawBucket) {
     next.shortTermMemories = shortTermRaw
         .map(item => normalizeMemoryItem(item))
         .filter(Boolean);
-    next.scheduleMemories = (Array.isArray(rawBucket.scheduleMemories) ? rawBucket.scheduleMemories : [])
-        .map(item => normalizeScheduleItem(item))
-        .filter(Boolean);
     next.userImpressions = normalizeUserImpressions(rawBucket.userImpressions);
     return next;
 }
@@ -365,6 +954,225 @@ function normalizeMemoriesData(rawMems) {
     return { normalizedMems: normalized, changed };
 }
 
+function createPortableMemoryExportForCurrentContact() {
+    if (!currentMemoContact) return null;
+    const mems = DB.getMemories();
+    const bucket = normalizeContactMemoryBucket(mems[currentMemoContact.id]);
+    const records = [];
+
+    (bucket.longTermMemories || []).forEach((item) => {
+        const content = String(item?.content || '').trim();
+        if (!content) return;
+        records.push({
+            id: `legacy-long-${currentMemoContact.id}-${item.timestamp || Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+            content,
+            embedding: [],
+            room: 'long_term',
+            importance: 8,
+            last_accessed: Number(item.timestamp) || Date.now(),
+            retrieval_count: 0,
+            created_at: Number(item.timestamp) || Date.now(),
+            updated_at: Number(item.timestamp) || Date.now(),
+            source_contact: currentMemoContact.name || '',
+            source_contact_id: currentMemoContact.id || '',
+            impression_section: '',
+            schedule_at: null,
+            expires_at: null,
+            keywords: normalizeKeywords(item.keywords),
+            legacy: {
+                keywords: normalizeKeywords(item.keywords),
+                source: item.source || ''
+            }
+        });
+    });
+
+    (bucket.shortTermMemories || []).forEach((item) => {
+        const content = String(item?.content || '').trim();
+        if (!content) return;
+        const ts = Number(item.timestamp) || Date.now();
+        records.push({
+            id: `legacy-short-${currentMemoContact.id}-${ts}-${Math.random().toString(16).slice(2, 6)}`,
+            content,
+            embedding: [],
+            room: 'short_term',
+            importance: item.isDailySummary ? 7 : 5,
+            last_accessed: ts,
+            retrieval_count: 0,
+            created_at: ts,
+            updated_at: ts,
+            source_contact: currentMemoContact.name || '',
+            source_contact_id: currentMemoContact.id || '',
+            impression_section: '',
+            schedule_at: null,
+            expires_at: ts + SHORT_TERM_MEMORY_TTL_MS,
+            keywords: normalizeKeywords(item.keywords),
+            legacy: {
+                keywords: normalizeKeywords(item.keywords),
+                source: item.source || '',
+                isDailySummary: Boolean(item.isDailySummary)
+            }
+        });
+    });
+
+    USER_IMPRESSION_KEYS.forEach((section) => {
+        const content = String(bucket.userImpressions?.[section] || '').trim();
+        if (!content) return;
+        const nowTs = Date.now();
+        records.push({
+            id: `legacy-impression-${currentMemoContact.id}-${section}`,
+            content,
+            embedding: [],
+            room: 'impression',
+            importance: 8,
+            last_accessed: nowTs,
+            retrieval_count: 0,
+            created_at: nowTs,
+            updated_at: nowTs,
+            source_contact: currentMemoContact.name || '',
+            source_contact_id: currentMemoContact.id || '',
+            impression_section: section,
+            schedule_at: null,
+            expires_at: null,
+            keywords: []
+        });
+    });
+
+    return {
+        version: 'memory-palace-v1',
+        exported_at: Date.now(),
+        profile_snapshot: {
+            partnerName: currentMemoContact.name || '',
+            partnerId: currentMemoContact.id || ''
+        },
+        memories: records
+    };
+}
+
+function triggerImportCurrentMemoMemories() {
+    if (!currentMemoContact) return alert('请先进入某个角色的记忆页');
+    document.getElementById('memo-memory-import-input')?.click();
+}
+
+function exportCurrentMemoMemories() {
+    if (!currentMemoContact) return alert('请先进入某个角色的记忆页');
+    const exportData = createPortableMemoryExportForCurrentContact();
+    if (!exportData) return alert('当前没有可导出的记忆');
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const a = document.createElement('a');
+    a.href = dataStr;
+    const safeName = String(currentMemoContact.name || 'memo').replace(/[\\/:*?"<>|]/g, '_');
+    a.download = `memo_memory_${safeName}_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function replaceCurrentContactMemoriesFromPortableRecords(records) {
+    if (!currentMemoContact) throw new Error('请先进入某个角色的记忆页');
+    const bucket = createEmptyMemoBucket();
+    bucket.userImpressions = createDefaultUserImpressions();
+    let count = 0;
+
+    (Array.isArray(records) ? records : []).forEach((item) => {
+        if (!item || typeof item !== 'object') return;
+        const room = item.room;
+        const content = String(item.content || '').trim();
+        if (!content) return;
+        const ts = Number(item.created_at || item.updated_at || item.last_accessed || item.timestamp) || Date.now();
+
+        if (room === 'long_term') {
+            const normalized = normalizeMemoryItem({
+                content,
+                keywords: item.legacy?.keywords || item.keywords || [],
+                timestamp: ts
+            }, ts);
+            if (normalized) {
+                bucket.longTermMemories.push(normalized);
+                count += 1;
+            }
+            return;
+        }
+
+        if (room === 'short_term') {
+            const normalized = normalizeMemoryItem({
+                content,
+                keywords: item.legacy?.keywords || item.keywords || [],
+                source: item.legacy?.source || item.source || 'import',
+                isDailySummary: Boolean(item.legacy?.isDailySummary || item.isDailySummary),
+                timestamp: ts
+            }, ts);
+            if (normalized) {
+                bucket.shortTermMemories.push(normalized);
+                count += 1;
+            }
+            return;
+        }
+
+        if (room === 'impression') {
+            const section = USER_IMPRESSION_KEYS.includes(item.impression_section) ? item.impression_section : 'profile';
+            bucket.userImpressions[section] = content;
+            count += 1;
+        }
+    });
+
+    const mems = DB.getMemories();
+    mems[currentMemoContact.id] = bucket;
+    DB.saveMemories(mems);
+    return count;
+}
+
+function readJsonFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('文件读取失败'));
+        reader.readAsText(file, 'utf-8');
+    });
+}
+
+async function handleMemoMemoryImport(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    try {
+        const text = await readJsonFile(file);
+        const payload = JSON.parse(text);
+        let importedCount = 0;
+
+        if (Array.isArray(payload?.memories) && payload.version === 'memory-palace-v1') {
+            importedCount = replaceCurrentContactMemoriesFromPortableRecords(payload.memories);
+        } else if (payload?.memories && typeof payload.memories === 'object' && !Array.isArray(payload.memories)) {
+            const normalized = normalizeContactMemoryBucket(payload.memories[currentMemoContact.id] || payload.memories);
+            const mems = DB.getMemories();
+            mems[currentMemoContact.id] = normalized;
+            DB.saveMemories(mems);
+            importedCount =
+                normalized.longTermMemories.length +
+                normalized.shortTermMemories.length +
+                USER_IMPRESSION_KEYS.filter(key => normalized.userImpressions?.[key]).length;
+        } else if (payload && typeof payload === 'object') {
+            const normalized = normalizeContactMemoryBucket(payload);
+            const mems = DB.getMemories();
+            mems[currentMemoContact.id] = normalized;
+            DB.saveMemories(mems);
+            importedCount =
+                normalized.longTermMemories.length +
+                normalized.shortTermMemories.length +
+                USER_IMPRESSION_KEYS.filter(key => normalized.userImpressions?.[key]).length;
+        } else {
+            throw new Error('不支持的记忆文件格式');
+        }
+
+        renderMemoDetailList();
+        closeMemoSettings();
+        alert(`已覆盖当前角色记忆，共导入 ${importedCount} 条记忆/印象`);
+    } catch (error) {
+        alert('导入记忆失败：' + error.message);
+    } finally {
+        const input = document.getElementById('memo-memory-import-input');
+        if (input) input.value = '';
+    }
+}
+
 function runMemoryMaintenance(memoriesMap) {
     let changed = false;
     const nowTs = Date.now();
@@ -376,24 +1184,96 @@ function runMemoryMaintenance(memoriesMap) {
         });
         if (bucket.shortTermMemories.length !== beforeShortLen) changed = true;
 
-        bucket.scheduleMemories.forEach(schedule => {
-            const nextStatus = getScheduleStatus(schedule, nowTs);
-            if (schedule.status !== nextStatus) {
-                schedule.status = nextStatus;
-                changed = true;
-            }
-        });
     });
     return changed;
 }
 
+function createOfflineBuzzwordRule(data = {}) {
+    return {
+        id: data.id || `offline-bagua-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        source: String(data.source || data.word || '').trim(),
+        mode: data.mode === 'replace' ? 'replace' : 'block',
+        replacement: String(data.replacement || data.replaceWith || '').trim()
+    };
+}
+
+const DEFAULT_OFFLINE_BUZZWORD_RULES = Object.freeze([
+    Object.freeze({ source: '极其', mode: 'block', replacement: '' }),
+    Object.freeze({ source: '脊背', mode: 'replace', replacement: '后背' })
+]);
+
+function getDefaultOfflineBuzzwordRules() {
+    return DEFAULT_OFFLINE_BUZZWORD_RULES.map(rule => createOfflineBuzzwordRule(rule));
+}
+
+function normalizeOfflineBuzzwordRules(rules) {
+    if (!Array.isArray(rules)) return [];
+    return rules.map(rule => createOfflineBuzzwordRule(rule)).filter(rule => rule.source);
+}
+
+function getOfflineBuzzwordRules() {
+    const settings = DB.getSettings();
+    return normalizeOfflineBuzzwordRules(settings.offlineBuzzwordRules);
+}
+
+function applyOfflineBuzzwordRulesToText(text, rules = []) {
+    let output = String(text || '');
+    rules.forEach(rule => {
+        if (!rule.source) return;
+        const replacement = rule.mode === 'replace' ? rule.replacement : '';
+        output = output.split(rule.source).join(replacement);
+    });
+    return output
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function applyOfflineBuzzwordRulesToStatus(status, rules = []) {
+    return {
+        mood: applyOfflineBuzzwordRulesToText(status?.mood || '', rules),
+        outfit: applyOfflineBuzzwordRulesToText(status?.outfit || '', rules),
+        action: applyOfflineBuzzwordRulesToText(status?.action || '', rules),
+        inner: applyOfflineBuzzwordRulesToText(status?.inner || '', rules)
+    };
+}
+
+function hasOfflineStatusContent(status) {
+    return Boolean(status && (status.mood || status.outfit || status.action || status.inner));
+}
+
+let offlineBuzzwordRuleDrafts = [];
+
 const DB = {
     getSettings: () => {
         const saved = MEMORY_CACHE['iphone_settings'];
-        const defaultSettings = { url: 'https://api.openai.com/v1', key: '', model: 'gpt-3.5-turbo', prompt: DEFAULT_SYSTEM_PROMPT, fullscreen: false, temperature: 0.7 };
+        const defaultSettings = {
+            url: 'https://api.openai.com/v1',
+            key: '',
+            model: 'gpt-3.5-turbo',
+            prompt: DEFAULT_SYSTEM_PROMPT,
+            fullscreen: true,
+            hideNotch: false,
+            hideStatusInfo: false,
+            temperature: 0.7,
+            keepAliveEnabled: false,
+            notificationPermissionGranted: false,
+            offlineBuzzwordRules: getDefaultOfflineBuzzwordRules(),
+            lockPasscode: DEFAULT_LOCK_PASSCODE,
+            lockPasscodeDisabled: false
+        };
         if (!saved) return defaultSettings;
         if (!saved.prompt || saved.prompt.length < 50) saved.prompt = DEFAULT_SYSTEM_PROMPT;
+        if (saved.fullscreen === undefined) saved.fullscreen = true;
+        if (saved.hideNotch === undefined) saved.hideNotch = false;
+        if (saved.hideStatusInfo === undefined) saved.hideStatusInfo = false;
         if (saved.temperature === undefined) saved.temperature = 0.7;
+        if (saved.keepAliveEnabled === undefined) saved.keepAliveEnabled = false;
+        if (saved.notificationPermissionGranted === undefined) saved.notificationPermissionGranted = false;
+        if (saved.offlineBuzzwordRules === undefined) saved.offlineBuzzwordRules = getDefaultOfflineBuzzwordRules();
+        else saved.offlineBuzzwordRules = normalizeOfflineBuzzwordRules(saved.offlineBuzzwordRules);
+        saved.lockPasscode = normalizeLockPasscode(saved.lockPasscode);
+        if (saved.lockPasscodeDisabled === undefined) saved.lockPasscodeDisabled = false;
         return saved;
     },
     saveSettings: (data) => {
@@ -420,7 +1300,7 @@ const DB = {
         MEMORY_CACHE['iphone_spy_data'] = data;
         saveToIndexedDB('iphone_spy_data', data);
     },
-    getTheme: () => MEMORY_CACHE['iphone_theme'] || { wallpaperType: 'color', wallpaperValue: '#ffffff', caseColor: '#1a1a1a', widgetImage: '', appIcons: {}, customFontUrl: '', fontColor: '#000000' },
+    getTheme: () => MEMORY_CACHE['iphone_theme'] || { wallpaperType: 'color', wallpaperValue: '#f2f4f5', caseColor: '#1a1a1a', widgetImage: '', widgetImages: [], widgetAvatarImage: '', widgetUserTag: '@user', appIcons: {}, customFontUrl: '', fontColor: '#000000', page2Images: {} },
     saveTheme: (data) => {
         MEMORY_CACHE['iphone_theme'] = data;
         saveToIndexedDB('iphone_theme', data);
@@ -470,8 +1350,255 @@ const DB = {
     saveGameData: (data) => {
         MEMORY_CACHE['iphone_game_data'] = data;
         saveToIndexedDB('iphone_game_data', data);
+    },
+    getUserAccounts: () => MEMORY_CACHE['iphone_user_accounts'] || [],
+    saveUserAccounts: (data) => {
+        MEMORY_CACHE['iphone_user_accounts'] = data;
+        saveToIndexedDB('iphone_user_accounts', data);
+    },
+    getWalletData: () => {
+        const saved = MEMORY_CACHE['iphone_wallet_data'];
+        const fallback = { balance: 0, records: [] };
+        if (!saved || typeof saved !== 'object') return fallback;
+        const balance = Number(saved.balance);
+        const records = Array.isArray(saved.records) ? saved.records : [];
+        return {
+            balance: Number.isFinite(balance) ? balance : 0,
+            records
+        };
+    },
+    saveWalletData: (data) => {
+        MEMORY_CACHE['iphone_wallet_data'] = data;
+        saveToIndexedDB('iphone_wallet_data', data);
+    },
+    getShoppingData: () => {
+        const saved = MEMORY_CACHE['iphone_shopping_data'];
+        if (!saved || typeof saved !== 'object') {
+            return { products: [], cart: [], purchasedOrders: [], fabPos: null };
+        }
+        return {
+            products: Array.isArray(saved.products) ? saved.products : [],
+            cart: Array.isArray(saved.cart) ? saved.cart : [],
+            purchasedOrders: Array.isArray(saved.purchasedOrders) ? saved.purchasedOrders : [],
+            fabPos: (saved.fabPos && typeof saved.fabPos === 'object') ? saved.fabPos : null
+        };
+    },
+    saveShoppingData: (data) => {
+        MEMORY_CACHE['iphone_shopping_data'] = data;
+        saveToIndexedDB('iphone_shopping_data', data);
+    },
+    getAccountingData: () => {
+        const saved = MEMORY_CACHE['iphone_accounting_data'];
+        if (!saved || typeof saved !== 'object') {
+            return { selectedRoleIds: [], balance: 0, records: [], messages: [], currentType: 'expense' };
+        }
+        return {
+            selectedRoleIds: Array.isArray(saved.selectedRoleIds) ? saved.selectedRoleIds.map(String) : [],
+            balance: Number.isFinite(Number(saved.balance)) ? Number(saved.balance) : 0,
+            records: Array.isArray(saved.records) ? saved.records : [],
+            messages: Array.isArray(saved.messages) ? saved.messages : [],
+            currentType: saved.currentType === 'income' ? 'income' : 'expense'
+        };
+    },
+    saveAccountingData: (data) => {
+        MEMORY_CACHE['iphone_accounting_data'] = data;
+        saveToIndexedDB('iphone_accounting_data', data);
     }
 };
+
+const DEFAULT_USER_ACCOUNT_PREVIEW_AVATAR = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23eee%22 width=%22100%22 height=%22100%22/></svg>';
+let contactsTabMode = 'add';
+
+function createUserAccountId() {
+    return `ua_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeUserAccount(raw, index = 0) {
+    const persona = typeof raw?.persona === 'string' ? raw.persona.trim() : '';
+    let name = typeof raw?.name === 'string' ? raw.name.trim() : '';
+    if (!persona) name = '我';
+    if (!name) name = '我';
+    return {
+        id: raw?.id || createUserAccountId(),
+        name,
+        persona,
+        avatar: typeof raw?.avatar === 'string' ? raw.avatar : '',
+        createdAt: Number(raw?.createdAt) || (Date.now() + index)
+    };
+}
+
+function getUserAccountById(accountId) {
+    const accounts = DB.getUserAccounts();
+    return accounts.find(a => a.id === accountId) || null;
+}
+
+function getPreferredUserAccount() {
+    const accounts = DB.getUserAccounts();
+    return accounts[0] || null;
+}
+
+function ensureUserAccountsUpgraded() {
+    const settings = DB.getSettings();
+    let accounts = DB.getUserAccounts().map((a, i) => normalizeUserAccount(a, i));
+    let contacts = DB.getContacts();
+    let contactsChanged = false;
+    let accountsChanged = false;
+    let settingsChanged = false;
+
+    if (settings.userAccountsMigratedV2 !== true) {
+        const migratedAccounts = [];
+        const now = Date.now();
+
+        if (contacts.length === 0) {
+            migratedAccounts.push({
+                id: createUserAccountId(),
+                name: '我',
+                persona: '',
+                avatar: '',
+                createdAt: now
+            });
+        } else {
+            contacts = contacts.map((contact, index) => {
+                const us = contact.userSettings || {};
+                const persona = String(us.userPersona || '').trim();
+                const migrated = {
+                    id: createUserAccountId(),
+                    name: persona ? (String(us.userName || '').trim() || '我') : '我',
+                    persona,
+                    avatar: String(us.userAvatar || ''),
+                    createdAt: now + index
+                };
+                migratedAccounts.push(migrated);
+                contactsChanged = true;
+                return {
+                    ...contact,
+                    userAccountId: migrated.id,
+                    userSettings: {
+                        ...us,
+                        userName: migrated.name,
+                        userPersona: migrated.persona,
+                        userAvatar: migrated.avatar
+                    }
+                };
+            });
+        }
+
+        accounts = migratedAccounts;
+        accountsChanged = true;
+        settings.userAccountsMigratedV2 = true;
+        settingsChanged = true;
+    }
+
+    if (accounts.length === 0) {
+        if (contacts.length > 0) {
+            const now = Date.now();
+            accounts = contacts.map((contact, index) => {
+                const us = contact.userSettings || {};
+                const persona = String(us.userPersona || '').trim();
+                return normalizeUserAccount({
+                    id: createUserAccountId(),
+                    name: persona ? (String(us.userName || '').trim() || '我') : '我',
+                    persona,
+                    avatar: String(us.userAvatar || ''),
+                    createdAt: now + index
+                }, index);
+            });
+            contacts = contacts.map((contact, index) => ({
+                ...contact,
+                userAccountId: accounts[index]?.id || ''
+            }));
+            contactsChanged = true;
+        } else {
+            accounts = [{
+                id: createUserAccountId(),
+                name: '我',
+                persona: '',
+                avatar: '',
+                createdAt: Date.now()
+            }];
+        }
+        accountsChanged = true;
+    }
+
+    const validAccountIds = new Set(accounts.map(a => a.id));
+    contacts = contacts.map(contact => {
+        const fallbackAccount = accounts[0];
+        let selectedAccount = null;
+        if (contact.userAccountId && validAccountIds.has(contact.userAccountId)) {
+            selectedAccount = getUserAccountById(contact.userAccountId);
+        }
+        if (!selectedAccount) {
+            selectedAccount = fallbackAccount;
+            contactsChanged = true;
+        }
+        const us = contact.userSettings || {};
+        const nextSettings = {
+            ...us,
+            userName: selectedAccount?.name || '我',
+            userPersona: selectedAccount?.persona || '',
+            userAvatar: selectedAccount?.avatar || ''
+        };
+        if (
+            contact.userAccountId !== selectedAccount?.id ||
+            us.userName !== nextSettings.userName ||
+            us.userPersona !== nextSettings.userPersona ||
+            us.userAvatar !== nextSettings.userAvatar
+        ) {
+            contactsChanged = true;
+            return {
+                ...contact,
+                userAccountId: selectedAccount?.id,
+                userSettings: nextSettings
+            };
+        }
+        return contact;
+    });
+
+    if (accountsChanged) DB.saveUserAccounts(accounts);
+    if (contactsChanged) DB.saveContacts(contacts);
+    if (settingsChanged) DB.saveSettings(settings);
+}
+
+function syncContactsWithUserAccounts() {
+    const accounts = DB.getUserAccounts();
+    const accountMap = new Map(accounts.map(acc => [acc.id, acc]));
+    const fallback = accounts[0];
+    const contacts = DB.getContacts();
+    let changed = false;
+    const next = contacts.map(contact => {
+        const account = accountMap.get(contact.userAccountId) || fallback;
+        if (!account) return contact;
+        const us = contact.userSettings || {};
+        const nextSettings = {
+            ...us,
+            userName: account.name || '我',
+            userPersona: account.persona || '',
+            userAvatar: account.avatar || ''
+        };
+        if (
+            contact.userAccountId !== account.id ||
+            us.userName !== nextSettings.userName ||
+            us.userPersona !== nextSettings.userPersona ||
+            us.userAvatar !== nextSettings.userAvatar
+        ) {
+            changed = true;
+            return {
+                ...contact,
+                userAccountId: account.id,
+                userSettings: nextSettings
+            };
+        }
+        return contact;
+    });
+
+    if (changed) {
+        DB.saveContacts(next);
+        if (currentChatContact) {
+            const refreshed = next.find(c => c.id === currentChatContact.id);
+            if (refreshed) currentChatContact = refreshed;
+        }
+    }
+}
 
 // --- 情侣空间逻辑 ---
 function openCoupleInvite() {
@@ -631,6 +1758,43 @@ function waterTree() {
 
 // --- 表情包功能 ---
 let currentStickerUploadTab = 'single';
+
+function isAiStickerEnabledForContact(contact) {
+    return contact?.userSettings?.enableAiStickers === true;
+}
+
+function syncAiStickerToggleForCurrentChat() {
+    const toggle = document.getElementById('ai-sticker-toggle');
+    if (!toggle) return;
+    toggle.checked = isAiStickerEnabledForContact(currentChatContact);
+}
+
+function persistAiStickerToggleForCurrentChat(enabled) {
+    if (!currentChatContact) return;
+    const contacts = DB.getContacts();
+    const contactIndex = contacts.findIndex(c => c.id === currentChatContact.id);
+    if (contactIndex === -1) return;
+
+    const currentUserSettings = contacts[contactIndex].userSettings || {};
+    contacts[contactIndex] = {
+        ...contacts[contactIndex],
+        userSettings: {
+            ...currentUserSettings,
+            enableAiStickers: enabled === true
+        }
+    };
+    DB.saveContacts(contacts);
+    currentChatContact = contacts[contactIndex];
+}
+
+function initAiStickerToggle() {
+    const toggle = document.getElementById('ai-sticker-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('change', () => {
+        persistAiStickerToggleForCurrentChat(toggle.checked);
+    });
+    syncAiStickerToggleForCurrentChat();
+}
 
 function setChatToolsBarExpanded(expanded) {
     const toolsBar = document.getElementById('chat-tools-bar');
@@ -831,13 +1995,239 @@ function saveBatchStickers() {
     }
 }
 
-function loadSettings() { const s = DB.getSettings(); document.getElementById('api-url').value = s.url; document.getElementById('api-key').value = s.key; document.getElementById('model-name').value = s.model; document.getElementById('system-prompt').value = s.prompt; document.getElementById('fullscreen-toggle').checked = s.fullscreen; const temp = s.temperature || 0.7; document.getElementById('temperature-slider').value = Math.round(temp * 100); document.getElementById('temperature-input').value = temp; applyFullscreen(s.fullscreen); applyTheme(); applyPage2Images(); }
-function saveSettings() { const temperature = parseFloat(document.getElementById('temperature-input').value) || 0.7; DB.saveSettings({ url: document.getElementById('api-url').value, key: document.getElementById('api-key').value, model: document.getElementById('model-name').value, prompt: document.getElementById('system-prompt').value, fullscreen: document.getElementById('fullscreen-toggle').checked, temperature: temperature }); alert('设置已保存'); }
+function normalizeBackgroundIntervalMinutes(value) {
+    const parsed = parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return 60;
+    return parsed;
+}
+
+function loadSettings() {
+    const s = DB.getSettings();
+    document.getElementById('api-url').value = s.url;
+    document.getElementById('api-key').value = s.key;
+    document.getElementById('model-name').value = s.model;
+    document.getElementById('system-prompt').value = s.prompt;
+    document.getElementById('fullscreen-toggle').checked = s.fullscreen;
+    document.getElementById('hide-notch-toggle').checked = s.hideNotch === true;
+    document.getElementById('hide-status-info-toggle').checked = s.hideStatusInfo === true;
+    document.getElementById('keep-alive-toggle').checked = s.keepAliveEnabled === true;
+    const disableLockToggle = document.getElementById('disable-lock-passcode-toggle');
+    const lockPasscodeInput = document.getElementById('lock-passcode-input');
+    if (disableLockToggle) disableLockToggle.checked = s.lockPasscodeDisabled === true;
+    if (lockPasscodeInput) lockPasscodeInput.value = s.lockPasscode || DEFAULT_LOCK_PASSCODE;
+    const temp = s.temperature || 0.7;
+    document.getElementById('temperature-slider').value = Math.round(temp * 100);
+    document.getElementById('temperature-input').value = temp;
+    applyFullscreen(s.fullscreen);
+    applyNotchVisibility(s.hideNotch === true);
+    applyStatusInfoVisibility(s.hideStatusInfo === true);
+    updateNotificationPermissionStatusUI();
+    applyKeepAliveAudioState();
+    syncBackgroundRuntimeByVisibility();
+    applyTheme();
+    applyPage2Images();
+    if (!hasResolvedInitialEntryScreen) {
+        resolveInitialEntryScreen();
+        hasResolvedInitialEntryScreen = true;
+    }
+}
+
+function saveSettings() {
+    const temperature = parseFloat(document.getElementById('temperature-input').value) || 0.7;
+    const current = DB.getSettings();
+    DB.saveSettings({
+        ...current,
+        url: document.getElementById('api-url').value,
+        key: document.getElementById('api-key').value,
+        model: document.getElementById('model-name').value,
+        prompt: document.getElementById('system-prompt').value,
+        fullscreen: document.getElementById('fullscreen-toggle').checked,
+        hideNotch: document.getElementById('hide-notch-toggle').checked,
+        hideStatusInfo: document.getElementById('hide-status-info-toggle').checked,
+        temperature: temperature,
+        keepAliveEnabled: document.getElementById('keep-alive-toggle').checked,
+        notificationPermissionGranted: current.notificationPermissionGranted === true || (typeof Notification !== 'undefined' && Notification.permission === 'granted'),
+        lockPasscode: normalizeLockPasscode(current.lockPasscode),
+        lockPasscodeDisabled: current.lockPasscodeDisabled === true
+    });
+    updateNotificationPermissionStatusUI();
+    applyKeepAliveAudioState();
+    syncBackgroundRuntimeByVisibility();
+    alert('设置已保存');
+}
+
+function updateNotificationPermissionStatusUI() {
+    const statusEl = document.getElementById('notification-permission-status');
+    if (!statusEl) return;
+    const granted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+    statusEl.style.display = granted ? 'block' : 'none';
+}
+
+function applyKeepAliveAudioState() {
+    const audio = document.getElementById('keep-alive-audio');
+    if (!audio) return;
+    audio.src = KEEP_ALIVE_AUDIO_URL;
+    audio.muted = true;
+    audio.volume = 0;
+    const keepAliveEnabled = DB.getSettings().keepAliveEnabled === true;
+    if (!keepAliveEnabled || !document.hidden) {
+        audio.pause();
+        return;
+    }
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+            console.warn('后台保活音频播放被浏览器拦截');
+        });
+    }
+}
+
+async function getNotificationRegistration() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+        let registration = await navigator.serviceWorker.getRegistration();
+        if (!registration) {
+            registration = await navigator.serviceWorker.register('./sw.js');
+        }
+        return registration || null;
+    } catch (error) {
+        console.warn('获取 Service Worker 失败:', error);
+        return null;
+    }
+}
+
+async function sendBrowserNotification(title, body, options = {}) {
+    if (typeof Notification === 'undefined') return false;
+    if (Notification.permission !== 'granted') return false;
+    const requireHidden = options.requireHidden !== false;
+    if (requireHidden && !document.hidden) return false;
+
+    const payload = {
+        body: body || '',
+        tag: options.tag || 'vvphone-chat',
+        renotify: false
+    };
+
+    // 优先使用 Service Worker 发送，兼容不允许 new Notification() 的环境。
+    const registration = await getNotificationRegistration();
+    if (registration && typeof registration.showNotification === 'function') {
+        try {
+            await registration.showNotification(title, payload);
+            return true;
+        } catch (error) {
+            console.warn('Service Worker 通知发送失败:', error);
+        }
+    }
+
+    // 降级到页面 Notification（部分浏览器/PWA 场景可能不允许）。
+    try {
+        new Notification(title, payload);
+        return true;
+    } catch (error) {
+        console.warn('页面 Notification 发送失败:', error);
+        return false;
+    }
+}
+
+async function requestBrowserNotificationPermission() {
+    if (typeof Notification === 'undefined') {
+        alert('当前浏览器不支持通知功能');
+        return;
+    }
+    const result = await Notification.requestPermission();
+    if (result === 'granted') {
+        const s = DB.getSettings();
+        s.notificationPermissionGranted = true;
+        DB.saveSettings(s);
+        updateNotificationPermissionStatusUI();
+        alert('已成功获取通知权限');
+    } else {
+        updateNotificationPermissionStatusUI();
+        alert('通知权限未开启');
+    }
+}
+
+async function testBrowserNotificationStatus() {
+    if (typeof Notification === 'undefined') {
+        alert('当前浏览器不支持通知功能');
+        return;
+    }
+    if (Notification.permission !== 'granted') {
+        alert('请先点击“开启浏览器通知权限”');
+        return;
+    }
+    const sent = await sendBrowserNotification(
+        '测试通知',
+        '这是一条测试通知，看到这条通知说明该功能正常！',
+        { requireHidden: false, tag: 'vvphone-test-notification' }
+    );
+    if (!sent) {
+        alert('测试通知发送失败：当前环境拒绝通知构造，请确认 Service Worker 文件可访问并已激活。');
+    }
+}
+
 function toggleFullscreen() { const isChecked = document.getElementById('fullscreen-toggle').checked; applyFullscreen(isChecked); const s = DB.getSettings(); s.fullscreen = isChecked; DB.saveSettings(s); }
 function applyFullscreen(isFull) { if (isFull) document.body.classList.add('fullscreen-mode'); else document.body.classList.remove('fullscreen-mode'); }
-async function fetchModels(btn) { const url = document.getElementById('api-url').value.replace(/\/$/, ''); const key = document.getElementById('api-key').value; if (!url || !key) return alert("请先填写 API Base URL 和 API Key"); const originalText = btn.innerText; btn.innerText = "加载中..."; btn.disabled = true; try { const res = await fetch(`${url}/models`, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } }); if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`); const data = await res.json(); const models = Array.isArray(data) ? data : (data.data || []); const select = document.getElementById('model-select'); select.innerHTML = '<option value="">-- 请选择模型 --</option>'; models.sort((a, b) => (a.id || a).localeCompare(b.id || b)); models.forEach(m => { const modelId = typeof m === 'string' ? m : m.id; const opt = document.createElement('option'); opt.value = modelId; opt.innerText = modelId; select.appendChild(opt); }); select.style.display = 'block'; btn.innerText = "拉取成功"; setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000); } catch (e) { alert("拉取失败: " + e.message); btn.innerText = originalText; btn.disabled = false; } }
+function toggleNotchVisibility() { const isChecked = document.getElementById('hide-notch-toggle').checked; applyNotchVisibility(isChecked); const s = DB.getSettings(); s.hideNotch = isChecked; DB.saveSettings(s); }
+function applyNotchVisibility(hideNotch) { const notch = document.querySelector('.notch'); if (!notch) return; notch.style.display = hideNotch ? 'none' : ''; }
+function toggleStatusInfoVisibility() { const isChecked = document.getElementById('hide-status-info-toggle').checked; applyStatusInfoVisibility(isChecked); const s = DB.getSettings(); s.hideStatusInfo = isChecked; DB.saveSettings(s); }
+function applyStatusInfoVisibility(hideStatusInfo) { const clock = document.getElementById('clock-time'); const battery = document.getElementById('battery-level'); if (clock) clock.style.display = hideStatusInfo ? 'none' : ''; if (battery) battery.style.display = hideStatusInfo ? 'none' : ''; }
+function normalizeApiBaseUrl(rawUrl) {
+    return String(rawUrl || '')
+        .trim()
+        .replace(/\/+$/, '')
+        .replace(/\/(chat\/completions|models)$/i, '');
+}
+
+function buildApiUrl(rawUrl, endpoint) {
+    const baseUrl = normalizeApiBaseUrl(rawUrl);
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    if (!baseUrl) return cleanEndpoint;
+    if (baseUrl.endsWith(cleanEndpoint)) return baseUrl;
+    return `${baseUrl}${cleanEndpoint}`;
+}
+
+function getChatCompletionsUrl(rawUrl) {
+    return buildApiUrl(rawUrl, '/chat/completions');
+}
+
+function getModelsUrl(rawUrl) {
+    return buildApiUrl(rawUrl, '/models');
+}
+
+async function fetchModels(btn) {
+    const url = normalizeApiBaseUrl(document.getElementById('api-url').value);
+    const key = document.getElementById('api-key').value;
+    if (!url || !key) return alert("请先填写 API Base URL 和 API Key");
+    const originalText = btn.innerText;
+    btn.innerText = "加载中...";
+    btn.disabled = true;
+    try {
+        const res = await fetch(getModelsUrl(url), { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        const models = Array.isArray(data) ? data : (data.data || []);
+        const select = document.getElementById('model-select');
+        select.innerHTML = '<option value="">-- 请选择模型 --</option>';
+        models.sort((a, b) => (a.id || a).localeCompare(b.id || b));
+        models.forEach(m => {
+            const modelId = typeof m === 'string' ? m : m.id;
+            const opt = document.createElement('option');
+            opt.value = modelId;
+            opt.innerText = modelId;
+            select.appendChild(opt);
+        });
+        select.style.display = 'block';
+        btn.innerText = "拉取成功";
+        setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000);
+    } catch (e) {
+        alert("拉取失败: " + e.message);
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
 function selectModel(sel) { if (sel.value) document.getElementById('model-name').value = sel.value; }
-function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), questionBoxData: DB.getQuestionBox(), musicData: DB.getMusicList(), forumData: DB.getForumData(), tomatoData: DB.getTomatoData(), gameData: DB.getGameData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
+function exportBackup() { const backupData = { settings: DB.getSettings(), contacts: DB.getContacts(), chats: DB.getChats(), worldbook: DB.getWorldBook(), spyData: DB.getSpyData(), theme: DB.getTheme(), memories: DB.getMemories(), calendar: DB.getCalendarEvents(), coupleData: DB.getCoupleData(), stickers: DB.getStickers(), questionBoxData: DB.getQuestionBox(), musicData: DB.getMusicList(), forumData: DB.getForumData(), tomatoData: DB.getTomatoData(), gameData: DB.getGameData(), userAccounts: DB.getUserAccounts(), walletData: DB.getWalletData(), timestamp: Date.now() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData)); const a = document.createElement('a'); a.href = dataStr; a.download = "iphone_sim_backup_" + new Date().toISOString().slice(0,10) + ".json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importBackupDataToDB(data) {
     if (data.settings) DB.saveSettings(data.settings);
     if (data.contacts) DB.saveContacts(data.contacts);
@@ -857,6 +2247,8 @@ function importBackupDataToDB(data) {
 
     if (data.tomatoData) DB.saveTomatoData(data.tomatoData);
     if (data.gameData) DB.saveGameData(data.gameData);
+    if (data.userAccounts) DB.saveUserAccounts(data.userAccounts);
+    if (data.walletData) DB.saveWalletData(data.walletData);
 }
 function importBackup(input) { 
     const file = input.files[0]; 
@@ -918,7 +2310,9 @@ function handleQuotaExceeded(data, dataSizeMB) {
         musicData: JSON.stringify(data.musicData || []).length,
         forumData: JSON.stringify(data.forumData || {}).length,
         tomatoData: JSON.stringify(data.tomatoData || {}).length,
-        gameData: JSON.stringify(data.gameData || {}).length
+        gameData: JSON.stringify(data.gameData || {}).length,
+        userAccounts: JSON.stringify(data.userAccounts || []).length,
+        walletData: JSON.stringify(data.walletData || {}).length
     };
     
     const sortedSizes = Object.entries(sizes)
@@ -962,7 +2356,9 @@ function openSelectiveImport(data) {
         musicData: { size: JSON.stringify(data.musicData || []).length, label: '音乐' },
         forumData: { size: JSON.stringify(data.forumData || {}).length, label: '论坛' },
         tomatoData: { size: JSON.stringify(data.tomatoData || {}).length, label: '番茄钟' },
-        gameData: { size: JSON.stringify(data.gameData || {}).length, label: '游戏' }
+        gameData: { size: JSON.stringify(data.gameData || {}).length, label: '游戏' },
+        userAccounts: { size: JSON.stringify(data.userAccounts || []).length, label: '我的账号' },
+        walletData: { size: JSON.stringify(data.walletData || {}).length, label: '钱包' }
     };
     
     let message = "📦 选择性导入\n\n请选择要导入的数据（输入序号，用逗号分隔）：\n\n";
@@ -1002,6 +2398,8 @@ function openSelectiveImport(data) {
                 case 'forumData': if (data.forumData) DB.saveForumData(data.forumData); break;
                 case 'tomatoData': if (data.tomatoData) DB.saveTomatoData(data.tomatoData); break;
                 case 'gameData': if (data.gameData) DB.saveGameData(data.gameData); break;
+                case 'userAccounts': if (data.userAccounts) DB.saveUserAccounts(data.userAccounts); break;
+                case 'walletData': if (data.walletData) DB.saveWalletData(data.walletData); break;
             }
         });
         
@@ -1015,19 +2413,172 @@ function openSelectiveImport(data) {
         }
     }
 }
+var widgetSlideTimer = null;
+var widgetSlideImages = [];
+var widgetSlideIndex = 0;
+var widgetModalDraftImages = Array(5).fill('');
 loadSettings();
 let currentThemeType = 'color';
-function renderThemeSettings() { const theme = DB.getTheme(); currentThemeType = theme.wallpaperType; switchThemeType(currentThemeType); if (theme.wallpaperType === 'color') document.getElementById('theme-wallpaper-color').value = theme.wallpaperValue; document.getElementById('theme-case-color').value = theme.caseColor; document.getElementById('theme-font-url').value = theme.customFontUrl || ''; document.getElementById('theme-font-color').value = theme.fontColor || '#000000'; }
+function getDesktopIconIds() {
+    return [
+        'icon-app-vk', 'icon-app-contacts', 'icon-app-memos', 'icon-app-calendar', 'icon-app-worldbook', 'icon-app-spy-list', 'icon-app-theme', 'icon-app-settings',
+        'icon-app-couple', 'icon-app-tomato', 'icon-app-music', 'icon-app-forum', 'icon-app-shopping', 'icon-app-game', 'icon-app-accounting', 'icon-app-wallet',
+        'icon-bottom-question-box', 'icon-bottom-kitchen', 'icon-bottom-tarot'
+    ];
+}
+
+function normalizeWidgetSlides(theme) {
+    const list = Array.isArray(theme.widgetImages) ? theme.widgetImages : (theme.widgetImage ? [theme.widgetImage] : []);
+    return list.map(v => String(v || '').trim()).filter(Boolean).slice(0, 5);
+}
+
+function stopWidgetSlideshow() {
+    if (widgetSlideTimer) {
+        clearInterval(widgetSlideTimer);
+        widgetSlideTimer = null;
+    }
+}
+
+function setWidgetSlideByIndex(index, useFade = false) {
+    const widgetImg = document.getElementById('home-widget-img');
+    if (!widgetImg || widgetSlideImages.length === 0) return;
+    const safeIndex = ((index % widgetSlideImages.length) + widgetSlideImages.length) % widgetSlideImages.length;
+    widgetSlideIndex = safeIndex;
+    const nextSrc = widgetSlideImages[safeIndex];
+    if (!useFade) {
+        widgetImg.src = nextSrc;
+        widgetImg.classList.remove('fading');
+        return;
+    }
+    widgetImg.classList.add('fading');
+    setTimeout(() => {
+        widgetImg.src = nextSrc;
+        widgetImg.classList.remove('fading');
+    }, 280);
+}
+
+function startWidgetSlideshowIfNeeded() {
+    stopWidgetSlideshow();
+    if (widgetSlideImages.length < 2) return;
+    widgetSlideTimer = setInterval(() => {
+        setWidgetSlideByIndex(widgetSlideIndex + 1, true);
+    }, 5000);
+}
+function renderThemeSettings() { const theme = DB.getTheme(); const settings = DB.getSettings(); currentThemeType = theme.wallpaperType; switchThemeType(currentThemeType); if (theme.wallpaperType === 'color') document.getElementById('theme-wallpaper-color').value = theme.wallpaperValue; document.getElementById('theme-case-color').value = theme.caseColor; document.getElementById('theme-font-url').value = theme.customFontUrl || ''; document.getElementById('theme-font-color').value = theme.fontColor || '#000000'; document.getElementById('disable-lock-passcode-toggle').checked = settings.lockPasscodeDisabled === true; document.getElementById('lock-passcode-input').value = settings.lockPasscode || DEFAULT_LOCK_PASSCODE; }
 function switchThemeType(type) { currentThemeType = type; document.getElementById('theme-type-color').classList.toggle('active', type === 'color'); document.getElementById('theme-type-image').classList.toggle('active', type === 'image'); document.getElementById('theme-input-color').style.display = type === 'color' ? 'block' : 'none'; document.getElementById('theme-input-image').style.display = type === 'image' ? 'block' : 'none'; }
 function saveTheme() { const caseColor = document.getElementById('theme-case-color').value; const currentTheme = DB.getTheme(); const processSave = (val) => { currentTheme.wallpaperType = currentThemeType; currentTheme.wallpaperValue = val; currentTheme.caseColor = caseColor; DB.saveTheme(currentTheme); applyTheme(); alert('主题已应用'); }; if (currentThemeType === 'color') { processSave(document.getElementById('theme-wallpaper-color').value); } else { const urlInput = document.getElementById('theme-wallpaper-url').value; const fileInput = document.getElementById('theme-wallpaper-image'); if (urlInput) processSave(urlInput); else if (fileInput.files && fileInput.files[0]) { const r = new FileReader(); r.onload = (e) => processSave(e.target.result); r.readAsDataURL(fileInput.files[0]); } else { if (currentTheme.wallpaperType === 'image') processSave(currentTheme.wallpaperValue); else alert('请选择图片'); } } }
-function getAppLabelName(appId) { const names = { 'icon-app-vk': 'Vkontakte', 'icon-app-contacts': '通讯录', 'icon-app-memos': '备忘录', 'icon-app-calendar': '日历', 'icon-app-worldbook': '世界书', 'icon-app-spy-list': '查岗', 'icon-app-theme': '美化', 'icon-app-settings': '设置', 'icon-app-couple': '情侣空间', 'icon-app-tomato': '番茄钟', 'icon-app-music': '音乐', 'icon-app-forum': '论坛', 'icon-app-shopping': '购物', 'icon-app-game': '游戏', 'icon-app-accounting': '记账', 'icon-app-wallet': '钱包', 'spy-icon-browser': '浏览器', 'spy-icon-diary': '日记' }; return names[appId] || 'App'; }
-function applyTheme() { const theme = DB.getTheme(); document.documentElement.style.setProperty('--case-color', theme.caseColor); document.documentElement.style.setProperty('--wallpaper', theme.wallpaperType === 'color' ? theme.wallpaperValue : `url(${theme.wallpaperValue})`); document.documentElement.style.setProperty('--global-text-color', theme.fontColor || '#000000'); const widget = document.getElementById('home-widget'); const widgetImg = document.getElementById('home-widget-img'); if (theme.widgetImage) { widgetImg.src = theme.widgetImage; widget.classList.add('has-image'); } else { widget.classList.remove('has-image'); } if (theme.appIcons) { for (const [id, iconUrl] of Object.entries(theme.appIcons)) { const el = document.getElementById(id); if (el && iconUrl) { el.style.background = 'none'; el.style.backgroundColor = 'transparent'; el.style.backgroundImage = `url(${iconUrl})`; el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center'; el.innerHTML = `<div class="app-label">${getAppLabelName(id)}</div>`; } } } const fontStyle = document.getElementById('custom-font-style'); if (theme.customFontUrl) { fontStyle.innerHTML = ` @font-face { font-family: 'UserCustomFont'; src: url('${theme.customFontUrl}'); font-display: swap; } body, input, textarea, button, select { font-family: 'UserCustomFont', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; } `; } else { fontStyle.innerHTML = ''; } }
+function toggleLockPasscodeDisabled() {
+    const settings = DB.getSettings();
+    settings.lockPasscodeDisabled = document.getElementById('disable-lock-passcode-toggle').checked === true;
+    DB.saveSettings(settings);
+    if (settings.lockPasscodeDisabled) {
+        alert('已关闭开屏密码，重新进入网页时将直接进入主页');
+    } else {
+        alert('已开启开屏密码，重新进入网页时需要输入密码');
+    }
+}
+function saveLockPasscode() {
+    const input = document.getElementById('lock-passcode-input');
+    const passcode = String(input?.value || '').replace(/\D/g, '');
+    if (!/^\d{4}$/.test(passcode)) {
+        alert('开屏密码必须是4位数字');
+        if (input) input.focus();
+        return;
+    }
+    const settings = DB.getSettings();
+    settings.lockPasscode = passcode;
+    DB.saveSettings(settings);
+    if (input) input.value = passcode;
+    resetLockPasscodeEntry();
+    alert('开屏密码已更新');
+}
+function captureDesktopIconDefaults() {
+    getDesktopIconIds().forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!el.dataset.defaultDesktopIconHtml) {
+            el.dataset.defaultDesktopIconHtml = el.innerHTML;
+            el.dataset.defaultDesktopIconStyle = el.getAttribute('style') || '';
+        }
+    });
+}
+function resetDesktopIconsToDefault() {
+    captureDesktopIconDefaults();
+    getDesktopIconIds().forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const defaultHtml = el.dataset.defaultDesktopIconHtml;
+        if (defaultHtml !== undefined) el.innerHTML = defaultHtml;
+        const defaultStyle = el.dataset.defaultDesktopIconStyle || '';
+        if (defaultStyle) el.setAttribute('style', defaultStyle);
+        else el.removeAttribute('style');
+    });
+}
+function getAppLabelName(appId) { const names = { 'icon-app-vk': 'Vkontakte', 'icon-app-contacts': '通讯录', 'icon-app-memos': '备忘录', 'icon-app-calendar': '日历', 'icon-app-worldbook': '世界书', 'icon-app-spy-list': '查岗', 'icon-app-theme': '美化', 'icon-app-settings': '设置', 'icon-app-couple': '情侣空间', 'icon-app-tomato': '番茄钟', 'icon-app-music': '音乐', 'icon-app-forum': '论坛', 'icon-app-shopping': '购物', 'icon-app-game': '游戏', 'icon-app-accounting': '记账', 'icon-app-wallet': '钱包', 'icon-bottom-question-box': '提问箱', 'icon-bottom-kitchen': '小厨房', 'icon-bottom-tarot': '塔罗牌', 'spy-icon-browser': '浏览器', 'spy-icon-diary': '日记' }; return names[appId] || 'App'; }
+function applyTheme() {
+    const theme = DB.getTheme();
+    document.documentElement.style.setProperty('--case-color', theme.caseColor);
+    document.documentElement.style.setProperty('--wallpaper', theme.wallpaperType === 'color' ? theme.wallpaperValue : `url(${theme.wallpaperValue})`);
+    document.documentElement.style.setProperty('--desktop-text-color', theme.fontColor || '#000000');
+
+    const widget = document.getElementById('home-widget');
+    widgetSlideImages = normalizeWidgetSlides(theme);
+    if (widgetSlideImages.length > 0) {
+        widget.classList.add('has-image');
+        setWidgetSlideByIndex(0, false);
+        startWidgetSlideshowIfNeeded();
+    } else {
+        widget.classList.remove('has-image');
+        stopWidgetSlideshow();
+    }
+
+    const avatar = document.getElementById('home-widget-avatar');
+    const avatarImg = document.getElementById('home-widget-avatar-img');
+    if (theme.widgetAvatarImage) {
+        avatarImg.src = theme.widgetAvatarImage;
+        avatar.classList.add('has-image');
+    } else {
+        avatar.classList.remove('has-image');
+    }
+
+    const widgetUserTag = document.getElementById('home-widget-user-tag');
+    if (widgetUserTag) {
+        widgetUserTag.textContent = (theme.widgetUserTag || '@user').trim() || '@user';
+    }
+
+    resetDesktopIconsToDefault();
+    if (theme.appIcons) {
+        for (const [id, iconUrl] of Object.entries(theme.appIcons)) {
+            const el = document.getElementById(id);
+            if (el && iconUrl) {
+                el.style.background = 'none';
+                el.style.backgroundColor = 'transparent';
+                el.style.backgroundImage = `url(${iconUrl})`;
+                el.style.backgroundSize = 'cover';
+                el.style.backgroundPosition = 'center';
+                if (el.classList.contains('bottom-app-icon')) {
+                    const defaultSvg = el.querySelector('.bottom-app-icon-svg');
+                    if (defaultSvg) defaultSvg.style.display = 'none';
+                } else {
+                    el.innerHTML = `<div class="app-label">${getAppLabelName(id)}</div>`;
+                }
+            }
+        }
+    }
+
+    const fontStyle = document.getElementById('custom-font-style');
+    if (theme.customFontUrl) {
+        fontStyle.innerHTML = ` @font-face { font-family: 'UserCustomFont'; src: url('${theme.customFontUrl}'); font-display: swap; } body, input, textarea, button, select { font-family: 'UserCustomFont', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; } `;
+    } else {
+        fontStyle.innerHTML = '';
+    }
+}
 function saveFont() { const url = document.getElementById('theme-font-url').value; const theme = DB.getTheme(); theme.customFontUrl = url; DB.saveTheme(theme); applyTheme(); alert('字体已更新'); }
 function resetFont() { const theme = DB.getTheme(); theme.customFontUrl = ''; DB.saveTheme(theme); applyTheme(); document.getElementById('theme-font-url').value = ''; alert('已恢复默认字体'); }
-function saveFontColor() { const color = document.getElementById('theme-font-color').value; const theme = DB.getTheme(); theme.fontColor = color; DB.saveTheme(theme); applyTheme(); alert('字体颜色已更新'); }
+function saveFontColor() { const color = document.getElementById('theme-font-color').value; const theme = DB.getTheme(); theme.fontColor = color; DB.saveTheme(theme); applyTheme(); alert('桌面字体颜色已更新'); }
 function resetAllThemes() {
     if (!confirm("确定要清空所有美化设置吗？\n这将重置壁纸、图标、字体、颜色以及所有联系人的聊天背景和气泡设置。")) return;
-    const defaultTheme = { wallpaperType: 'color', wallpaperValue: '#ffffff', caseColor: '#1a1a1a', widgetImage: '', appIcons: {}, customFontUrl: '', fontColor: '#000000' };
+    const defaultTheme = { wallpaperType: 'color', wallpaperValue: '#f2f4f5', caseColor: '#1a1a1a', widgetImage: '', widgetImages: [], widgetAvatarImage: '', widgetUserTag: '@user', appIcons: {}, customFontUrl: '', fontColor: '#000000', page2Images: {} };
     DB.saveTheme(defaultTheme);
     
     let contacts = DB.getContacts();
@@ -1041,9 +2592,78 @@ function resetAllThemes() {
     renderThemeSettings();
     alert("所有美化已重置！");
 }
-function triggerWidgetUpload() { const url = prompt("请输入图片 URL (或点击取消以上传文件)"); if (url) saveWidgetImage(url); else document.getElementById('widget-file-input').click(); }
-function uploadWidgetImage(input) { if (input.files && input.files[0]) { const reader = new FileReader(); reader.onload = (e) => saveWidgetImage(e.target.result); reader.readAsDataURL(input.files[0]); } }
-function saveWidgetImage(imgData) { const theme = DB.getTheme(); theme.widgetImage = imgData; DB.saveTheme(theme); applyTheme(); }
+function triggerWidgetUpload() { openWidgetUploadModal(); }
+function openWidgetUploadModal() {
+    const theme = DB.getTheme();
+    const slides = normalizeWidgetSlides(theme);
+    widgetModalDraftImages = Array(5).fill('').map((_, idx) => slides[idx] || '');
+
+    for (let i = 0; i < 5; i++) {
+        const urlInput = document.getElementById(`widget-slot-url-${i}`);
+        const fileInput = document.getElementById(`widget-slot-file-${i}`);
+        if (urlInput) urlInput.value = '';
+        if (fileInput) fileInput.value = '';
+        renderWidgetSlotPreview(i);
+    }
+
+    document.getElementById('widget-upload-modal').classList.add('active');
+}
+function closeWidgetUploadModal() {
+    const modal = document.getElementById('widget-upload-modal');
+    if (modal) modal.classList.remove('active');
+}
+function triggerWidgetSlotFile(index) {
+    const input = document.getElementById(`widget-slot-file-${index}`);
+    if (input) input.click();
+}
+function uploadWidgetSlotFile(input, index) {
+    if (!(input.files && input.files[0])) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        widgetModalDraftImages[index] = e.target.result;
+        const urlInput = document.getElementById(`widget-slot-url-${index}`);
+        if (urlInput) urlInput.value = '';
+        renderWidgetSlotPreview(index);
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+function setWidgetSlotUrl(index, value) {
+    const url = String(value || '').trim();
+    widgetModalDraftImages[index] = url;
+    renderWidgetSlotPreview(index);
+}
+function clearWidgetSlot(index) {
+    widgetModalDraftImages[index] = '';
+    const urlInput = document.getElementById(`widget-slot-url-${index}`);
+    const fileInput = document.getElementById(`widget-slot-file-${index}`);
+    if (urlInput) urlInput.value = '';
+    if (fileInput) fileInput.value = '';
+    renderWidgetSlotPreview(index);
+}
+function renderWidgetSlotPreview(index) {
+    const preview = document.getElementById(`widget-slot-preview-${index}`);
+    if (!preview) return;
+    const imgData = widgetModalDraftImages[index];
+    if (imgData) {
+        preview.innerHTML = `<img src="${imgData}" alt="预览图 ${index + 1}">`;
+    } else {
+        preview.innerHTML = '<span>未设置</span>';
+    }
+}
+function saveWidgetSlides() {
+    const slides = widgetModalDraftImages.map(v => String(v || '').trim()).filter(Boolean).slice(0, 5);
+    const theme = DB.getTheme();
+    theme.widgetImages = slides;
+    theme.widgetImage = slides[0] || '';
+    DB.saveTheme(theme);
+    applyTheme();
+    closeWidgetUploadModal();
+}
+function triggerWidgetAvatarUpload(event) { if (event) event.stopPropagation(); document.getElementById('widget-avatar-file-input').click(); }
+function uploadWidgetAvatar(input) { if (input.files && input.files[0]) { const reader = new FileReader(); reader.onload = (e) => saveWidgetAvatarImage(e.target.result); reader.readAsDataURL(input.files[0]); } }
+function saveWidgetAvatarImage(imgData) { const theme = DB.getTheme(); theme.widgetAvatarImage = imgData; DB.saveTheme(theme); applyTheme(); }
+function saveWidgetUserTag() { const tagEl = document.getElementById('home-widget-user-tag'); if (!tagEl) return; const cleanTag = (tagEl.textContent || '').replace(/\s+/g, ' ').trim() || '@user'; tagEl.textContent = cleanTag; const theme = DB.getTheme(); theme.widgetUserTag = cleanTag; DB.saveTheme(theme); }
+function handleWidgetUserTagKeydown(event) { if (event.key === 'Enter') { event.preventDefault(); event.target.blur(); } event.stopPropagation(); }
 
 function saveAppIcon() { 
     const appId = document.getElementById('theme-app-select').value; 
@@ -1130,11 +2750,37 @@ function savePage2WidgetImage(imgData) {
 
 function applyPage2Images() {
     const theme = DB.getTheme();
-    
+
+    const widget = document.getElementById('page2-widget-square');
+    const widgetImg = document.getElementById('page2-widget-img');
+    if (widget && widgetImg) {
+        widget.classList.remove('has-image');
+        widgetImg.removeAttribute('src');
+    }
+
+    const leftCircle = document.getElementById('circle-left');
+    const leftCircleImg = document.getElementById('circle-left-img');
+    if (leftCircle && leftCircleImg) {
+        leftCircle.classList.remove('has-image');
+        leftCircleImg.removeAttribute('src');
+    }
+
+    const rightCircle = document.getElementById('circle-right');
+    const rightCircleImg = document.getElementById('circle-right-img');
+    if (rightCircle && rightCircleImg) {
+        rightCircle.classList.remove('has-image');
+        rightCircleImg.removeAttribute('src');
+    }
+
+    const rect = document.getElementById('rectangle-bottom');
+    const rectImg = document.getElementById('rectangle-img');
+    if (rect && rectImg) {
+        rect.classList.remove('has-image');
+        rectImg.removeAttribute('src');
+    }
+
     // 应用方块小组件图片
     if (theme.page2Images?.widget) {
-        const widget = document.getElementById('page2-widget-square');
-        const widgetImg = document.getElementById('page2-widget-img');
         if (widget && widgetImg) {
             widgetImg.src = theme.page2Images.widget;
             widget.classList.add('has-image');
@@ -1143,28 +2789,22 @@ function applyPage2Images() {
 
     // 应用新设计元素的图片
     if (theme.page2Images?.circleLeft) {
-        const circle = document.getElementById('circle-left');
-        const img = document.getElementById('circle-left-img');
-        if (circle && img) {
-            img.src = theme.page2Images.circleLeft;
-            circle.classList.add('has-image');
+        if (leftCircle && leftCircleImg) {
+            leftCircleImg.src = theme.page2Images.circleLeft;
+            leftCircle.classList.add('has-image');
         }
     }
 
     if (theme.page2Images?.circleRight) {
-        const circle = document.getElementById('circle-right');
-        const img = document.getElementById('circle-right-img');
-        if (circle && img) {
-            img.src = theme.page2Images.circleRight;
-            circle.classList.add('has-image');
+        if (rightCircle && rightCircleImg) {
+            rightCircleImg.src = theme.page2Images.circleRight;
+            rightCircle.classList.add('has-image');
         }
     }
 
     if (theme.page2Images?.rectangle) {
-        const rect = document.getElementById('rectangle-bottom');
-        const img = document.getElementById('rectangle-img');
-        if (rect && img) {
-            img.src = theme.page2Images.rectangle;
+        if (rect && rectImg) {
+            rectImg.src = theme.page2Images.rectangle;
             rect.classList.add('has-image');
         }
     }
@@ -1228,14 +2868,16 @@ function saveRectangleImage(imgData) {
 
 function exportThemePreset() {
     const globalTheme = DB.getTheme();
-    const contacts = DB.getContacts();
-    let chatTemplate = {};
-    let offlineTemplate = {};
-    if (contacts.length > 0) {
-        chatTemplate = contacts[0].chatTheme || {};
-        offlineTemplate = contacts[0].offlineSettings || {};
-    }
-    const presetData = { global: globalTheme, chatTemplate: chatTemplate, offlineTemplate: offlineTemplate, timestamp: Date.now() };
+    const presetData = {
+        global: {
+            wallpaperType: globalTheme.wallpaperType || 'color',
+            wallpaperValue: globalTheme.wallpaperValue || '#f2f4f5',
+            appIcons: globalTheme.appIcons || {},
+            fontColor: globalTheme.fontColor || '#000000',
+            customFontUrl: globalTheme.customFontUrl || ''
+        },
+        timestamp: Date.now()
+    };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(presetData));
     const a = document.createElement('a');
     a.href = dataStr;
@@ -1252,19 +2894,19 @@ function importThemePreset(input) {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            if (data.global) { DB.saveTheme(data.global); applyTheme(); }
-            if (data.chatTemplate || data.offlineTemplate) {
-                if (confirm("预设包含聊天界面和线下模式的美化设置。\n是否将其应用到【所有】联系人？")) {
-                    let contacts = DB.getContacts();
-                    contacts.forEach(c => {
-                        if (data.chatTemplate) c.chatTheme = JSON.parse(JSON.stringify(data.chatTemplate));
-                        if (data.offlineTemplate) {
-                            const oldSettings = c.offlineSettings || { min: 500, max: 700, style: '' };
-                            c.offlineSettings = { ...oldSettings, bg: data.offlineTemplate.bg };
-                        }
-                    });
-                    DB.saveContacts(contacts);
-                }
+            if (data.global) {
+                const currentTheme = DB.getTheme();
+                const imported = data.global;
+                const nextTheme = {
+                    ...currentTheme,
+                    wallpaperType: imported.wallpaperType || currentTheme.wallpaperType || 'color',
+                    wallpaperValue: imported.wallpaperValue || currentTheme.wallpaperValue || '#f2f4f5',
+                    appIcons: imported.appIcons && typeof imported.appIcons === 'object' ? imported.appIcons : (currentTheme.appIcons || {}),
+                    fontColor: imported.fontColor || currentTheme.fontColor || '#000000',
+                    customFontUrl: Object.prototype.hasOwnProperty.call(imported, 'customFontUrl') ? imported.customFontUrl : (currentTheme.customFontUrl || '')
+                };
+                DB.saveTheme(nextTheme);
+                applyTheme();
             }
             alert("美化预设导入成功！");
             renderThemeSettings();
@@ -1410,11 +3052,236 @@ function addCalendarEvent(type) {
     renderCalendarEventList(); 
 }
 function deleteCalendarEvent(index) { if (!confirm("确定删除此事件？")) return; const allEvents = DB.getCalendarEvents(); allEvents[selectedCalDateStr].splice(index, 1); if (allEvents[selectedCalDateStr].length === 0) delete allEvents[selectedCalDateStr]; DB.saveCalendarEvents(allEvents); renderCalendarEventList(); }
-function openContactForm(contactId = null) { const form = document.getElementById('add-contact-area'); form.classList.add('active'); document.getElementById('contact-avatar-input').value = ''; document.getElementById('contact-avatar-url').value = ''; if (contactId) { const c = DB.getContacts().find(c => c.id === contactId); if (c) { document.getElementById('contact-form-title').innerText = "编辑联系人"; document.getElementById('contact-id-hidden').value = c.id; document.getElementById('contact-name-input').value = c.name; document.getElementById('contact-persona-input').value = c.persona; if (c.avatar && c.avatar.startsWith('http')) document.getElementById('contact-avatar-url').value = c.avatar; } } else { document.getElementById('contact-form-title').innerText = "添加联系人"; document.getElementById('contact-id-hidden').value = ''; document.getElementById('contact-name-input').value = ''; document.getElementById('contact-persona-input').value = ''; } }
+function switchContactsTab(tab) {
+    contactsTabMode = tab === 'account' ? 'account' : 'add';
+    const addView = document.getElementById('contacts-add-view');
+    const accountView = document.getElementById('contacts-account-view');
+    const addBtn = document.getElementById('contacts-tab-add');
+    const accountBtn = document.getElementById('contacts-tab-account');
+    if (addView) addView.style.display = contactsTabMode === 'add' ? 'block' : 'none';
+    if (accountView) accountView.style.display = contactsTabMode === 'account' ? 'block' : 'none';
+    if (addBtn) addBtn.classList.toggle('active', contactsTabMode === 'add');
+    if (accountBtn) accountBtn.classList.toggle('active', contactsTabMode === 'account');
+}
+
+function openContactForm(contactId = null) {
+    switchContactsTab('add');
+    const form = document.getElementById('add-contact-area');
+    form.classList.add('active');
+    document.getElementById('contact-avatar-input').value = '';
+    document.getElementById('contact-avatar-url').value = '';
+    if (contactId) {
+        const c = DB.getContacts().find(c => c.id === contactId);
+        if (c) {
+            document.getElementById('contact-form-title').innerText = "编辑联系人";
+            document.getElementById('contact-id-hidden').value = c.id;
+            document.getElementById('contact-name-input').value = c.name;
+            document.getElementById('contact-persona-input').value = c.persona;
+            if (c.avatar && c.avatar.startsWith('http')) document.getElementById('contact-avatar-url').value = c.avatar;
+        }
+    } else {
+        document.getElementById('contact-form-title').innerText = "添加联系人";
+        document.getElementById('contact-id-hidden').value = '';
+        document.getElementById('contact-name-input').value = '';
+        document.getElementById('contact-persona-input').value = '';
+    }
+}
+
 function closeContactForm() { document.getElementById('add-contact-area').classList.remove('active'); }
-function saveContact() { const id = document.getElementById('contact-id-hidden').value; const name = document.getElementById('contact-name-input').value; const persona = document.getElementById('contact-persona-input').value; const fileInput = document.getElementById('contact-avatar-input'); const urlInput = document.getElementById('contact-avatar-url').value; if (!name) return alert('请输入姓名'); const processSave = (avatarUrl) => { let contacts = DB.getContacts(); if (id) { const i = contacts.findIndex(c => c.id == id); if (i !== -1) { contacts[i].name = name; contacts[i].persona = persona; if (avatarUrl) contacts[i].avatar = avatarUrl; } } else { contacts.push({ id: Date.now(), name, persona, avatar: avatarUrl || '' }); } DB.saveContacts(contacts); renderContacts(); closeContactForm(); }; if (urlInput) processSave(urlInput); else if (fileInput.files[0]) { const r = new FileReader(); r.onload = (e) => processSave(e.target.result); r.readAsDataURL(fileInput.files[0]); } else processSave(null); }
-function deleteContact(id) { if(confirm('确定删除？')) { DB.saveContacts(DB.getContacts().filter(c => c.id !== id)); let chats = DB.getChats(); delete chats[id]; DB.saveChats(chats); renderContacts(); } }
-function renderContacts() { const list = document.getElementById('contacts-list'); list.innerHTML = ''; DB.getContacts().forEach(c => { const div = document.createElement('div'); div.className = 'contact-list-item'; div.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">${c.persona}</div></div><div class="contact-actions"><div class="contact-btn" onclick="openContactForm(${c.id})">✏️</div><div class="contact-btn" style="color:#ff3b30" onclick="deleteContact(${c.id})">🗑️</div></div>`; list.appendChild(div); }); }
+
+function saveContact() {
+    const id = document.getElementById('contact-id-hidden').value;
+    const name = document.getElementById('contact-name-input').value;
+    const persona = document.getElementById('contact-persona-input').value;
+    const fileInput = document.getElementById('contact-avatar-input');
+    const urlInput = document.getElementById('contact-avatar-url').value;
+    if (!name) return alert('请输入姓名');
+
+    const processSave = (avatarUrl) => {
+        let contacts = DB.getContacts();
+        if (id) {
+            const i = contacts.findIndex(c => c.id == id);
+            if (i !== -1) {
+                contacts[i].name = name;
+                contacts[i].persona = persona;
+                if (avatarUrl) contacts[i].avatar = avatarUrl;
+            }
+        } else {
+            const defaultAccount = getPreferredUserAccount();
+            const userSettings = {
+                userName: defaultAccount?.name || '我',
+                userPersona: defaultAccount?.persona || '',
+                userAvatar: defaultAccount?.avatar || ''
+            };
+            contacts.push({
+                id: Date.now(),
+                name,
+                persona,
+                avatar: avatarUrl || '',
+                userAccountId: defaultAccount?.id || '',
+                userSettings
+            });
+        }
+        DB.saveContacts(contacts);
+        renderContactsPanel();
+        closeContactForm();
+    };
+
+    if (urlInput) processSave(urlInput);
+    else if (fileInput.files[0]) {
+        const r = new FileReader();
+        r.onload = (e) => processSave(e.target.result);
+        r.readAsDataURL(fileInput.files[0]);
+    } else processSave(null);
+}
+
+function deleteContact(id) { if(confirm('确定删除？')) { DB.saveContacts(DB.getContacts().filter(c => c.id !== id)); let chats = DB.getChats(); delete chats[id]; DB.saveChats(chats); renderContactsPanel(); } }
+
+function renderContacts() {
+    const list = document.getElementById('contacts-list');
+    list.innerHTML = '';
+    DB.getContacts().forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'contact-list-item';
+        div.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">${c.persona}</div></div><div class="contact-actions"><div class="contact-btn" onclick="openContactForm(${c.id})">✏️</div><div class="contact-btn" style="color:#ff3b30" onclick="deleteContact(${c.id})">🗑️</div></div>`;
+        list.appendChild(div);
+    });
+}
+
+function renderUserAccounts() {
+    const list = document.getElementById('user-accounts-list');
+    if (!list) return;
+    const accounts = DB.getUserAccounts();
+    list.innerHTML = '';
+    accounts.forEach(account => {
+        const item = document.createElement('div');
+        item.className = 'user-account-list-item';
+        item.onclick = () => openUserAccountEditor(account.id);
+        const name = document.createElement('span');
+        name.className = 'user-account-list-name';
+        name.textContent = account.name || '我';
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'user-account-delete-btn';
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.setAttribute('aria-label', '删除账号');
+        deleteBtn.onclick = event => deleteUserAccount(account.id, event);
+        item.appendChild(name);
+        item.appendChild(deleteBtn);
+        list.appendChild(item);
+    });
+    const addItem = document.createElement('div');
+    addItem.className = 'user-account-add-item';
+    addItem.innerHTML = '<span class="user-account-add-plus">+</span>';
+    addItem.onclick = () => openUserAccountEditor();
+    list.appendChild(addItem);
+}
+
+function renderContactsPanel() {
+    renderContacts();
+    renderUserAccounts();
+    switchContactsTab(contactsTabMode);
+}
+
+function openUserAccountEditor(accountId = null) {
+    const account = accountId ? getUserAccountById(accountId) : null;
+    document.getElementById('user-account-id-hidden').value = account?.id || '';
+    document.getElementById('user-account-avatar-preview').src = account?.avatar || DEFAULT_USER_ACCOUNT_PREVIEW_AVATAR;
+    document.getElementById('user-account-avatar-input').value = '';
+    document.getElementById('user-account-avatar-url').value = account?.avatar?.startsWith('http') ? account.avatar : '';
+    document.getElementById('user-account-name-input').value = account?.name || '我';
+    document.getElementById('user-account-persona-input').value = account?.persona || '';
+    document.getElementById('user-account-editor-modal').classList.add('active');
+}
+
+function closeUserAccountEditor() {
+    document.getElementById('user-account-editor-modal').classList.remove('active');
+}
+
+function previewUserAccountAvatar(input) {
+    if (input.files?.[0]) {
+        const r = new FileReader();
+        r.onload = e => document.getElementById('user-account-avatar-preview').src = e.target.result;
+        r.readAsDataURL(input.files[0]);
+    }
+}
+
+function saveUserAccount() {
+    const accountId = document.getElementById('user-account-id-hidden').value;
+    const nameInput = document.getElementById('user-account-name-input').value.trim();
+    const personaInput = document.getElementById('user-account-persona-input').value.trim();
+    const urlInput = document.getElementById('user-account-avatar-url').value.trim();
+    const fileInput = document.getElementById('user-account-avatar-input');
+
+    const processSave = (avatarUrl) => {
+        const accounts = DB.getUserAccounts();
+        const idx = accounts.findIndex(a => a.id === accountId);
+        const nextName = personaInput ? (nameInput || '我') : '我';
+        const target = normalizeUserAccount({
+            ...(idx !== -1 ? accounts[idx] : { id: createUserAccountId(), createdAt: Date.now() }),
+            name: nextName,
+            persona: personaInput,
+            avatar: avatarUrl || (idx !== -1 ? accounts[idx].avatar : '') || ''
+        }, idx === -1 ? accounts.length : idx);
+        if (idx === -1) accounts.push(target);
+        else accounts[idx] = target;
+        DB.saveUserAccounts(accounts);
+        syncContactsWithUserAccounts();
+        renderContactsPanel();
+        if (currentChatContact) {
+            updateChatUserAccountOptions(currentChatContact.userAccountId || target.id);
+            renderChatHistory();
+        }
+        closeUserAccountEditor();
+    };
+
+    if (urlInput) processSave(urlInput);
+    else if (fileInput.files?.[0]) {
+        const r = new FileReader();
+        r.onload = e => processSave(e.target.result);
+        r.readAsDataURL(fileInput.files[0]);
+    } else {
+        processSave(null);
+    }
+}
+
+function deleteUserAccount(accountId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!confirm('确定要删除这个用户人设账号吗？')) return;
+
+    const accounts = DB.getUserAccounts();
+    const nextAccounts = accounts.filter(account => account.id !== accountId);
+    if (nextAccounts.length === accounts.length) return;
+
+    DB.saveUserAccounts(nextAccounts);
+
+    const forumData = DB.getForumData();
+    let forumChanged = false;
+    if (forumData.accountData && Object.prototype.hasOwnProperty.call(forumData.accountData, accountId)) {
+        delete forumData.accountData[accountId];
+        forumChanged = true;
+    }
+    if (forumData.mainAccountId === accountId) {
+        forumData.mainAccountId = nextAccounts[0]?.id || '';
+        if (forumData.mainAccountId) getForumAccountBucket(forumData, forumData.mainAccountId, true);
+        currentForumAccountId = forumData.mainAccountId || '';
+        forumChanged = true;
+    } else if (currentForumAccountId === accountId) {
+        currentForumAccountId = forumData.mainAccountId || nextAccounts[0]?.id || '';
+    }
+    if (forumChanged) DB.saveForumData(forumData);
+
+    syncContactsWithUserAccounts();
+    renderContactsPanel();
+    if (currentChatContact) {
+        updateChatUserAccountOptions(currentChatContact.userAccountId);
+        renderChatHistory();
+    }
+}
+
 let currentWBTab = 'global';
 function toggleWBCreateMenu() { document.getElementById('wb-create-menu').classList.toggle('active'); }
 function switchWBTab(tab) { currentWBTab = tab; document.getElementById('wb-tab-global').classList.toggle('active', tab === 'global'); document.getElementById('wb-tab-local').classList.toggle('active', tab === 'local'); renderWorldBook(); }
@@ -1456,7 +3323,6 @@ function updateMemoZoneButtons() {
     const map = {
         longTerm: 'memo-zone-btn-longTerm',
         shortTerm: 'memo-zone-btn-shortTerm',
-        schedule: 'memo-zone-btn-schedule',
         impression: 'memo-zone-btn-impression'
     };
     Object.entries(map).forEach(([zone, id]) => {
@@ -1521,32 +3387,12 @@ function renderMemoDetailList() {
         return;
     }
 
-    if (currentMemoZone === 'schedule') {
-        list.appendChild(createMemoSectionHeader("📅 日程记忆"));
-        if (mems.scheduleMemories.length === 0) {
-            list.appendChild(createMemoEmptyTip('暂无日程记忆'));
-            return;
-        }
-        mems.scheduleMemories.forEach((m, i) => {
-            const div = document.createElement('div');
-            div.className = `memo-item schedule-${m.status || 'upcoming'}`;
-            const eventDate = m.eventDate || '未设置开始时间';
-            const endDate = m.endDate ? ` ~ ${m.endDate}` : '';
-            div.innerHTML = `<span class="memo-date">${m.status || 'upcoming'} | ${eventDate}${endDate}</span>${m.content}<span class="memo-delete" onclick="deleteMemory('scheduleMemories', ${i}, event)">🗑️</span>`;
-            div.onclick = () => editMemory('scheduleMemories', i);
-            list.appendChild(div);
-        });
-        return;
-    }
-
     list.appendChild(createMemoSectionHeader("🧠 用户印象"));
     const impressions = mems.userImpressions || createDefaultUserImpressions();
     const impressionLabels = {
-        profile: '基本画像',
-        personality: '性格认知',
+        profile: '基础认知',
         relationship: '我们的关系',
-        attitude: '我对TA的态度',
-        notes: '互动备注'
+        notes: '关于TA的注意事项'
     };
     USER_IMPRESSION_KEYS.forEach((key) => {
         const div = document.createElement('div');
@@ -1568,11 +3414,9 @@ function setEditorVisibility({ keywords, source, eventDate, endDate, impressionT
 function switchImpressionSection(section) {
     memoEditorState.section = section;
     const labels = {
-        profile: '基本画像',
-        personality: '性格认知',
+        profile: '基础认知',
         relationship: '我们的关系',
-        attitude: '我对TA的态度',
-        notes: '互动备注'
+        notes: '关于TA的注意事项'
     };
     USER_IMPRESSION_KEYS.forEach((key) => {
         const btn = document.getElementById(`memo-impression-btn-${key}`);
@@ -1612,10 +3456,6 @@ function openMemoEditor(mode, options = {}) {
         document.getElementById('memo-editor-title').innerText = options.editType ? '编辑短效记忆' : '添加短效记忆';
         document.getElementById('memo-editor-content-label').innerText = '短效记忆内容';
         setEditorVisibility({ keywords: true, source: true, eventDate: false, endDate: false, impressionTabs: false });
-    } else if (mode === 'schedule') {
-        document.getElementById('memo-editor-title').innerText = options.editType ? '编辑日程记忆' : '添加日程记忆';
-        document.getElementById('memo-editor-content-label').innerText = '日程内容';
-        setEditorVisibility({ keywords: false, source: false, eventDate: true, endDate: true, impressionTabs: false });
     } else if (mode === 'impression') {
         setEditorVisibility({ keywords: false, source: false, eventDate: false, endDate: false, impressionTabs: true });
     }
@@ -1635,13 +3475,6 @@ function openMemoEditor(mode, options = {}) {
                 contentEl.value = target.content || '';
                 keywordsEl.value = (target.keywords || []).join(', ');
                 sourceEl.value = target.source || 'chat';
-            }
-        } else if (options.editType === 'scheduleMemories') {
-            const target = bucket.scheduleMemories[options.editIndex];
-            if (target) {
-                contentEl.value = target.content || '';
-                eventDateEl.value = formatDatetimeLocal(target.eventDate);
-                endDateEl.value = formatDatetimeLocal(target.endDate);
             }
         }
     }
@@ -1663,8 +3496,6 @@ function saveMemoEditor() {
     const content = document.getElementById('memo-editor-content').value.trim();
     const keywords = normalizeKeywords((document.getElementById('memo-editor-keywords').value || '').split(','));
     const source = document.getElementById('memo-editor-source').value;
-    const eventDate = document.getElementById('memo-editor-event-date').value;
-    const endDate = document.getElementById('memo-editor-end-date').value;
     const nowTs = Date.now();
 
     if (memoEditorState.mode === 'longTerm') {
@@ -1683,21 +3514,6 @@ function saveMemoEditor() {
         } else {
             bucket.shortTermMemories.push(payload);
         }
-    } else if (memoEditorState.mode === 'schedule') {
-        if (!content) return alert('请输入日程内容');
-        if (!eventDate) return alert('请填写开始时间');
-        const payload = normalizeScheduleItem({
-            content,
-            eventDate,
-            endDate: endDate || '',
-            timestamp: nowTs
-        });
-        if (!payload) return alert('日程内容无效');
-        if (memoEditorState.editType === 'scheduleMemories' && memoEditorState.editIndex >= 0) {
-            bucket.scheduleMemories[memoEditorState.editIndex] = payload;
-        } else {
-            bucket.scheduleMemories.push(payload);
-        }
     } else if (memoEditorState.mode === 'impression') {
         bucket.userImpressions[memoEditorState.section] = content;
     }
@@ -1709,14 +3525,12 @@ function saveMemoEditor() {
 
 function addLongTermMemory() { openMemoEditor('longTerm'); }
 function addShortTermMemory() { openMemoEditor('shortTerm'); }
-function addScheduleMemory() { openMemoEditor('schedule'); }
 function editUserImpression(section) { openMemoEditor('impression', { section }); }
 function addImportantMemory() { addLongTermMemory(); }
 
 function editMemory(type, i) {
     if (type === 'longTermMemories') openMemoEditor('longTerm', { editType: type, editIndex: i });
     else if (type === 'shortTermMemories') openMemoEditor('shortTerm', { editType: type, editIndex: i });
-    else if (type === 'scheduleMemories') openMemoEditor('schedule', { editType: type, editIndex: i });
 }
 
 function deleteMemory(type, i, evt) {
@@ -1764,14 +3578,155 @@ function addShortMemoryFromSettings() {
     addShortTermMemory();
 }
 
-function addScheduleMemoryFromSettings() {
-    closeMemoSettings();
-    addScheduleMemory();
-}
-
 function editImpressionFromSettings() {
     closeMemoSettings();
     openMemoEditor('impression', { section: 'profile' });
+}
+
+function closeShortToLongTransferModal() {
+    document.getElementById('memo-transfer-modal').classList.remove('active');
+}
+
+function openShortToLongTransferModal() {
+    if (!currentMemoContact) return;
+    closeMemoSettings();
+    const list = document.getElementById('memo-transfer-list');
+    const bucket = DB.getMemories()[currentMemoContact.id] || createEmptyMemoBucket();
+    const shortItems = bucket.shortTermMemories || [];
+    if (shortItems.length === 0) {
+        list.innerHTML = '<div class="memo-empty">暂无可转移的短效记忆</div>';
+    } else {
+        list.innerHTML = shortItems.map((item, idx) => {
+            const time = item.timestamp ? new Date(item.timestamp).toLocaleString('zh-CN') : '未知时间';
+            return `
+                <label style="display:block; border:1px solid #eee; border-radius:10px; padding:10px; margin-bottom:8px; background:#fff;">
+                    <input type="checkbox" class="memo-transfer-checkbox" value="${idx}" style="margin-right:8px; transform:translateY(1px);">
+                    <span style="font-size:12px; color:#999;">#${idx + 1} · ${time}</span>
+                    <div style="margin-top:6px; color:#222; line-height:1.5;">${item.content || ''}</div>
+                </label>
+            `;
+        }).join('');
+    }
+    document.getElementById('memo-transfer-modal').classList.add('active');
+}
+
+function confirmTransferShortToLong() {
+    if (!currentMemoContact) return;
+    const selected = [...document.querySelectorAll('.memo-transfer-checkbox:checked')]
+        .map(cb => parseInt(cb.value, 10))
+        .filter(n => Number.isInteger(n));
+    if (selected.length === 0) return alert('请先选择要转移的短效记忆');
+
+    const mems = DB.getMemories();
+    if (!mems[currentMemoContact.id]) mems[currentMemoContact.id] = createEmptyMemoBucket();
+    const bucket = mems[currentMemoContact.id];
+
+    const moved = [];
+    selected.sort((a, b) => b - a).forEach(idx => {
+        const item = bucket.shortTermMemories[idx];
+        if (item) {
+            moved.push(item);
+            bucket.shortTermMemories.splice(idx, 1);
+        }
+    });
+
+    moved.reverse().forEach(item => {
+        const normalized = normalizeMemoryItem({
+            content: item.content || '',
+            keywords: item.keywords || [],
+            timestamp: Date.now()
+        });
+        if (normalized) bucket.longTermMemories.push(normalized);
+    });
+
+    DB.saveMemories(mems);
+    closeShortToLongTransferModal();
+    currentMemoZone = 'longTerm';
+    renderMemoDetailList();
+    alert(`已转移 ${moved.length} 条短效记忆到长效记忆`);
+}
+
+async function summarizeUserImpressionsFromSettings() {
+    if (!currentMemoContact) return;
+    const settings = DB.getSettings();
+    if (!settings.key) return alert('请先在设置中配置 API Key');
+    if (!confirm('将根据近期聊天与记忆，一键更新“基础认知/我们的关系/关于TA的注意事项”。是否继续？')) return;
+
+    const history = DB.getChats()[currentMemoContact.id] || [];
+    const recentMessages = history
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .slice(-120);
+    const messageText = recentMessages.map(msg => {
+        const role = msg.role === 'user' ? '用户' : '我';
+        const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
+        return `[${time}] ${role}: ${msg.content || ''}`;
+    }).join('\n');
+
+    const bucket = DB.getMemories()[currentMemoContact.id] || createEmptyMemoBucket();
+    const memoryText = [
+        ...bucket.shortTermMemories.slice(-20).map(item => `- ${item.content}`),
+        ...bucket.longTermMemories.slice(-20).map(item => `- ${item.content}`)
+    ].join('\n');
+    const baseImpressions = bucket.userImpressions || createDefaultUserImpressions();
+
+    const prompt = `你正在为角色“${currentMemoContact.name}”编写用户印象更新。
+
+[角色人设]
+${currentMemoContact.persona || '（未设置）'}
+
+[现有用户印象]
+- 基础认知：${baseImpressions.profile || '（暂无）'}
+- 我们的关系：${baseImpressions.relationship || '（暂无）'}
+- 关于TA的注意事项：${baseImpressions.notes || '（暂无）'}
+
+[近期聊天]
+${messageText || '（暂无）'}
+
+[近期记忆]
+${memoryText || '（暂无）'}
+
+要求：
+1. 必须严格贴合角色人设、语气和价值观，禁止机械冷淡、禁止“客观中立模板话”。
+2. 以角色第一人称的真实内心去判断，不要违背人设身份和情感立场。
+3. 只输出这三个分区：profile、relationship、notes。
+4. 每个分区 1-3 句，具体、有温度、可被后续对话使用。
+5. 若信息不足，可保留原有内容风格并做轻微补充，禁止编造重大事实。
+
+只返回 JSON：
+{"profile":"...","relationship":"...","notes":"..."}`;
+
+    try {
+        const res = await fetch(getChatCompletionsUrl(settings.url), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.4
+            })
+        });
+        const data = await res.json();
+        if (!data.choices?.length) throw new Error('API返回为空');
+        const raw = data.choices[0].message.content.trim().replace(/```json/g, '').replace(/```/g, '').trim();
+        const result = JSON.parse(raw);
+
+        const mems = DB.getMemories();
+        if (!mems[currentMemoContact.id]) mems[currentMemoContact.id] = createEmptyMemoBucket();
+        const target = mems[currentMemoContact.id].userImpressions || createDefaultUserImpressions();
+
+        ['profile', 'relationship', 'notes'].forEach(key => {
+            const value = typeof result[key] === 'string' ? result[key].trim() : '';
+            if (value) target[key] = value;
+        });
+        mems[currentMemoContact.id].userImpressions = target;
+        DB.saveMemories(mems);
+
+        renderMemoDetailList();
+        closeMemoSettings();
+        alert('用户印象已一键更新');
+    } catch (e) {
+        alert('一键总结失败：' + e.message);
+    }
 }
 
 function saveMemoSettings() {
@@ -1864,8 +3819,11 @@ async function executeDailySummary(contact) {
     const nowStr = now.toLocaleString('zh-CN', { hour12: false });
     const yesterdayStr = yesterday.toLocaleString('zh-CN', { hour12: false });
     
-    const prompt = `你现在是 ${contact.name}。
+    const prompt = `你现在是 ${contact.name}，正在以角色本人视角写备忘录。
 请阅读以下过去24小时（${yesterdayStr} 至 ${nowStr}）的聊天记录和已有记忆，进行每日总结。
+
+===== 角色人设 =====
+${contact.persona || '（未设置）'}
 
 ===== 聊天记录 =====
 ${chatText || '（无聊天记录）'}
@@ -1874,8 +3832,8 @@ ${chatText || '（无聊天记录）'}
 ${memText || '（无记忆片段）'}
 
 ===== 任务要求 =====
-1. 以【第一人称】（我...）进行总结
-2. 语言必须简洁、客观、直接，尽量不用修辞手法
+1. 必须以【角色第一人称】（我...）总结，立场与语气严格符合角色人设
+2. 用自然、有情绪温度的表达，不要机械、冷淡、模板化，不要“客观中立口吻”
 3. 每日总结控制在 80-150 字，合并同类信息，不要重复
 4. 只有当内容属于以下类型时，才写入 longTermMemories：
    - 重要决定/人生抉择
@@ -1884,8 +3842,7 @@ ${memText || '（无记忆片段）'}
    - 需要长期记住的稳定个人偏好（如长期喜好、禁忌、过敏、习惯）
 5. 如果没有符合条件的内容，longTermMemories 必须返回空数组 []
 6. 与近期事件相关、且72小时内可能被再次提及的内容可写入 shortTermMemories
-7. 如果提及明确时间安排（未来/进行中/已结束事件），可写入 scheduleMemories
-8. 如果有助于塑造“我对用户的看法”，可更新 userImpressions 各板块
+7. 如果有助于塑造“我对用户的看法”，可更新 userImpressions 各板块
 
 严格返回JSON格式：
 {
@@ -1893,8 +3850,7 @@ ${memText || '（无记忆片段）'}
     "keywords": ["关键词1", "关键词2"],
     "longTermMemories": ["长效记忆1（如果有）", "长效记忆2（如果有）"],
     "shortTermMemories": ["短效记忆1（如果有）", "短效记忆2（如果有）"],
-    "scheduleMemories": [{"content":"...", "eventDate":"2026-03-21 18:00", "endDate":"2026-03-21 20:00"}],
-    "userImpressions": {"profile":"", "personality":"", "relationship":"", "attitude":"", "notes":""},
+    "userImpressions": {"profile":"", "relationship":"", "notes":""},
     "hasContent": true/false
 }
 
@@ -1904,7 +3860,7 @@ ${memText || '（无记忆片段）'}
 - 只返回 JSON，不要输出任何额外说明`;
 
     try {
-        const res = await fetch(`${settings.url}/chat/completions`, {
+        const res = await fetch(getChatCompletionsUrl(settings.url), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
             body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.3 })
@@ -1960,17 +3916,6 @@ ${memText || '（无记忆片段）'}
                             timestamp: now.getTime()
                         });
                         if (normalized) updatedMems[contact.id].shortTermMemories.push(normalized);
-                    });
-
-                    const scheduleMemories = Array.isArray(result.scheduleMemories) ? result.scheduleMemories : [];
-                    scheduleMemories.forEach(scheduleItem => {
-                        const normalized = normalizeScheduleItem({
-                            content: scheduleItem?.content || '',
-                            eventDate: scheduleItem?.eventDate || '',
-                            endDate: scheduleItem?.endDate || '',
-                            timestamp: now.getTime()
-                        });
-                        if (normalized) updatedMems[contact.id].scheduleMemories.push(normalized);
                     });
 
                     if (result.userImpressions && typeof result.userImpressions === 'object') {
@@ -2252,6 +4197,8 @@ function saveSpyDiaryEdit() {
 async function callSpyAPI(type) { 
     const s = DB.getSettings(); 
     if (!s.key) return alert('请配置 API Key'); 
+    if (!s.url || !s.model) return alert('请先配置 API Base URL 和模型');
+    if (!currentSpyContact) return alert('请先在查岗中选择角色');
     
     const chatHistory = (DB.getChats()[currentSpyContact.id] || []).slice(-20).map(m => `${m.role === 'user' ? 'User' : 'Me'}: ${m.content}`).join('\n');
     
@@ -2297,44 +4244,83 @@ async function callSpyAPI(type) {
 
     try { 
         const temp = s.temperature !== undefined ? s.temperature : 0.7;
-        const res = await fetch(`${s.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.key}` }, body: JSON.stringify({ model: s.model, messages: [{ role: "system", content: prompt }], temperature: temp }) }); 
-        const data = await res.json(); 
-        if (data.choices?.length > 0) { 
-            let c = data.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '').trim(); 
-            const parsed = JSON.parse(c); 
-            const sd = DB.getSpyData(); 
-            if (!sd[currentSpyContact.id]) sd[currentSpyContact.id] = {}; 
-            
-            if (type === 'chat') { 
-                sd[currentSpyContact.id].vk_contacts = parsed; 
-                DB.saveSpyData(sd); 
-                renderSpyVKContacts(); 
-            } else if (type === 'memo') { 
-                sd[currentSpyContact.id].memos = parsed; 
-                DB.saveSpyData(sd); 
-                renderSpyMemos(); 
-            } else if (type === 'browser') {
-                sd[currentSpyContact.id].browser_history = parsed;
+        const res = await fetch(getChatCompletionsUrl(s.url), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.key}` },
+            body: JSON.stringify({
+                model: s.model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: temp
+            })
+        });
+        const rawText = await res.text();
+        let data = null;
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch {
+            data = null;
+        }
+
+        if (!res.ok) {
+            const errorMsg = data?.error?.message || data?.message || rawText || `HTTP ${res.status}`;
+            throw new Error(`请求失败（${res.status}）：${errorMsg}`);
+        }
+
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content || typeof content !== 'string') {
+            throw new Error('模型未返回有效内容，请重试');
+        }
+
+        let parsed;
+        try {
+            const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            parsed = JSON.parse(cleaned);
+        } catch {
+            throw new Error('模型返回内容不是有效JSON，请重试');
+        }
+
+        const sd = DB.getSpyData(); 
+        if (!sd[currentSpyContact.id]) sd[currentSpyContact.id] = {}; 
+        
+        if (type === 'chat') { 
+            sd[currentSpyContact.id].vk_contacts = parsed; 
+            DB.saveSpyData(sd); 
+            renderSpyVKContacts(); 
+        } else if (type === 'memo') { 
+            sd[currentSpyContact.id].memos = parsed; 
+            DB.saveSpyData(sd); 
+            renderSpyMemos(); 
+        } else if (type === 'browser') {
+            sd[currentSpyContact.id].browser_history = parsed;
+            DB.saveSpyData(sd);
+            renderSpyBrowser();
+        } else if (type === 'diary') {
+            if (!sd[currentSpyContact.id].diaries) sd[currentSpyContact.id].diaries = [];
+            if (parsed.content) {
+                sd[currentSpyContact.id].diaries.push({ id: Date.now(), content: parsed.content });
                 DB.saveSpyData(sd);
-                renderSpyBrowser();
-            } else if (type === 'diary') {
-                if (!sd[currentSpyContact.id].diaries) sd[currentSpyContact.id].diaries = [];
-                if (parsed.content) {
-                    sd[currentSpyContact.id].diaries.push({ id: Date.now(), content: parsed.content });
-                    DB.saveSpyData(sd);
-                    renderSpyDiaries();
-                }
+                renderSpyDiaries();
+            } else {
+                throw new Error('日记内容为空，请重试');
             }
-        } 
+        }
     } catch (e) { 
         alert("生成失败：" + e.message); 
     } 
 }
 
 let currentChatContact = null, longPressTimer, selectedMessageIndex = -1, isSelectionMode = false, selectedIndices = new Set(), pendingQuoteContent = null;
+let pendingChatImageDataUrl = '';
+let pendingVideoCoverDataUrl = '';
+const VOICE_BUBBLE_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3"></path><path d="M6 6v11"></path><path d="M10 3v18"></path><path d="M14 8v7"></path><path d="M18 5v13"></path><path d="M22 10v3"></path></svg>';
+let voiceRecognition = null;
+let voiceRecording = false;
+let voicePermissionGranted = false;
+let voiceFinalTranscript = '';
 let displayedMessageCount = 20; // 初始显示的消息数量
 const MESSAGES_PER_PAGE = 20; // 每次加载的消息数量
 let chatOnlineStatusTimer = null;
+initAiStickerToggle();
 function renderVKList() { const l = document.getElementById('vk-chat-list'); l.innerHTML = ''; DB.getContacts().forEach(c => { const d = document.createElement('div'); d.className = 'chat-list-item'; d.onclick = () => openChat(c); d.innerHTML = `<img src="${c.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/></svg>'}" class="avatar-preview"><div class="contact-info"><div class="contact-name">${c.name}</div><div class="contact-persona">点击开始聊天</div></div>`; l.appendChild(d); }); }
 function openChat(c) { 
     currentChatContact = c; 
@@ -2349,25 +4335,119 @@ function openChat(c) {
     exitDeleteMode(); 
     cancelQuote(); 
     applyChatTheme(c); 
+    syncAiStickerToggleForCurrentChat();
     renderChatHistory(); 
 }
 function applyChatTheme(contact) { const theme = contact.chatTheme || {}; const styleTag = document.getElementById('dynamic-chat-theme'); const chatInterface = document.getElementById('chat-interface'); if (theme.bgType === 'image' && theme.bgValue) { chatInterface.style.backgroundImage = `url(${theme.bgValue})`; chatInterface.style.backgroundColor = 'transparent'; } else { chatInterface.style.backgroundImage = 'none'; chatInterface.style.backgroundColor = theme.bgValue || '#f5f5f5'; } let css = ''; if (theme.userBubbleColor) css += `.message-bubble.user { background-color: ${theme.userBubbleColor} !important; color: #fff; } `; if (theme.userBubbleCSS) css += `.message-bubble.user { ${theme.userBubbleCSS} } `; if (theme.aiBubbleColor) css += `.message-bubble.ai { background-color: ${theme.aiBubbleColor} !important; } `; if (theme.aiBubbleCSS) css += `.message-bubble.ai { ${theme.aiBubbleCSS} } `; styleTag.innerHTML = css; }
-function closeChat() { document.getElementById('chat-interface').style.display = 'none'; if (chatOnlineStatusTimer) { clearInterval(chatOnlineStatusTimer); chatOnlineStatusTimer = null; } currentChatContact = null; }
+function closeChat() { document.getElementById('chat-interface').style.display = 'none'; if (chatOnlineStatusTimer) { clearInterval(chatOnlineStatusTimer); chatOnlineStatusTimer = null; } currentChatContact = null; syncAiStickerToggleForCurrentChat(); }
 let currentChatBgType = 'color';
+function updateChatUserAccountOptions(preferredId = '') {
+    const select = document.getElementById('chat-user-account-select');
+    const avatarEl = document.getElementById('chat-user-account-avatar-preview');
+    const nameEl = document.getElementById('chat-user-account-name-preview');
+    const personaEl = document.getElementById('chat-user-account-persona-preview');
+    if (!select) return;
+
+    const accounts = DB.getUserAccounts();
+    select.innerHTML = '';
+    accounts.forEach(account => {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = account.name || '我';
+        select.appendChild(option);
+    });
+
+    const fallback = accounts[0];
+    const current = accounts.find(a => a.id === preferredId) || fallback;
+    if (current) select.value = current.id;
+
+    const renderPreview = () => {
+        const selected = accounts.find(a => a.id === select.value) || fallback;
+        if (!selected) {
+            if (avatarEl) avatarEl.src = DEFAULT_USER_ACCOUNT_PREVIEW_AVATAR;
+            if (nameEl) nameEl.textContent = '我';
+            if (personaEl) personaEl.textContent = '';
+            return;
+        }
+        if (avatarEl) avatarEl.src = selected.avatar || DEFAULT_USER_ACCOUNT_PREVIEW_AVATAR;
+        if (nameEl) nameEl.textContent = selected.name || '我';
+        if (personaEl) personaEl.textContent = selected.persona || '';
+    };
+
+    select.onchange = renderPreview;
+    renderPreview();
+}
+
+function getCurrencyConfigByCode(code) {
+    return CHAT_CURRENCY_MAP[code] || CHAT_CURRENCY_MAP.cny;
+}
+
+function getCurrentChatCurrencyCode() {
+    return currentChatContact?.userSettings?.currencyUnit || 'cny';
+}
+
+function convertRmbToTargetCurrency(rmbAmount, currencyCode) {
+    const cfg = getCurrencyConfigByCode(currencyCode);
+    const source = Number(rmbAmount);
+    if (!Number.isFinite(source)) return 0;
+    return source / cfg.cnyPerUnit;
+}
+
+function formatCurrencyAmountValue(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0';
+    const rounded = Number(n.toFixed(2));
+    if (Number.isInteger(rounded)) return String(rounded);
+    return String(rounded);
+}
+
+function formatAmountByCurrency(rmbAmount, currencyCode = 'cny') {
+    const cfg = getCurrencyConfigByCode(currencyCode);
+    const converted = convertRmbToTargetCurrency(rmbAmount, cfg.code);
+    return `${formatCurrencyAmountValue(converted)}${cfg.symbol}`;
+}
+
+function updateTransferCurrencyPreview() {
+    const el = document.getElementById('transfer-currency-preview');
+    const input = document.getElementById('transfer-amount');
+    if (!el || !input) return;
+    const cfg = getCurrencyConfigByCode(getCurrentChatCurrencyCode());
+    const amount = Number(input.value || 0);
+    const convertedText = Number.isFinite(amount) && amount > 0 ? formatAmountByCurrency(amount, cfg.code) : `0${cfg.symbol}`;
+    el.innerText = `将转换为【${cfg.label}】${convertedText}`;
+}
+
+function updateRedPacketCurrencyPreview() {
+    const el = document.getElementById('redpacket-currency-preview');
+    const input = document.getElementById('redpacket-amount');
+    if (!el || !input) return;
+    const cfg = getCurrencyConfigByCode(getCurrentChatCurrencyCode());
+    const amount = Number(input.value || 0);
+    const convertedText = Number.isFinite(amount) && amount > 0 ? formatAmountByCurrency(amount, cfg.code) : `0${cfg.symbol}`;
+    el.innerText = `将转换为【${cfg.label}】${convertedText}`;
+}
+
 function openChatSettings() {
     if(!currentChatContact) return;
     document.getElementById('ctx-overlay').classList.add('active');
     document.getElementById('chat-settings-modal').classList.add('active');
     const us = currentChatContact.userSettings || {};
-    document.getElementById('user-setting-name').value = us.userName || '';
-    document.getElementById('user-setting-persona').value = us.userPersona || '';
-    document.getElementById('user-setting-avatar-preview').src = us.userAvatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23eee%22 width=%22100%22 height=%22100%22/></svg>';
-    document.getElementById('user-setting-avatar-url').value = (us.userAvatar?.startsWith('http') ? us.userAvatar : '');
+    updateChatUserAccountOptions(currentChatContact.userAccountId);
     document.getElementById('time-perception-toggle').checked = us.enableTimePerception || false;
+    const thoughtMode = us.thoughtMode || 'default';
+    const defaultThoughtToggle = document.getElementById('thought-mode-default-toggle');
+    const longThoughtToggle = document.getElementById('thought-mode-long-toggle');
+    if (defaultThoughtToggle && longThoughtToggle) {
+        defaultThoughtToggle.checked = thoughtMode !== 'long_chain';
+        longThoughtToggle.checked = thoughtMode === 'long_chain';
+    }
     document.getElementById('html-theater-toggle').checked = us.enableHtmlTheater === true;
+    document.getElementById('role-currency-unit-select').value = us.currencyUnit || 'cny';
     document.getElementById('auto-summary-toggle').checked = us.autoSummaryEnabled !== false;
-    document.getElementById('summary-interval-input').value = us.summaryInterval || 20;
+    document.getElementById('summary-interval-input').value = us.summaryInterval || 50;
     document.getElementById('context-limit-input').value = us.contextLimit || 100;
+    document.getElementById('bg-msg-toggle').checked = us.enableBackgroundMessages === true;
+    document.getElementById('bg-msg-interval-input').value = normalizeBackgroundIntervalMinutes(us.backgroundMessageIntervalMinutes || 60);
     renderBindWorldBookList();
     const theme = currentChatContact.chatTheme || {};
     document.getElementById('theme-user-color').value = theme.userBubbleColor || '#cce5ff';
@@ -2383,23 +4463,46 @@ function openChatSettings() {
         document.getElementById('theme-chat-bg-url').value = '';
     }
 }
+
+function handleThoughtModeToggle(mode) {
+    const defaultToggle = document.getElementById('thought-mode-default-toggle');
+    const longToggle = document.getElementById('thought-mode-long-toggle');
+    if (!defaultToggle || !longToggle) return;
+
+    if (mode === 'long_chain') {
+        if (longToggle.checked) {
+            defaultToggle.checked = false;
+        } else {
+            defaultToggle.checked = true;
+        }
+    } else {
+        if (defaultToggle.checked) {
+            longToggle.checked = false;
+        } else {
+            longToggle.checked = true;
+        }
+    }
+}
+
 function switchChatBgType(type) { currentChatBgType = type; document.getElementById('chat-bg-type-color').classList.toggle('active', type === 'color'); document.getElementById('chat-bg-type-image').classList.toggle('active', type === 'image'); document.getElementById('chat-bg-input-color').style.display = type === 'color' ? 'block' : 'none'; document.getElementById('chat-bg-input-image').style.display = type === 'image' ? 'block' : 'none'; }
 function renderBindWorldBookList() { const l = document.getElementById('bind-wb-list'); l.innerHTML = ''; const wb = DB.getWorldBook(); const local = wb.entries.filter(e => e.type === 'local'); const bound = currentChatContact.boundWorldBooks || []; if (local.length === 0) { l.innerHTML = '<div style="padding:10px;color:#999;font-size:12px;">暂无局部世界书</div>'; return; } local.forEach(en => { const d = document.createElement('div'); d.className = 'bind-wb-item'; d.innerHTML = `<input type="checkbox" value="${en.id}" id="wb-bind-${en.id}" ${bound.includes(en.id.toString()) ? 'checked' : ''}><label for="wb-bind-${en.id}">${en.title}</label>`; l.appendChild(d); }); }
 function closeChatSettings() { saveChatUserSettings(); document.getElementById('ctx-overlay').classList.remove('active'); document.getElementById('chat-settings-modal').classList.remove('active'); }
-function previewUserAvatar(input) { if (input.files?.[0]) { const r = new FileReader(); r.onload = e => document.getElementById('user-setting-avatar-preview').src = e.target.result; r.readAsDataURL(input.files[0]); } }
 function saveChatBubbleSettings() { saveChatUserSettings().then(() => alert("气泡设置已保存")); }
 function saveChatBgSettings() { saveChatUserSettings().then(() => alert("聊天背景已保存")); }
 function saveChatUserSettings() {
     if(!currentChatContact) return Promise.resolve();
-    const userName = document.getElementById('user-setting-name').value;
-    const userPersona = document.getElementById('user-setting-persona').value;
-    const urlInput = document.getElementById('user-setting-avatar-url').value;
-    const fileInput = document.getElementById('user-setting-avatar-input');
+    const selectedAccountId = document.getElementById('chat-user-account-select').value;
+    const selectedAccount = getUserAccountById(selectedAccountId) || getPreferredUserAccount();
     const enableTime = document.getElementById('time-perception-toggle').checked;
+    const enableLongThoughtMode = document.getElementById('thought-mode-long-toggle')?.checked === true;
+    const thoughtMode = enableLongThoughtMode ? 'long_chain' : 'default';
     const enableHtmlTheater = document.getElementById('html-theater-toggle').checked;
+    const currencyUnit = document.getElementById('role-currency-unit-select').value || 'cny';
     const autoSummary = document.getElementById('auto-summary-toggle').checked;
-    const summaryInterval = parseInt(document.getElementById('summary-interval-input').value) || 20;
+    const summaryInterval = Math.max(1, parseInt(document.getElementById('summary-interval-input').value) || 50);
     const contextLimit = parseInt(document.getElementById('context-limit-input').value) || 100;
+    const enableBackgroundMessages = document.getElementById('bg-msg-toggle').checked;
+    const backgroundMessageIntervalMinutes = normalizeBackgroundIntervalMinutes(document.getElementById('bg-msg-interval-input').value);
     const boundIds = [...document.querySelectorAll('#bind-wb-list input:checked')].map(cb => cb.value);
     const userBubbleColor = document.getElementById('theme-user-color').value;
     const userBubbleCSS = document.getElementById('theme-user-css').value;
@@ -2407,20 +4510,29 @@ function saveChatUserSettings() {
     const aiBubbleCSS = document.getElementById('theme-ai-css').value;
     const bgUrlInput = document.getElementById('theme-chat-bg-url').value;
     const bgFileInput = document.getElementById('theme-chat-bg-file');
-    const processSave = (av, bgVal) => {
+    const processSave = (bgVal) => {
         let cs = DB.getContacts();
         const i = cs.findIndex(c => c.id === currentChatContact.id);
         if (i !== -1) {
+            const userName = selectedAccount?.name || '我';
+            const userPersona = selectedAccount?.persona || '';
+            const userAvatar = selectedAccount?.avatar || '';
             cs[i].userSettings = {
+                ...(cs[i].userSettings || {}),
                 userName,
                 userPersona,
-                userAvatar: av || cs[i].userSettings?.userAvatar || '',
+                userAvatar,
                 enableTimePerception: enableTime,
+                thoughtMode,
                 enableHtmlTheater: enableHtmlTheater,
+                currencyUnit,
                 autoSummaryEnabled: autoSummary,
                 summaryInterval: summaryInterval,
-                contextLimit: contextLimit
+                contextLimit: contextLimit,
+                enableBackgroundMessages: enableBackgroundMessages,
+                backgroundMessageIntervalMinutes: backgroundMessageIntervalMinutes
             };
+            cs[i].userAccountId = selectedAccount?.id || cs[i].userAccountId || '';
             cs[i].boundWorldBooks = boundIds;
             let finalBgValue = bgVal;
             if (!finalBgValue) {
@@ -2435,17 +4547,8 @@ function saveChatUserSettings() {
             currentChatContact = cs[i];
             applyChatTheme(currentChatContact);
             renderChatHistory();
+            syncBackgroundRuntimeByVisibility();
         }
-    };
-    const handleAvatar = () => {
-        return new Promise(resolve => {
-            if (urlInput) resolve(urlInput);
-            else if (fileInput.files?.[0]) {
-                const r = new FileReader();
-                r.onload = e => resolve(e.target.result);
-                r.readAsDataURL(fileInput.files[0]);
-            } else resolve(null);
-        });
     };
     const handleBg = () => {
         return new Promise(resolve => {
@@ -2463,13 +4566,862 @@ function saveChatUserSettings() {
             }
         });
     };
-    return Promise.all([handleAvatar(), handleBg()]).then(([av, bg]) => { processSave(av, bg); });
+    return Promise.all([handleBg()]).then(([bg]) => { processSave(bg); });
 }
 function applyThemeToAllChats() { if (!confirm("确定要将当前的气泡样式和背景应用到所有联系人的聊天中吗？")) return; saveChatUserSettings().then(() => { const currentTheme = currentChatContact.chatTheme; if (!currentTheme) return; let contacts = DB.getContacts(); contacts.forEach(c => { c.chatTheme = JSON.parse(JSON.stringify(currentTheme)); }); DB.saveContacts(contacts); alert("已应用到所有聊天！"); }); }
 function clearCurrentHistory() { if (confirm('清空记录？')) { const c = DB.getChats(); c[currentChatContact.id] = []; DB.saveChats(c); renderChatHistory(); closeChatSettings(); } }
-function openTransferModal() { document.getElementById('transfer-modal').classList.add('active'); document.getElementById('transfer-amount').value = ''; document.getElementById('transfer-note').value = ''; }
+function normalizeWalletData(raw) {
+    const base = (raw && typeof raw === 'object') ? raw : {};
+    const balance = Number(base.balance);
+    const sourceRecords = Array.isArray(base.records) ? base.records : [];
+    const records = sourceRecords
+        .map((item, index) => {
+            const amount = Number(item?.amount);
+            const balanceAfter = Number(item?.balanceAfter);
+            const timestamp = Number(item?.timestamp) || Date.now();
+            const type = item?.type === 'income' ? 'income' : 'expense';
+            return {
+                id: item?.id || `wallet_record_${timestamp}_${index}`,
+                type,
+                feature: String(item?.feature || (type === 'income' ? '充值' : '提现')),
+                amount: Number.isFinite(amount) ? amount : 0,
+                balanceAfter: Number.isFinite(balanceAfter) ? balanceAfter : 0,
+                timestamp
+            };
+        })
+        .filter(item => item.amount > 0);
+    return {
+        balance: Number.isFinite(balance) ? balance : 0,
+        records
+    };
+}
+function getWalletData() {
+    return normalizeWalletData(DB.getWalletData());
+}
+function saveWalletData(data) {
+    DB.saveWalletData(normalizeWalletData(data));
+}
+function formatWalletCurrency(amount) {
+    return `¥${Number(amount || 0).toFixed(2)}`;
+}
+function formatWalletRecordTime(ts) {
+    const d = new Date(ts);
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const hour = String(d.getHours()).padStart(2, '0');
+    const minute = String(d.getMinutes()).padStart(2, '0');
+    return `${month}-${day} ${hour}:${minute}`;
+}
+function getWalletMonthLabel(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+}
+function appendWalletRecord(type, feature, amount, balanceAfter) {
+    const wallet = getWalletData();
+    wallet.records.push({
+        id: `wallet_record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        type: type === 'income' ? 'income' : 'expense',
+        feature: feature || (type === 'income' ? '充值' : '提现'),
+        amount: Number(amount),
+        balanceAfter: Number(balanceAfter),
+        timestamp: Date.now()
+    });
+    saveWalletData(wallet);
+}
+function increaseWalletBalance(amount, feature = '充值') {
+    const wallet = getWalletData();
+    const safeAmount = Number(amount);
+    if (!Number.isFinite(safeAmount) || safeAmount <= 0) return false;
+    wallet.balance = Number((wallet.balance + safeAmount).toFixed(2));
+    saveWalletData(wallet);
+    appendWalletRecord('income', feature, safeAmount, wallet.balance);
+    renderWalletApp();
+    return true;
+}
+function spendWalletBalance(amount, feature = '提现') {
+    const wallet = getWalletData();
+    const safeAmount = Number(amount);
+    if (!Number.isFinite(safeAmount) || safeAmount <= 0) return false;
+    if (wallet.balance < safeAmount) return false;
+    wallet.balance = Number((wallet.balance - safeAmount).toFixed(2));
+    saveWalletData(wallet);
+    appendWalletRecord('expense', feature, safeAmount, wallet.balance);
+    renderWalletApp();
+    return true;
+}
+function openWalletDetailView() {
+    const detail = document.getElementById('wallet-detail-view');
+    if (!detail) return;
+    detail.classList.add('active');
+    renderWalletDetailList();
+}
+function closeWalletDetailView() {
+    const detail = document.getElementById('wallet-detail-view');
+    if (!detail) return;
+    detail.classList.remove('active');
+}
+function openWalletActionModal(action) {
+    const modal = document.getElementById('wallet-action-modal');
+    const title = document.getElementById('wallet-action-modal-title');
+    const input = document.getElementById('wallet-action-input');
+    if (!modal || !title || !input) return;
+    const act = action === 'withdraw' ? 'withdraw' : 'recharge';
+    modal.dataset.action = act;
+    title.innerText = act === 'recharge' ? '充值' : '提现';
+    input.value = '';
+    modal.classList.add('active');
+    setTimeout(() => input.focus(), 0);
+}
+function closeWalletActionModal(event) {
+    if (event && event.target && event.target.id !== 'wallet-action-modal') return;
+    const modal = document.getElementById('wallet-action-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+}
+function confirmWalletAction() {
+    const modal = document.getElementById('wallet-action-modal');
+    const input = document.getElementById('wallet-action-input');
+    if (!modal || !input) return;
+    const amount = Number(input.value);
+    if (!Number.isFinite(amount) || amount <= 0) return alert('请输入有效金额');
+    if (modal.dataset.action === 'withdraw') {
+        if (!spendWalletBalance(amount, '提现')) return alert('余额不足');
+    } else {
+        if (!increaseWalletBalance(amount, '充值')) return alert('充值失败');
+    }
+    closeWalletActionModal();
+}
+function renderWalletBalance() {
+    const el = document.getElementById('wallet-balance-amount');
+    if (!el) return;
+    el.innerText = formatWalletCurrency(getWalletData().balance);
+}
+function renderWalletDetailList() {
+    const list = document.getElementById('wallet-detail-list');
+    if (!list) return;
+    const wallet = getWalletData();
+    const sorted = [...wallet.records].sort((a, b) => b.timestamp - a.timestamp);
+    if (sorted.length === 0) {
+        list.innerHTML = '<div class="wallet-empty-record">暂无收支记录</div>';
+        return;
+    }
+    const monthMap = {};
+    sorted.forEach(record => {
+        const month = getWalletMonthLabel(record.timestamp);
+        if (!monthMap[month]) monthMap[month] = [];
+        monthMap[month].push(record);
+    });
+    const monthHtml = Object.keys(monthMap).map(month => {
+        const rows = monthMap[month].map(record => {
+            const isIncome = record.type === 'income';
+            const changeClass = isIncome ? 'income' : 'expense';
+            const changeSign = isIncome ? '+' : '-';
+            return `<div class="wallet-record-item"><div class="wallet-record-left"><div class="wallet-record-feature">${record.feature}</div><div class="wallet-record-time">${formatWalletRecordTime(record.timestamp)}</div></div><div class="wallet-record-right"><div class="wallet-record-change ${changeClass}">${changeSign}${formatWalletCurrency(record.amount)}</div><div class="wallet-record-balance">余额 ${formatWalletCurrency(record.balanceAfter)}</div></div></div>`;
+        }).join('');
+        return `<div class="wallet-month-card"><div class="wallet-month-title">${month}</div>${rows}</div>`;
+    }).join('');
+    list.innerHTML = monthHtml;
+}
+function renderWalletApp() {
+    renderWalletBalance();
+    renderWalletDetailList();
+}
+function initWalletApp() {
+    closeWalletDetailView();
+    closeWalletActionModal();
+    renderWalletApp();
+}
+function normalizeAccountingData(raw) {
+    const base = raw && typeof raw === 'object' ? raw : {};
+    const selectedRoleIds = Array.isArray(base.selectedRoleIds) ? base.selectedRoleIds.map(String) : [];
+    const balance = Number(base.balance);
+    const sourceRecords = Array.isArray(base.records) ? base.records : [];
+    const records = sourceRecords
+        .map((item, index) => {
+            const amount = Number(item?.amount);
+            const balanceAfter = Number(item?.balanceAfter);
+            const timestamp = Number(item?.timestamp) || Date.now();
+            const type = item?.type === 'income' ? 'income' : 'expense';
+            return {
+                id: item?.id || `accounting_record_${timestamp}_${index}`,
+                type,
+                feature: String(item?.feature || (type === 'income' ? '记账收入' : '记账支出')),
+                amount: Number.isFinite(amount) ? amount : 0,
+                balanceAfter: Number.isFinite(balanceAfter) ? balanceAfter : 0,
+                timestamp
+            };
+        })
+        .filter(item => item.amount > 0);
+    const sourceMessages = Array.isArray(base.messages) ? base.messages : [];
+    const messages = sourceMessages
+        .map((item, index) => {
+            const role = item?.role === 'assistant' ? 'assistant' : 'user';
+            const content = String(item?.content || '').trim();
+            if (!content) return null;
+            return {
+                id: String(item?.id || `accounting_msg_${Date.now()}_${index}`),
+                role,
+                content,
+                contactId: item?.contactId ? String(item.contactId) : '',
+                name: String(item?.name || (role === 'assistant' ? '记账搭子' : '我')),
+                timestamp: Number(item?.timestamp) || Date.now()
+            };
+        })
+        .filter(Boolean);
+    const currentType = base.currentType === 'income' ? 'income' : 'expense';
+    return {
+        selectedRoleIds,
+        balance: Number.isFinite(balance) ? balance : 0,
+        records,
+        messages,
+        currentType
+    };
+}
+function getAccountingData() {
+    return normalizeAccountingData(DB.getAccountingData());
+}
+function saveAccountingData(data) {
+    DB.saveAccountingData(normalizeAccountingData(data));
+}
+function formatAccountingCurrency(amount) {
+    return `¥${Number(amount || 0).toFixed(2)}`;
+}
+function getAccountingMonthLabel(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+}
+function appendAccountingRecord(type, feature, amount, balanceAfter) {
+    const data = getAccountingData();
+    data.records.push({
+        id: `accounting_record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        type: type === 'income' ? 'income' : 'expense',
+        feature: String(feature || (type === 'income' ? '记账收入' : '记账支出')),
+        amount: Number(amount),
+        balanceAfter: Number(balanceAfter),
+        timestamp: Date.now()
+    });
+    saveAccountingData(data);
+}
+function increaseAccountingBalance(amount, feature = '记账收入') {
+    const data = getAccountingData();
+    const safeAmount = Number(amount);
+    if (!Number.isFinite(safeAmount) || safeAmount <= 0) return false;
+    data.balance = Number((data.balance + safeAmount).toFixed(2));
+    saveAccountingData(data);
+    appendAccountingRecord('income', feature, safeAmount, data.balance);
+    return true;
+}
+function spendAccountingBalance(amount, feature = '记账支出') {
+    const data = getAccountingData();
+    const safeAmount = Number(amount);
+    if (!Number.isFinite(safeAmount) || safeAmount <= 0) return false;
+    if (data.balance < safeAmount) return false;
+    data.balance = Number((data.balance - safeAmount).toFixed(2));
+    saveAccountingData(data);
+    appendAccountingRecord('expense', feature, safeAmount, data.balance);
+    return true;
+}
+function updateAccountingTypeToggle() {
+    const btn = document.getElementById('accounting-type-toggle');
+    if (!btn) return;
+    const data = getAccountingData();
+    btn.innerText = data.currentType === 'income' ? '收入' : '支出';
+}
+function formatAccountingYuan(value) {
+    const amount = Number(value) || 0;
+    if (Number.isInteger(amount)) return String(amount);
+    return amount.toFixed(2);
+}
+function renderAccountingStats() {
+    const el = document.getElementById('accounting-chat-stats');
+    if (!el) return;
+    const data = getAccountingData();
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    let income = 0;
+    let expense = 0;
+    data.records.forEach((record) => {
+        const d = new Date(record.timestamp);
+        if (d.getFullYear() !== y || d.getMonth() !== m) return;
+        if (record.type === 'income') income += Number(record.amount) || 0;
+        else expense += Number(record.amount) || 0;
+    });
+    const monthText = now.toLocaleDateString('zh-CN', { month: 'long' });
+    el.innerText = `${monthText} 支出${formatAccountingYuan(expense)}元 收入${formatAccountingYuan(income)}元`;
+}
+function renderAccountingBalance() {
+    const el = document.getElementById('accounting-balance-amount');
+    if (!el) return;
+    el.innerText = formatAccountingCurrency(getAccountingData().balance);
+}
+function renderAccountingDetailList() {
+    const list = document.getElementById('accounting-detail-list');
+    if (!list) return;
+    const data = getAccountingData();
+    const sorted = [...data.records].sort((a, b) => b.timestamp - a.timestamp);
+    if (sorted.length === 0) {
+        list.innerHTML = '<div class="wallet-empty-record">暂无收支记录</div>';
+        return;
+    }
+    const monthMap = {};
+    sorted.forEach(record => {
+        const month = getAccountingMonthLabel(record.timestamp);
+        if (!monthMap[month]) monthMap[month] = [];
+        monthMap[month].push(record);
+    });
+    const monthHtml = Object.keys(monthMap).map(month => {
+        const rows = monthMap[month].map(record => {
+            const isIncome = record.type === 'income';
+            const changeClass = isIncome ? 'income' : 'expense';
+            const changeSign = isIncome ? '+' : '-';
+            return `<div class="wallet-record-item"><div class="wallet-record-left"><div class="wallet-record-feature">${escapeHtml(record.feature)}</div><div class="wallet-record-time">${formatWalletRecordTime(record.timestamp)}</div></div><div class="wallet-record-right"><div class="wallet-record-change ${changeClass}">${changeSign}${formatAccountingCurrency(record.amount)}</div><div class="wallet-record-balance">余额 ${formatAccountingCurrency(record.balanceAfter)}</div></div></div>`;
+        }).join('');
+        return `<div class="wallet-month-card"><div class="wallet-month-title">${month}</div>${rows}</div>`;
+    }).join('');
+    list.innerHTML = monthHtml;
+}
+function openAccountingDetailView() {
+    const view = document.getElementById('accounting-detail-view');
+    if (!view) return;
+    renderAccountingDetailList();
+    view.classList.add('active');
+}
+function closeAccountingDetailView() {
+    const view = document.getElementById('accounting-detail-view');
+    if (!view) return;
+    view.classList.remove('active');
+}
+function switchAccountingTab(tab) {
+    const isBalance = tab !== 'chat';
+    const balanceView = document.getElementById('accounting-balance-view');
+    const chatView = document.getElementById('accounting-chat-view');
+    const tabBalance = document.getElementById('accounting-tab-balance');
+    const tabChat = document.getElementById('accounting-tab-chat');
+    if (balanceView) balanceView.classList.toggle('active', isBalance);
+    if (chatView) chatView.classList.toggle('active', !isBalance);
+    if (tabBalance) tabBalance.classList.toggle('active', isBalance);
+    if (tabChat) tabChat.classList.toggle('active', !isBalance);
+    if (!isBalance) closeAccountingDetailView();
+}
+function openAccountingBalanceModal() {
+    const modal = document.getElementById('accounting-balance-modal');
+    const input = document.getElementById('accounting-balance-input');
+    if (!modal || !input) return;
+    input.value = Number(getAccountingData().balance).toFixed(2);
+    modal.classList.add('active');
+    setTimeout(() => input.focus(), 0);
+}
+function closeAccountingBalanceModal(event) {
+    if (event && event.target && event.target.id !== 'accounting-balance-modal') return;
+    const modal = document.getElementById('accounting-balance-modal');
+    if (modal) modal.classList.remove('active');
+}
+function confirmAccountingBalance() {
+    const input = document.getElementById('accounting-balance-input');
+    if (!input) return;
+    const amount = Number(input.value);
+    if (!Number.isFinite(amount) || amount < 0) return alert('请输入有效余额');
+    const data = getAccountingData();
+    data.balance = Number(amount.toFixed(2));
+    saveAccountingData(data);
+    renderAccountingBalance();
+    renderAccountingDetailList();
+    closeAccountingBalanceModal();
+}
+function renderAccountingRoleList() {
+    const list = document.getElementById('accounting-role-list');
+    if (!list) return;
+    const contacts = DB.getContacts();
+    const selectedSet = new Set(getAccountingData().selectedRoleIds);
+    if (contacts.length === 0) {
+        list.innerHTML = '<div class="accounting-empty">通讯录暂无角色，请先去通讯录添加。</div>';
+        return;
+    }
+    list.innerHTML = contacts.map((contact) => {
+        const cid = String(contact.id);
+        const checked = selectedSet.has(cid) ? 'checked' : '';
+        return `<label class="accounting-role-item"><input type="checkbox" value="${escapeHtml(cid)}" ${checked}><span>${escapeHtml(contact.name || '未命名角色')}</span></label>`;
+    }).join('');
+}
+function openAccountingRoleModal() {
+    const modal = document.getElementById('accounting-role-modal');
+    if (!modal) return;
+    renderAccountingRoleList();
+    modal.classList.add('active');
+}
+function closeAccountingRoleModal(event) {
+    if (event && event.target && event.target.id !== 'accounting-role-modal') return;
+    const modal = document.getElementById('accounting-role-modal');
+    if (modal) modal.classList.remove('active');
+}
+function saveAccountingRoleSelection() {
+    const data = getAccountingData();
+    const checked = [...document.querySelectorAll('#accounting-role-list input:checked')].map((el) => String(el.value));
+    data.selectedRoleIds = checked;
+    saveAccountingData(data);
+    closeAccountingRoleModal();
+}
+function appendAccountingMessage(role, content, extra = {}) {
+    const data = getAccountingData();
+    data.messages.push({
+        id: `accounting_msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        role: role === 'assistant' ? 'assistant' : 'user',
+        content: String(content || ''),
+        contactId: extra.contactId ? String(extra.contactId) : '',
+        name: String(extra.name || (role === 'assistant' ? '记账搭子' : '我')),
+        timestamp: Date.now()
+    });
+    saveAccountingData(data);
+}
+function renderAccountingHistory() {
+    const wrap = document.getElementById('accounting-chat-history');
+    if (!wrap) return;
+    const messages = getAccountingData().messages;
+    if (messages.length === 0) {
+        wrap.innerHTML = '<div class="wallet-empty-record">开始记一笔吧</div>';
+        return;
+    }
+    wrap.innerHTML = messages.map((msg) => {
+        const roleClass = msg.role === 'assistant' ? 'ai' : 'user';
+        const metaText = msg.role === 'assistant' ? escapeHtml(msg.name || '记账搭子') : '我';
+        return `<div class="message-row ${roleClass}"><div class="bubble-container"><div class="message-bubble ${roleClass}">${escapeHtml(msg.content)}</div><div class="accounting-message-meta">${metaText}</div></div></div>`;
+    }).join('');
+    wrap.scrollTop = wrap.scrollHeight;
+}
+function toggleAccountingType() {
+    const data = getAccountingData();
+    data.currentType = data.currentType === 'income' ? 'expense' : 'income';
+    saveAccountingData(data);
+    updateAccountingTypeToggle();
+}
+function handleAccountingEnter(event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    submitAccountingEntry();
+}
+async function submitAccountingEntry() {
+    const itemInput = document.getElementById('accounting-item-input');
+    const amountInput = document.getElementById('accounting-amount-input');
+    if (!itemInput || !amountInput) return;
+    const item = itemInput.value.trim();
+    const amount = Number(amountInput.value);
+    if (!item) return alert('请输入本次消费/收入内容');
+    if (!Number.isFinite(amount) || amount <= 0) return alert('请输入有效金额');
+    const data = getAccountingData();
+    const isIncome = data.currentType === 'income';
+    const signedText = `${item} ${isIncome ? '+' : '-'}${amount.toFixed(2)}`;
+    if (isIncome) {
+        if (!increaseAccountingBalance(amount, item)) return alert('收入记账失败');
+    } else {
+        if (!spendAccountingBalance(amount, item)) return alert('余额不足，无法记录支出');
+    }
+    appendAccountingMessage('user', signedText, { name: '我' });
+    itemInput.value = '';
+    amountInput.value = '';
+    renderAccountingBalance();
+    renderAccountingStats();
+    renderAccountingDetailList();
+    renderAccountingHistory();
+    await triggerAccountingRoleReplies({
+        raw: signedText,
+        item,
+        amount,
+        isIncome
+    });
+}
+async function requestAccountingReplyForRole(contact, payload, settings) {
+    const itemName = String(payload?.item || '').trim() || '记账项目';
+    const amountRmb = Number(payload?.amount) || 0;
+    const isIncome = payload?.isIncome === true;
+    const userMessage = String(payload?.raw || '').trim();
+    const currencyCode = contact?.userSettings?.currencyUnit || 'cny';
+    const currencyCfg = getCurrencyConfigByCode(currencyCode);
+    const convertedAmountText = formatAmountByCurrency(amountRmb, currencyCode);
+    const signedAmountText = `${isIncome ? '+' : '-'}${amountRmb.toFixed(2)}`;
+
+    const account = getUserAccountById(contact.userAccountId);
+    let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${contact.name}\n人设：${contact.persona || ''}`;
+    if (account) {
+        systemContent += `\n\n[记账用户信息]\n名字：${account.name || '我'}\n人设：${account.persona || ''}`;
+    }
+    systemContent += `\n\n[记账货币换算参考]\n用户记账默认货币是人民币。\n本次记账：${itemName} ${signedAmountText}（人民币¥）\n按照你的货币单位（${currencyCfg.label}）固定汇率折算，约为：${isIncome ? '+' : '-'}${convertedAmountText}\n请以折算后的金额感知消费水平，避免把正常金额误判为天价。`;
+    systemContent += '\n\n你是陪我记账的角色。你只需要围绕这条记账消息简短回复，内容可关心、吐槽或提醒，禁止扩展到无关话题。回复100字以内，不要和其他角色互动。';
+    const response = await fetch(getChatCompletionsUrl(settings.url), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.key}`
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            temperature: settings.temperature !== undefined ? settings.temperature : 0.7,
+            messages: [
+                { role: 'system', content: systemContent },
+                { role: 'user', content: `我刚记了一笔账：${userMessage}` }
+            ]
+        })
+    });
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content || '';
+    const extracted = extractThoughtAndBody(content);
+    const first = String(extracted.content || content).split('|||')[0].trim();
+    return first || '收到这笔记账了';
+}
+async function triggerAccountingRoleReplies(payload) {
+    const data = getAccountingData();
+    if (!Array.isArray(data.selectedRoleIds) || data.selectedRoleIds.length === 0) return;
+    const settings = DB.getSettings();
+    if (!settings.key) return alert('请先在设置中配置 API Key');
+    const contacts = DB.getContacts();
+    const targets = data.selectedRoleIds
+        .map((id) => contacts.find((item) => String(item.id) === String(id)))
+        .filter(Boolean);
+    if (targets.length === 0) return;
+    const typing = document.getElementById('accounting-typing-indicator');
+    if (typing) typing.style.display = 'block';
+    const results = await Promise.all(targets.map(async (contact) => {
+        try {
+            const reply = await requestAccountingReplyForRole(contact, payload, settings);
+            return { ok: true, contact, reply };
+        } catch (error) {
+            return { ok: false, contact, error };
+        }
+    }));
+    if (typing) typing.style.display = 'none';
+    let okCount = 0;
+    results.forEach((result) => {
+        if (!result.ok) return;
+        okCount += 1;
+        appendAccountingMessage('assistant', result.reply, { contactId: result.contact.id, name: result.contact.name || '记账搭子' });
+    });
+    renderAccountingHistory();
+    if (okCount === 0) alert('角色回复失败，请检查模型配置或网络');
+}
+function initAccountingApp() {
+    switchAccountingTab('balance');
+    closeAccountingDetailView();
+    updateAccountingTypeToggle();
+    renderAccountingBalance();
+    renderAccountingStats();
+    renderAccountingDetailList();
+    renderAccountingHistory();
+    const typing = document.getElementById('accounting-typing-indicator');
+    if (typing) typing.style.display = 'none';
+}
+function openTransferModal() {
+    document.getElementById('transfer-modal').classList.add('active');
+    document.getElementById('transfer-amount').value = '';
+    document.getElementById('transfer-note').value = '';
+    updateTransferCurrencyPreview();
+}
 function closeTransferModal() { document.getElementById('transfer-modal').classList.remove('active'); }
-function sendTransfer() { const amt = document.getElementById('transfer-amount').value, note = document.getElementById('transfer-note').value; if (!amt) return alert("请输入金额"); const c = DB.getChats(); if (!c[currentChatContact.id]) c[currentChatContact.id] = []; c[currentChatContact.id].push({ role: 'user', type: 'transfer', amount: amt, note: note, status: 'pending', timestamp: Date.now() }); DB.saveChats(c); renderChatHistory(); closeTransferModal(); }
+function sendTransfer() {
+    const amtRaw = document.getElementById('transfer-amount').value;
+    const note = document.getElementById('transfer-note').value;
+    const amt = Number(amtRaw);
+    if (!Number.isFinite(amt) || amt <= 0) return alert("请输入有效金额");
+    if (!spendWalletBalance(amt, 'Vkontakte转账')) return alert("钱包余额不足");
+    const currencyUnit = getCurrentChatCurrencyCode();
+    const c = DB.getChats();
+    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+    c[currentChatContact.id].push({
+        role: 'user',
+        type: 'transfer',
+        amount: amt.toFixed(2),
+        currencyUnit,
+        note: note,
+        status: 'pending',
+        timestamp: Date.now()
+    });
+    DB.saveChats(c);
+    renderChatHistory();
+    closeTransferModal();
+}
+function openVoiceModal() {
+    const modal = document.getElementById('voice-modal');
+    if (!modal) return;
+    const input = document.getElementById('voice-transcript-input');
+    const status = document.getElementById('voice-record-status');
+    const btn = document.getElementById('voice-record-btn');
+    if (input) input.value = '';
+    if (status) status.innerText = '点击开始录音';
+    if (btn) btn.classList.remove('recording');
+    voiceFinalTranscript = '';
+    initVoiceRecordButtonEvents();
+    modal.classList.add('active');
+}
+function closeVoiceModal() {
+    stopVoiceRecognition();
+    const modal = document.getElementById('voice-modal');
+    if (modal) modal.classList.remove('active');
+}
+function handleVoiceModalBackdrop(event) {
+    if (event && event.target && event.target.id === 'voice-modal') closeVoiceModal();
+}
+function initVoiceRecordButtonEvents() {
+    const btn = document.getElementById('voice-record-btn');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.addEventListener('click', toggleVoiceRecognitionByButton);
+    btn.addEventListener('contextmenu', (event) => event.preventDefault());
+    btn.dataset.bound = '1';
+}
+function toggleVoiceRecognitionByButton(event) {
+    if (event) event.preventDefault();
+    if (voiceRecording) {
+        stopVoiceRecognition();
+    } else {
+        startVoiceRecognition();
+    }
+}
+async function ensureVoiceMicrophonePermission() {
+    if (voicePermissionGranted) return true;
+    if (!navigator.mediaDevices?.getUserMedia) return true;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        voicePermissionGranted = true;
+        return true;
+    } catch (error) {
+        alert('无法获取麦克风权限，请检查浏览器设置');
+        return false;
+    }
+}
+async function startVoiceRecognition() {
+    if (voiceRecording) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert('当前浏览器不支持 Web Speech API 语音识别');
+        return;
+    }
+    const permissionOk = await ensureVoiceMicrophonePermission();
+    if (!permissionOk) return;
+    if (!voiceRecognition) {
+        voiceRecognition = new SpeechRecognition();
+        voiceRecognition.continuous = true;
+        voiceRecognition.interimResults = true;
+        voiceRecognition.lang = 'zh-CN';
+        voiceRecognition.onresult = (event) => {
+            const input = document.getElementById('voice-transcript-input');
+            if (!input) return;
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0]?.transcript || '';
+                if (event.results[i].isFinal) {
+                    voiceFinalTranscript += transcript;
+                } else {
+                    interim += transcript;
+                }
+            }
+            const merged = `${voiceFinalTranscript}${interim}`.trim();
+            if (merged) input.value = merged;
+        };
+        voiceRecognition.onerror = () => {
+            voiceRecording = false;
+            const status = document.getElementById('voice-record-status');
+            const btn = document.getElementById('voice-record-btn');
+            if (status) status.innerText = '识别失败，请重试';
+            if (btn) btn.classList.remove('recording');
+        };
+        voiceRecognition.onend = () => {
+            voiceRecording = false;
+            const status = document.getElementById('voice-record-status');
+            const btn = document.getElementById('voice-record-btn');
+            if (status) status.innerText = '点击开始录音';
+            if (btn) btn.classList.remove('recording');
+        };
+    }
+    voiceFinalTranscript = document.getElementById('voice-transcript-input')?.value || '';
+    try {
+        voiceRecognition.start();
+        voiceRecording = true;
+        const status = document.getElementById('voice-record-status');
+        const btn = document.getElementById('voice-record-btn');
+        if (status) status.innerText = '录音中，再次点击结束';
+        if (btn) btn.classList.add('recording');
+    } catch (error) {
+        voiceRecording = false;
+    }
+}
+function stopVoiceRecognition() {
+    if (!voiceRecording || !voiceRecognition) return;
+    try {
+        voiceRecognition.stop();
+    } catch (error) {
+        voiceRecording = false;
+    }
+}
+function formatVoiceTranscriptForDisplay(rawText, chunkSize = 15) {
+    const text = String(rawText || '');
+    if (!text) return '';
+    const isCjkChar = (ch) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/.test(ch);
+    const wrapCjkSegment = (segment) => {
+        const chars = Array.from(segment);
+        if (chars.length <= chunkSize) return segment;
+        const chunks = [];
+        for (let i = 0; i < chars.length; i += chunkSize) {
+            chunks.push(chars.slice(i, i + chunkSize).join(''));
+        }
+        return chunks.join('\n');
+    };
+    const formatLine = (line) => {
+        if (!line) return line;
+        const chars = Array.from(line);
+        let result = '';
+        let buffer = '';
+        let lastType = null;
+        chars.forEach((ch) => {
+            const type = isCjkChar(ch) ? 'cjk' : 'other';
+            if (lastType === null || lastType === type) {
+                buffer += ch;
+                lastType = type;
+                return;
+            }
+            result += lastType === 'cjk' ? wrapCjkSegment(buffer) : buffer;
+            buffer = ch;
+            lastType = type;
+        });
+        if (buffer) result += lastType === 'cjk' ? wrapCjkSegment(buffer) : buffer;
+        return result;
+    };
+    return text.split('\n').map(formatLine).join('\n');
+}
+function sendVoiceMessage() {
+    if (!currentChatContact) return;
+    const input = document.getElementById('voice-transcript-input');
+    const voiceText = input ? input.value.trim() : '';
+    if (!voiceText) return alert('请先录音或输入语音转文字内容');
+    const c = DB.getChats();
+    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+    c[currentChatContact.id].push({
+        role: 'user',
+        type: 'voice',
+        voiceText,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(c);
+    renderChatHistory();
+    closeVoiceModal();
+}
+function openRedPacketModal() {
+    document.getElementById('redpacket-modal').classList.add('active');
+    document.getElementById('redpacket-amount').value = '';
+    document.getElementById('redpacket-note').value = '';
+    updateRedPacketCurrencyPreview();
+}
+function closeRedPacketModal() { document.getElementById('redpacket-modal').classList.remove('active'); }
+function sendRedPacket() {
+    const amountRaw = document.getElementById('redpacket-amount').value;
+    const note = document.getElementById('redpacket-note').value.trim();
+    const amount = Number(amountRaw);
+    if (!amountRaw || !Number.isFinite(amount) || amount <= 0) return alert("请输入有效红包金额");
+    if (!spendWalletBalance(amount, '发红包')) return alert("钱包余额不足");
+    const currencyUnit = getCurrentChatCurrencyCode();
+    const c = DB.getChats();
+    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+    c[currentChatContact.id].push({
+        role: 'user',
+        type: 'redpacket',
+        amount: amount.toFixed(2),
+        currencyUnit,
+        note,
+        status: 'pending',
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(c);
+    renderChatHistory();
+    closeRedPacketModal();
+}
+function openImageModal() {
+    document.getElementById('image-modal').classList.add('active');
+    document.getElementById('chat-image-file').value = '';
+    document.getElementById('chat-image-url').value = '';
+    document.getElementById('chat-image-desc').value = '';
+    pendingChatImageDataUrl = '';
+}
+function closeImageModal() { document.getElementById('image-modal').classList.remove('active'); }
+function previewChatImageFile(input) {
+    const file = input?.files?.[0];
+    if (!file) {
+        pendingChatImageDataUrl = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        pendingChatImageDataUrl = e?.target?.result || '';
+    };
+    reader.readAsDataURL(file);
+}
+function sendImageMessage() {
+    const desc = document.getElementById('chat-image-desc').value.trim();
+    const url = document.getElementById('chat-image-url').value.trim();
+    const imageUrl = url || pendingChatImageDataUrl;
+    if (!desc) return alert("请填写图片描述");
+    if (!imageUrl) return alert("请上传图片或输入图片 URL");
+    const c = DB.getChats();
+    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+    c[currentChatContact.id].push({
+        role: 'user',
+        type: 'image',
+        imageUrl,
+        imageDesc: desc,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(c);
+    renderChatHistory();
+    closeImageModal();
+}
+function openVideoModal() {
+    document.getElementById('video-modal').classList.add('active');
+    document.getElementById('chat-video-cover-file').value = '';
+    document.getElementById('chat-video-cover-url').value = '';
+    document.getElementById('chat-video-desc').value = '';
+    pendingVideoCoverDataUrl = '';
+}
+function closeVideoModal() { document.getElementById('video-modal').classList.remove('active'); }
+function previewVideoCoverFile(input) {
+    const file = input?.files?.[0];
+    if (!file) {
+        pendingVideoCoverDataUrl = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        pendingVideoCoverDataUrl = e?.target?.result || '';
+    };
+    reader.readAsDataURL(file);
+}
+function sendVideoMessage() {
+    const desc = document.getElementById('chat-video-desc').value.trim();
+    const coverUrlInput = document.getElementById('chat-video-cover-url').value.trim();
+    const videoCoverUrl = coverUrlInput || pendingVideoCoverDataUrl || '';
+    if (!desc) return alert("请填写视频描述");
+    const c = DB.getChats();
+    if (!c[currentChatContact.id]) c[currentChatContact.id] = [];
+    c[currentChatContact.id].push({
+        role: 'user',
+        type: 'video',
+        videoDesc: desc,
+        videoCoverUrl,
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(c);
+    renderChatHistory();
+    closeVideoModal();
+}
+function openVideoDetailModal(desc) {
+    const textEl = document.getElementById('video-detail-text');
+    textEl.textContent = desc || '（无描述）';
+    document.getElementById('video-detail-modal').classList.add('active');
+}
+function closeVideoDetailModal() { document.getElementById('video-detail-modal').classList.remove('active'); }
 
 function formatChatTime(timestamp) {
     if (!timestamp) return '';
@@ -2637,15 +5589,161 @@ function renderChatHistory(maintainScroll = false) {
                 let st = "等待确认", ic = "💰"; 
                 if (msg.status === 'accepted') { st = "已收款"; ic = "✅"; b.classList.add('accepted'); } 
                 if (msg.status === 'rejected') { st = "已退还"; ic = "↩️"; b.classList.add('rejected'); } 
-                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">¥${msg.amount}</span><span class="transfer-status">${st}</span></div></div><div class="transfer-footer">转账备注: ${msg.note || '无'}</div>`; 
+                const transferAmountText = formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">${transferAmountText}</span><span class="transfer-status">${st}</span></div></div><div class="transfer-footer">转账备注: ${msg.note || '无'}</div>`; 
                 bc.appendChild(b); 
+            } else if (msg.type === 'pay_invite_req') {
+                const b = document.createElement('div');
+                b.className = 'message-bubble transfer-bubble';
+                const payAmountText = msg.amountText || formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                const orderCount = Number(msg.orderCount) || 0;
+                const orderTimeText = msg.orderTimeText || formatShoppingOrderTime(msg.orderTime || msg.timestamp || Date.now());
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">🛒</div><div class="transfer-info"><span class="transfer-amount">邀请你代付</span><span class="transfer-status">${payAmountText}</span></div></div><div class="transfer-footer">订单摘要：${orderCount}件 ｜ ${payAmountText} ｜ 下单时间 ${orderTimeText}</div>`;
+                bc.appendChild(b);
+            } else if (msg.type === 'pay_invite_receipt') {
+                const b = document.createElement('div');
+                b.className = 'message-bubble transfer-bubble';
+                const accepted = msg.status === 'accepted';
+                b.classList.add(accepted ? 'accepted' : 'rejected');
+                const payAmountText = msg.amountText || formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                const title = accepted ? '我已帮你代付' : '我已拒绝你的代付邀请';
+                const icon = accepted ? '✅' : '❌';
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${icon}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">${payAmountText}</span></div></div><div class="transfer-footer">${accepted ? '订单已处理' : '本次无法代付'}</div>`;
+                bc.appendChild(b);
+            } else if (msg.type === 'gift_req') {
+                const b = document.createElement('div');
+                b.className = 'message-bubble transfer-bubble';
+                const amountText = msg.amountText || formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                const orderTimeText = msg.orderTimeText || formatShoppingOrderTime(msg.orderTime || msg.timestamp || Date.now());
+                const hasImage = typeof msg.image === 'string' && msg.image.trim();
+                const iconHtml = hasImage
+                    ? `<img src="${msg.image}" alt="${escapeHTML(msg.title || '礼物')}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+                    : '🎁';
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${iconHtml}</div><div class="transfer-info"><span class="transfer-amount">${escapeHTML(msg.title || '礼物')}</span><span class="transfer-status">${amountText}</span></div></div><div class="transfer-footer">下单时间：${orderTimeText}</div>`;
+                bc.appendChild(b);
+            } else if (msg.type === 'gift_receipt') {
+                const b = document.createElement('div');
+                b.className = 'message-bubble transfer-bubble';
+                const accepted = msg.status === 'accepted';
+                b.classList.add(accepted ? 'accepted' : 'rejected');
+                const title = accepted ? '我已收下你的礼物' : '我已拒收你的礼物';
+                const icon = accepted ? '✅' : '❌';
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${icon}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">${escapeHTML(msg.title || '礼物')}</span></div></div><div class="transfer-footer">${accepted ? '谢谢你的心意' : '这次先不收啦'}</div>`;
+                bc.appendChild(b);
+            } else if (msg.type === 'food_gift') {
+                const b = document.createElement('div');
+                const isDarkGift = msg.isDark === true;
+                b.className = `message-bubble transfer-bubble accepted ${isDarkGift ? 'food-gift-dark' : ''}`;
+                const dishEmoji = msg.foodEmoji || '';
+                const dishName = escapeHTML(msg.foodName || '食物');
+                const giftTitle = isDarkGift ? '黑暗料理赠送' : '美食赠送';
+                const giftStatus = isDarkGift ? '黑暗料理' : `${dishEmoji}${dishName}`;
+                const giftFooter = isDarkGift ? '向你赠送了黑暗料理...' : `向你赠送了${dishEmoji}${dishName}`;
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">🍽️</div><div class="transfer-info"><span class="transfer-amount">${giftTitle}</span><span class="transfer-status">${giftStatus}</span></div></div><div class="transfer-footer">${giftFooter}</div>`;
+                bc.appendChild(b);
+            } else if (msg.type === 'redpacket') {
+                const b = document.createElement('div');
+                b.className = 'message-bubble redpacket-bubble';
+                let rpStatus = '待领取';
+                if (msg.status === 'accepted') rpStatus = '已领取';
+                if (msg.status === 'rejected') rpStatus = '已退回';
+                const redpacketAmountText = formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                b.innerHTML = `<div class="redpacket-header"><div class="redpacket-icon">福</div><div class="redpacket-info"><span class="redpacket-amount">${redpacketAmountText}</span><span class="redpacket-note">${msg.note || '恭喜发财'}</span></div></div><div class="redpacket-footer">${rpStatus}</div>`;
+                bc.appendChild(b);
             } else if (msg.type === 'transfer_receipt') { 
                 const b = document.createElement('div'); 
                 b.className = 'message-bubble transfer-bubble'; 
                 if (msg.status === 'rejected') b.classList.add('rejected'); else b.classList.add('accepted'); 
                 const title = msg.status === 'accepted' ? "已收款" : "已退还", ic = msg.status === 'accepted' ? "✅" : "↩️", desc = msg.status === 'accepted' ? "已接受您的转账" : "已拒收您的转账"; 
-                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">¥${msg.amount}</span></div></div><div class="transfer-footer">${desc}</div>`; 
+                const transferReceiptAmountText = formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">${transferReceiptAmountText}</span></div></div><div class="transfer-footer">${desc}</div>`; 
                 bc.appendChild(b); 
+            } else if (msg.type === 'redpacket_receipt') {
+                const b = document.createElement('div');
+                b.className = 'message-bubble transfer-bubble';
+                if (msg.status === 'rejected') b.classList.add('rejected'); else b.classList.add('accepted');
+                const title = msg.status === 'accepted' ? "已领取" : "已退回";
+                const ic = msg.status === 'accepted' ? "🧧" : "↩️";
+                const desc = msg.status === 'accepted' ? "已领取你的红包" : "已拒收并退回红包";
+                const redpacketReceiptAmountText = formatAmountByCurrency(msg.amount, msg.currencyUnit || getCurrentChatCurrencyCode());
+                b.innerHTML = `<div class="transfer-header"><div class="transfer-icon">${ic}</div><div class="transfer-info"><span class="transfer-amount">${title}</span><span class="transfer-status">${redpacketReceiptAmountText}</span></div></div><div class="transfer-footer">${desc}</div>`;
+                bc.appendChild(b);
+            } else if (msg.type === 'voice') {
+                row.classList.add('voice-row');
+                const stack = document.createElement('div');
+                stack.className = 'voice-message-stack';
+                const b = document.createElement('div');
+                b.className = `message-bubble ${msg.role === 'user' ? 'user' : 'ai'} voice-bubble`;
+                const iconWrap = document.createElement('div');
+                iconWrap.className = 'voice-bubble-icon-wrap';
+                iconWrap.innerHTML = VOICE_BUBBLE_ICON_SVG;
+                b.appendChild(iconWrap);
+                stack.appendChild(b);
+                const transcriptStrip = document.createElement('div');
+                const roleClass = msg.role === 'user' ? 'user' : 'ai';
+                transcriptStrip.className = `voice-transcript-strip ${roleClass}`;
+                transcriptStrip.innerText = formatVoiceTranscriptForDisplay(msg.voiceText || msg.content || '');
+                stack.appendChild(transcriptStrip);
+                bc.appendChild(stack);
+                const syncVoiceStripColor = () => {
+                    const bubbleStyle = getComputedStyle(b);
+                    const bg = bubbleStyle.backgroundColor;
+                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+                        transcriptStrip.style.backgroundColor = bg;
+                    }
+                    if (bubbleStyle.color) {
+                        transcriptStrip.style.color = bubbleStyle.color;
+                    }
+                };
+                syncVoiceStripColor();
+                requestAnimationFrame(syncVoiceStripColor);
+                if (!isSelectionMode) {
+                    stack.addEventListener('touchstart', () => startLongPress(originalIndex));
+                    stack.addEventListener('touchend', cancelLongPress);
+                    stack.addEventListener('mousedown', () => startLongPress(originalIndex));
+                    stack.addEventListener('mouseup', cancelLongPress);
+                    stack.addEventListener('contextmenu', e => e.preventDefault());
+                }
+            } else if (msg.type === 'image') {
+                const wrap = document.createElement('div');
+                wrap.className = 'image-plain-message';
+                const img = document.createElement('img');
+                img.src = msg.imageUrl || '';
+                img.alt = msg.imageDesc || '图片';
+                wrap.appendChild(img);
+                bc.appendChild(wrap);
+                if (!isSelectionMode) {
+                    wrap.addEventListener('touchstart', () => startLongPress(originalIndex));
+                    wrap.addEventListener('touchend', cancelLongPress);
+                    wrap.addEventListener('mousedown', () => startLongPress(originalIndex));
+                    wrap.addEventListener('mouseup', cancelLongPress);
+                    wrap.addEventListener('contextmenu', e => e.preventDefault());
+                }
+            } else if (msg.type === 'video') {
+                const wrap = document.createElement('div');
+                wrap.className = 'video-plain-message';
+                const thumb = document.createElement('div');
+                thumb.className = 'video-plain-thumb';
+                if (msg.videoCoverUrl) {
+                    const cover = document.createElement('img');
+                    cover.className = 'video-thumb-image';
+                    cover.src = msg.videoCoverUrl;
+                    cover.alt = '视频封面';
+                    thumb.appendChild(cover);
+                }
+                const playIcon = document.createElement('div');
+                playIcon.className = 'video-play-icon';
+                thumb.appendChild(playIcon);
+                wrap.appendChild(thumb);
+                wrap.onclick = () => openVideoDetailModal(msg.videoDesc || '');
+                bc.appendChild(wrap);
+                if (!isSelectionMode) {
+                    wrap.addEventListener('touchstart', () => startLongPress(originalIndex));
+                    wrap.addEventListener('touchend', cancelLongPress);
+                    wrap.addEventListener('mousedown', () => startLongPress(originalIndex));
+                    wrap.addEventListener('mouseup', cancelLongPress);
+                    wrap.addEventListener('contextmenu', e => e.preventDefault());
+                }
             } else if (msg.type === 'couple_invite_req') {
                 const b = document.createElement('div');
                 b.className = `message-bubble couple-invite-req`;
@@ -2679,10 +5777,13 @@ function renderChatHistory(maintainScroll = false) {
                 stage.style.width = '100%';
                 stage.style.borderRadius = '18px';
                 stage.style.padding = '0';
-                stage.style.overflow = 'hidden';
+                stage.style.overflow = 'visible';
                 stage.style.boxShadow = '0 8px 24px rgba(50,45,95,0.16)';
                 stage.style.backdropFilter = 'blur(10px)';
-                stage.innerHTML = msg.content || '';
+                stage.style.boxSizing = 'border-box';
+                stage.style.wordBreak = 'break-word';
+                stage.style.overflowWrap = 'anywhere';
+                renderHtmlTheaterIntoStage(stage, msg.content || '');
                 bc.appendChild(stage);
             } else { 
                 const b = document.createElement('div'); 
@@ -2694,7 +5795,7 @@ function renderChatHistory(maintainScroll = false) {
                     b.appendChild(q); 
                 } 
                 const t = document.createElement('span'); 
-                t.innerText = msg.content; 
+                t.innerText = msg.role === 'assistant' ? stripLeadingLeakedTimePrefix(msg.content) : msg.content; 
                 b.appendChild(t); 
                 bc.appendChild(b);
                 if (!isSelectionMode) { 
@@ -2881,6 +5982,164 @@ function saveHtmlTheaterMessageForContact(contactId, htmlContent) {
     if (currentChatContact && currentChatContact.id === contactId) renderChatHistory();
 }
 
+function getLastAssistantTimestampForContact(contactId) {
+    const chats = DB.getChats()[contactId] || [];
+    for (let i = chats.length - 1; i >= 0; i--) {
+        if (chats[i].role === 'assistant' && chats[i].timestamp) return Number(chats[i].timestamp) || 0;
+    }
+    return 0;
+}
+
+function mapChatMessageForBackgroundAPI(msg) {
+    if (msg.isRetracted) {
+        if (msg.role === 'user') {
+            return { role: 'system', content: '[系统提示：用户撤回了一条消息。你虽然看不到内容，但知道用户撤回了。请自然回应。]' };
+        }
+        return { role: 'assistant', content: '[已撤回的消息]' };
+    }
+    if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
+    if (msg.type === 'redpacket') return { role: 'user', content: `[用户给你发送了红包 ¥${msg.amount}，备注：${msg.note || '无'}]` };
+    if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
+    if (msg.type === 'redpacket_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已领取红包 ¥${msg.amount}]` : `[我已拒收并退回红包 ¥${msg.amount}]` };
+    if (msg.type === 'image') return { role: msg.role, content: `[图片：${msg.imageDesc || '未描述'}]` };
+    if (msg.type === 'video') return { role: msg.role, content: `[视频：${msg.videoDesc || '未描述'}]` };
+    if (msg.type === 'voice') return { role: msg.role, content: `[语音转文字：${msg.voiceText || msg.content || ''}]` };
+    if (msg.type === 'couple_invite_req') return { role: 'user', content: '[用户向你发送了“情侣空间”开通邀请]' };
+    if (msg.type === 'couple_invite_accept') return { role: 'assistant', content: '[我已同意你的情侣空间邀请]' };
+    if (msg.type === 'couple_invite_reject') return { role: 'assistant', content: '[我已拒绝你的情侣空间邀请]' };
+    if (msg.type === 'call_end') return { role: 'system', content: msg.content };
+    if (msg.type === 'sticker') return { role: msg.role, content: `[图片表情：${msg.stickerDesc || '表情'}]` };
+    return { role: msg.role, content: msg.content || '' };
+}
+
+function extractBackgroundReplyParts(rawContent) {
+    let content = String(rawContent || '').trim();
+    let thought = null;
+    const thoughtMatch = content.match(/^\[(?:THOUGHTS|thoughts):(.*?)\]/s);
+    if (thoughtMatch) {
+        thought = thoughtMatch[1].trim();
+        content = content.replace(thoughtMatch[0], '').trim();
+        content = content.replace(/^\|\|\|\s*/, '').trim();
+    }
+    content = content.replace(/\[HTML_THEATER\][\s\S]*?\[\/HTML_THEATER\]/gi, '').trim();
+    const parts = content.split('|||').map(p => p.trim()).filter(Boolean);
+    if (parts.length === 0 && content) parts.push(content);
+    return { thought, parts: normalizeSingleSendAtPrefixParts(parts, { ensureFirstPrefix: true }) };
+}
+
+async function triggerBackgroundAutoReplyForContact(contact) {
+    if (!contact || !contact.id) return false;
+    const settings = DB.getSettings();
+    if (!settings.key) return false;
+    const userSettings = contact.userSettings || {};
+    const contextLimit = userSettings.contextLimit || 100;
+    const history = (DB.getChats()[contact.id] || []).slice(-contextLimit);
+    const apiMessages = history.map(mapChatMessageForBackgroundAPI);
+
+    let systemContent = `${settings.prompt}\n\n[角色信息]\n名字：${contact.name}\n人设：${contact.persona}`;
+    if (userSettings.userName || userSettings.userPersona) {
+        systemContent += `\n\n[用户信息]\n名字：${userSettings.userName || 'User'}\n人设：${userSettings.userPersona || ''}`;
+    }
+    systemContent += `\n\n===== 【后台主动发消息模式】 =====
+你正在模拟真实聊天软件的后台来信，请基于最近对话自然地主动发来一条或多条短消息。
+必须使用格式：[THOUGHTS: 心声] ||| 第一条消息 ||| 第二条消息
+要求：语气自然、生活化，不要解释自己是AI，不要输出时间戳。`;
+
+    const messages = [
+        { role: 'system', content: systemContent },
+        ...apiMessages,
+        { role: 'user', content: '[系统提示：用户当前不在前台，请你主动发送一次关心、分享近况或延续话题的消息。]' }
+    ];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
+    try {
+        const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
+        const response = await fetch(getChatCompletionsUrl(settings.url), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+            body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) return false;
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) return false;
+        const { thought, parts } = extractBackgroundReplyParts(content);
+        if (parts.length === 0) return false;
+
+        const chats = DB.getChats();
+        if (!chats[contact.id]) chats[contact.id] = [];
+        parts.forEach((part, index) => {
+            const item = {
+                role: 'assistant',
+                content: part,
+                timestamp: Date.now() + index,
+                mode: 'online'
+            };
+            if (thought && index === parts.length - 1) item.thought = thought;
+            chats[contact.id].push(item);
+        });
+        DB.saveChats(chats);
+
+        if (currentChatContact && currentChatContact.id === contact.id) {
+            renderChatHistory();
+        }
+        void sendBrowserNotification(`${contact.name} 发来新消息`, parts[0].slice(0, 60));
+        return true;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        return false;
+    }
+}
+
+async function runBackgroundMessageCheck() {
+    if (!document.hidden) return;
+    const contacts = DB.getContacts();
+    const now = Date.now();
+    for (const contact of contacts) {
+        const us = contact.userSettings || {};
+        if (us.enableBackgroundMessages !== true) continue;
+        const intervalMinutes = normalizeBackgroundIntervalMinutes(us.backgroundMessageIntervalMinutes || 60);
+        const intervalMs = intervalMinutes * 60 * 1000;
+        const lastRun = backgroundMessageLastRunMap[contact.id] || getLastAssistantTimestampForContact(contact.id) || 0;
+        if (now - lastRun < intervalMs) continue;
+        if (backgroundMessageInFlight.has(contact.id)) continue;
+
+        backgroundMessageInFlight.add(contact.id);
+        try {
+            const ok = await triggerBackgroundAutoReplyForContact(contact);
+            if (ok) backgroundMessageLastRunMap[contact.id] = Date.now();
+        } finally {
+            backgroundMessageInFlight.delete(contact.id);
+        }
+    }
+}
+
+function startBackgroundMessageScheduler() {
+    if (backgroundMessageTimer) return;
+    runBackgroundMessageCheck();
+    backgroundMessageTimer = setInterval(runBackgroundMessageCheck, BACKGROUND_MESSAGE_CHECK_MS);
+}
+
+function stopBackgroundMessageScheduler() {
+    if (!backgroundMessageTimer) return;
+    clearInterval(backgroundMessageTimer);
+    backgroundMessageTimer = null;
+}
+
+function syncBackgroundRuntimeByVisibility() {
+    if (document.hidden) {
+        startBackgroundMessageScheduler();
+    } else {
+        stopBackgroundMessageScheduler();
+    }
+    applyKeepAliveAudioState();
+}
+
+document.addEventListener('visibilitychange', syncBackgroundRuntimeByVisibility);
+
 function handleEnterKey(event) {
     if (event.key === 'Enter') {
         event.preventDefault(); 
@@ -2888,9 +6147,64 @@ function handleEnterKey(event) {
     }
 }
 
+const LEAKED_TIME_PREFIX_REGEX = /^\s*(?:[\[［]\s*发送于\s*[：:]\s*\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}\s+\d{1,2}:\d{2}:\d{2}\s*[\]］]|[\[［]\s*\d{1,2}:\d{2}:\d{2}\s*[\]］])\s*/;
+
+function stripLeadingLeakedTimePrefix(text) {
+    let content = String(text || '');
+    let previous = '';
+    while (content !== previous) {
+        previous = content;
+        content = content.replace(LEAKED_TIME_PREFIX_REGEX, '');
+    }
+    return content.trim();
+}
+
+function formatSendAtPrefix(timestamp = Date.now()) {
+    const d = new Date(timestamp);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `[发送于：${y}/${m}/${day} ${hh}:${mm}:${ss}]`;
+}
+
+function normalizeSingleSendAtPrefixParts(parts, options = {}) {
+    const ensureFirstPrefix = options.ensureFirstPrefix !== false;
+    const normalized = (Array.isArray(parts) ? parts : [])
+        .map(p => String(p || '').trim())
+        .filter(Boolean);
+    if (normalized.length === 0) return [];
+
+    for (let i = 1; i < normalized.length; i++) {
+        normalized[i] = stripLeadingLeakedTimePrefix(normalized[i]);
+    }
+
+    const firstBody = stripLeadingLeakedTimePrefix(normalized[0]);
+    normalized[0] = ensureFirstPrefix
+        ? `${formatSendAtPrefix()} ${firstBody}`.trim()
+        : firstBody;
+
+    return normalized.filter(Boolean);
+}
+
+function extractThoughtAndBody(rawContent) {
+    let content = stripLeadingLeakedTimePrefix(rawContent);
+    let thought = null;
+    const thoughtMatch = content.match(/^\[(?:THOUGHTS|thoughts):(.*?)\]/s);
+    if (thoughtMatch) {
+        thought = thoughtMatch[1].trim();
+        content = content.replace(thoughtMatch[0], '').trim();
+        content = content.replace(/^\|\|\|\s*/, '').trim();
+    }
+    content = stripLeadingLeakedTimePrefix(content);
+    return { thought, content };
+}
+
 function sendMessage() { const isCallActive = document.getElementById('call-screen').classList.contains('active'); const isOfflineActive = document.getElementById('offline-mode').classList.contains('active'); let inputId = 'message-input'; if (isCallActive) inputId = 'call-message-input'; if (isOfflineActive) inputId = 'offline-message-input'; const input = document.getElementById(inputId); const t = input.value.trim(); if (!t) return; saveMessage('user', t, pendingQuoteContent); input.value = ''; cancelQuote(); if (isOfflineActive) { document.getElementById('offline-typing-indicator').style.display = 'block'; triggerAIResponse(); } }
 function regenerateLastResponse() { if (!currentChatContact) return; const c = DB.getChats(); let chat = c[currentChatContact.id] || []; if (chat.length === 0) return; let removed = false; while (chat.length > 0 && chat[chat.length - 1].role === 'assistant') { chat.pop(); removed = true; } if (removed) { DB.saveChats(c); renderChatHistory(); triggerAIResponse(); } else alert("最后一条不是AI消息"); }
-function continueChat() { triggerAIResponse(); }
+function continueChat() { triggerAIResponse({ continueFromLastAssistant: true }); }
 let callTimerInterval = null;
 let callSeconds = 0;
 function startCall() { 
@@ -2925,7 +6239,12 @@ async function triggerCallStartResponse() {
             return { role: 'assistant', content: `[已撤回的消息]` };
         }
         if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
+        if (msg.type === 'redpacket') return { role: 'user', content: `[用户给你发送了红包 ¥${msg.amount}，备注：${msg.note || '无'}]` };
         if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
+        if (msg.type === 'redpacket_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已领取红包 ¥${msg.amount}]` : `[我已拒收并退回红包 ¥${msg.amount}]` };
+        if (msg.type === 'image') return { role: msg.role, content: `[图片：${msg.imageDesc || '未描述'}]` };
+        if (msg.type === 'video') return { role: msg.role, content: `[视频：${msg.videoDesc || '未描述'}]` };
+        if (msg.type === 'voice') return { role: msg.role, content: `[语音转文字：${msg.voiceText || msg.content || ''}]` };
         if (msg.type === 'couple_invite_req') return { role: 'user', content: `[用户向你发送了“情侣空间”开通邀请]` };
         if (msg.type === 'couple_invite_accept') return { role: 'assistant', content: `[我已同意你的情侣空间邀请]` };
         if (msg.type === 'couple_invite_reject') return { role: 'assistant', content: `[我已拒绝你的情侣空间邀请]` };
@@ -2948,7 +6267,7 @@ async function triggerCallStartResponse() {
 
     try {
         const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
-        const response = await fetch(`${settings.url}/chat/completions`, {
+        const response = await fetch(getChatCompletionsUrl(settings.url), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
             body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp })
@@ -2956,13 +6275,9 @@ async function triggerCallStartResponse() {
         const data = await response.json();
         if (data.choices && data.choices.length > 0) {
             let content = data.choices[0].message.content;
-            let extractedThought = null;
-            const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s);
-            if (thoughtMatch) {
-                extractedThought = thoughtMatch[1].trim();
-                content = content.replace(thoughtMatch[0], '').trim();
-                content = content.replace(/^\|\|\|\s*/, '').trim();
-            }
+            const extracted = extractThoughtAndBody(content);
+            let extractedThought = extracted.thought;
+            content = extracted.content;
             document.getElementById('call-status').innerText = "通话中";
             if (content && content.trim()) {
                 saveMessage('assistant', content, null, extractedThought);
@@ -3018,10 +6333,9 @@ function createOfflineRainRenderer(container) {
     if (!container) return null;
     const canvas = document.createElement('canvas');
     canvas.className = 'offline-rain-surface';
+    canvas.style.background = 'transparent';
     const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
     if (!gl) return null;
-    container.innerHTML = '';
-    container.appendChild(canvas);
 
     const vertexSource = `
         attribute vec2 aPosition;
@@ -3168,7 +6482,8 @@ function createOfflineRainRenderer(container) {
             float dropletShine = smoothstep(0.35, 1.0, c.x) * 0.09;
             col += vec3(0.95, 0.97, 1.0) * dropletShine;
 
-            float layerAlpha = mix(0.06, 0.78, uHasTexture);
+            // 无背景纹理时，完全由 shader 输出画面，避免白底“吃掉”雨滴效果。
+            float layerAlpha = (uHasTexture > 0.5) ? 0.78 : 1.0;
             gl_FragColor = vec4(col, layerAlpha);
         }
     `;
@@ -3220,11 +6535,16 @@ function createOfflineRainRenderer(container) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     const emptyPixel = new Uint8Array([20, 28, 42, 255]);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, emptyPixel);
+    gl.clearColor(0, 0, 0, 0);
 
     let hasTexture = 0;
     let rafId = 0;
     let startTime = performance.now();
     let rainAmount = 0.82;
+
+    // 仅在初始化成功后挂载，避免 shader 报错时留下遮挡层。
+    container.innerHTML = '';
+    container.appendChild(canvas);
 
     const resize = () => {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -3241,6 +6561,7 @@ function createOfflineRainRenderer(container) {
         const elapsed = (now - startTime) / 1000;
         resize();
         gl.useProgram(program);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
         gl.uniform1f(timeLocation, elapsed);
         gl.uniform1f(rainAmountLocation, rainAmount);
@@ -3257,11 +6578,16 @@ function createOfflineRainRenderer(container) {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-            hasTexture = 1;
+            try {
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+                hasTexture = 1;
+            } catch (error) {
+                console.warn('线下模式背景纹理加载失败，将回退到程序纹理背景:', error);
+                hasTexture = 0;
+            }
         };
         img.onerror = () => {
             hasTexture = 0;
@@ -3292,11 +6618,123 @@ function setOfflineModeBackground(bgUrl) {
     const bgLayer = document.getElementById('offline-bg-photo');
     if (!bgLayer) return;
     if (bgUrl) {
-        bgLayer.style.backgroundImage = `url(${bgUrl})`;
+        const escapedUrl = String(bgUrl).replace(/"/g, '\\"');
+        bgLayer.style.backgroundImage = `url("${escapedUrl}")`;
     } else {
-        bgLayer.style.backgroundImage = 'none';
+        // 无外部图片时使用暗色渐变兜底，保证 shader 雨滴层对比度。
+        bgLayer.style.backgroundImage = 'linear-gradient(180deg, #0f1b2f 0%, #101726 55%, #0a111d 100%)';
     }
     if (offlineRainRenderer) offlineRainRenderer.setImage(bgUrl || '');
+}
+
+function getOfflinePerspectiveInstruction(perspective, contactName, userName) {
+    const safeContactName = String(contactName || '角色').trim() || '角色';
+    const rawUserName = String(userName || '').trim();
+    const safeThirdUserName = rawUserName && rawUserName !== '我' ? rawUserName : '用户';
+
+    switch (perspective) {
+        case 'first_char':
+            return `【正文人称锁定】\n- 正文必须严格站在${safeContactName}本人视角书写。\n- “我”只允许指代${safeContactName}，绝对不能指代用户。\n- “你”只允许指代用户。\n- 正文里所有动作、神态、心理、感受，若用“我”开头，主体都必须是${safeContactName}。`;
+        case 'second':
+            return `【正文人称锁定】\n- 正文必须严格用“你”指代用户，不能把用户写成“我”或“${safeThirdUserName}”。\n- 若正文里出现“我”，其主体只能是${safeContactName}。\n- 绝对禁止把“你”误写成${safeContactName}自己。`;
+        case 'third':
+            return `【正文人称锁定】\n- 正文必须严格用“${safeThirdUserName}”指代用户，不能把用户写成“我”或“你”。\n- 若正文里出现“我”，其主体只能是${safeContactName}。\n- 若正文里出现“你”，也只能用于角色对用户的直接对话，不能作为叙事主视角。`;
+        case 'first_user':
+        default:
+            return `【正文人称锁定】\n- 正文必须严格站在用户本人视角书写。\n- 正文中的“我”只允许指代用户，绝对不能指代${safeContactName}。\n- 正文中的“你”默认指代${safeContactName}。\n- 若要描写${safeContactName}的动作、神态、心理、感受，只能写成“你…… / ${safeContactName}…… / 他(她/TA)……”这类形式，绝对禁止把${safeContactName}写成“我”。\n- 输出前自检：正文里每一个“我”都必须是用户本人。`;
+    }
+}
+
+function getOfflineStatusBarInstruction(contactName) {
+    const safeContactName = String(contactName || '角色').trim() || '角色';
+    return `【状态栏主体锁定】\n- 状态栏四项只允许描述${safeContactName}当前的状态，不受正文人称设置影响。\n- 【心情】只写${safeContactName}的情绪；【服装状态】只写${safeContactName}的衣着；【动作】只写${safeContactName}的动作；【心声独白】只写${safeContactName}此刻的内心活动。\n- 绝对禁止在状态栏中描写用户的情绪、衣着、动作、内心、身体反应或对用户状态的判断。\n- 状态栏不要把用户写成主体；拿不准时，宁可重复描述${safeContactName}，也不要描述用户。\n- 状态栏中禁止用“我”或“你”制造主体歧义，默认主体始终是${safeContactName}。`;
+}
+
+function extractOfflineStatusBlock(rawContent) {
+    const text = String(rawContent || '');
+    const map = {
+        mood: '',
+        outfit: '',
+        action: '',
+        inner: ''
+    };
+    const patterns = [
+        { key: 'mood', regex: /(?:【\s*心情\s*】|心情\s*[：:])\s*([\s\S]*?)(?=(?:【\s*服装状态\s*】|服装状态\s*[：:]|【\s*动作\s*】|动作\s*[：:]|【\s*心声独白\s*】|心声独白\s*[：:]|$))/i },
+        { key: 'outfit', regex: /(?:【\s*服装状态\s*】|服装状态\s*[：:])\s*([\s\S]*?)(?=(?:【\s*动作\s*】|动作\s*[：:]|【\s*心声独白\s*】|心声独白\s*[：:]|$))/i },
+        { key: 'action', regex: /(?:【\s*动作\s*】|动作\s*[：:])\s*([\s\S]*?)(?=(?:【\s*心声独白\s*】|心声独白\s*[：:]|$))/i },
+        { key: 'inner', regex: /(?:【\s*心声独白\s*】|心声独白\s*[：:])\s*([\s\S]*?)$/i }
+    ];
+    patterns.forEach(item => {
+        const match = text.match(item.regex);
+        if (match && match[1]) {
+            map[item.key] = match[1].replace(/\n+/g, ' ').trim();
+        }
+    });
+    return map;
+}
+
+function parseOfflineReplyPayload(rawContent) {
+    const text = String(rawContent || '').replace(/\r/g, '').trim();
+    const status = extractOfflineStatusBlock(text);
+    let body = text;
+
+    const bodySectionMatch = text.match(/(?:^|\n)\s*(?:\[?正文\]?|【正文】)\s*[:：]?\s*([\s\S]*?)(?=\n\s*(?:\[?状态栏\]?|【状态栏】|【\s*心情\s*】|心情\s*[：:])|$)/i);
+    if (bodySectionMatch && bodySectionMatch[1]) {
+        body = bodySectionMatch[1].trim();
+    } else {
+        const statusStartIndex = text.search(/(?:^|\n)\s*(?:\[?状态栏\]?|【状态栏】|【\s*心情\s*】|心情\s*[：:])/i);
+        if (statusStartIndex >= 0) body = text.slice(0, statusStartIndex).trim();
+    }
+
+    body = body
+        .replace(/^\s*(?:\[?正文\]?|【正文】)\s*[:：]\s*/i, '')
+        .replace(/\n?\s*(?:\[?状态栏\]?|【状态栏】)\s*[:：]?\s*$/i, '')
+        .trim();
+
+    if (!body) {
+        body = '他看着你，停顿了片刻，像是在认真消化你刚才的话。';
+    }
+
+    return { body, status };
+}
+
+function updateOfflineStatusBar(status) {
+    const fallback = '暂无';
+    const moodEl = document.getElementById('offline-status-mood');
+    const outfitEl = document.getElementById('offline-status-outfit');
+    const actionEl = document.getElementById('offline-status-action');
+    const innerEl = document.getElementById('offline-status-inner');
+    if (!moodEl || !outfitEl || !actionEl || !innerEl) return;
+    moodEl.innerText = status?.mood || fallback;
+    outfitEl.innerText = status?.outfit || fallback;
+    actionEl.innerText = status?.action || fallback;
+    innerEl.innerText = status?.inner || fallback;
+}
+
+function refreshOfflineStatusBarFromChat() {
+    if (!currentChatContact) return;
+    const chat = DB.getChats()[currentChatContact.id] || [];
+    let latestStatus = null;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const msg = chat[i];
+        if (msg && msg.role === 'assistant' && msg.mode === 'offline' && msg.offlineStatus) {
+            latestStatus = msg.offlineStatus;
+            break;
+        }
+    }
+    updateOfflineStatusBar(latestStatus || {});
+}
+
+function toggleOfflineStatusBar(forceOpen) {
+    const panel = document.getElementById('offline-status-panel');
+    if (!panel) return;
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !panel.classList.contains('active');
+    if (shouldOpen) {
+        refreshOfflineStatusBarFromChat();
+        panel.classList.add('active');
+    } else {
+        panel.classList.remove('active');
+    }
 }
 
 function ensureOfflineRainRenderer() {
@@ -3306,6 +6744,7 @@ function ensureOfflineRainRenderer() {
     try {
         offlineRainRenderer = createOfflineRainRenderer(container);
     } catch (error) {
+        container.innerHTML = '';
         console.error('线下模式雨滴渲染初始化失败:', error);
         return null;
     }
@@ -3328,13 +6767,17 @@ function openOfflineMode() {
         renderer.setRainAmount(0.82);
         renderer.start();
     }
+    refreshOfflineStatusBarFromChat();
+    toggleOfflineStatusBar(false);
     renderChatHistory();
 }
 
 function exitOfflineMode() {
     document.getElementById('offline-mode').classList.remove('active');
     document.getElementById('offline-typing-indicator').style.display = 'none';
+    toggleOfflineStatusBar(false);
     closeOfflineSettings();
+    closeOfflineBuzzwordTool();
     if (offlineRainRenderer) offlineRainRenderer.stop();
 }
 
@@ -3369,6 +6812,169 @@ function setOfflineInterrupt(value) {
     document.getElementById('offline-interrupt-no').classList.toggle('active', value !== true);
 }
 function closeOfflineSettings() { document.getElementById('offline-settings-modal').classList.remove('active'); document.getElementById('ctx-overlay').classList.remove('active'); }
+function renderOfflineBuzzwordRuleList() {
+    const list = document.getElementById('offline-bagua-list');
+    const empty = document.getElementById('offline-bagua-empty');
+    if (!list || !empty) return;
+    list.innerHTML = '';
+    offlineBuzzwordRuleDrafts.forEach((rule, index) => {
+        const row = document.createElement('div');
+        row.className = 'offline-bagua-row';
+
+        const sourceInput = document.createElement('input');
+        sourceInput.type = 'text';
+        sourceInput.placeholder = '输入要处理的词';
+        sourceInput.value = rule.source || '';
+        sourceInput.oninput = (event) => {
+            offlineBuzzwordRuleDrafts[index].source = event.target.value;
+        };
+
+        const modeSelect = document.createElement('select');
+        const blockOption = document.createElement('option');
+        blockOption.value = 'block';
+        blockOption.textContent = '屏蔽';
+        const replaceOption = document.createElement('option');
+        replaceOption.value = 'replace';
+        replaceOption.textContent = '替换';
+        modeSelect.appendChild(blockOption);
+        modeSelect.appendChild(replaceOption);
+        modeSelect.value = rule.mode === 'replace' ? 'replace' : 'block';
+
+        const replacementInput = document.createElement('input');
+        replacementInput.type = 'text';
+        replacementInput.placeholder = modeSelect.value === 'replace' ? '输入替换词' : '屏蔽模式留空';
+        replacementInput.value = rule.replacement || '';
+        replacementInput.disabled = modeSelect.value !== 'replace';
+        replacementInput.oninput = (event) => {
+            offlineBuzzwordRuleDrafts[index].replacement = event.target.value;
+        };
+
+        modeSelect.onchange = (event) => {
+            const mode = event.target.value === 'replace' ? 'replace' : 'block';
+            offlineBuzzwordRuleDrafts[index].mode = mode;
+            if (mode === 'block') offlineBuzzwordRuleDrafts[index].replacement = '';
+            replacementInput.disabled = mode !== 'replace';
+            replacementInput.placeholder = mode === 'replace' ? '输入替换词' : '屏蔽模式留空';
+            replacementInput.value = offlineBuzzwordRuleDrafts[index].replacement || '';
+        };
+
+        row.appendChild(sourceInput);
+        row.appendChild(modeSelect);
+        row.appendChild(replacementInput);
+        list.appendChild(row);
+    });
+    empty.classList.toggle('active', offlineBuzzwordRuleDrafts.length === 0);
+}
+
+function normalizeOfflineBuzzwordRuleDraftsForSave(rules) {
+    const normalized = [];
+    for (let i = 0; i < rules.length; i++) {
+        const rule = createOfflineBuzzwordRule(rules[i]);
+        const isCompletelyEmpty = !rule.source && !rule.replacement;
+        if (isCompletelyEmpty) continue;
+        if (!rule.source) {
+            alert(`第 ${i + 1} 行未填写需要处理的词汇`);
+            return null;
+        }
+        if (rule.mode === 'replace' && !rule.replacement) {
+            alert(`第 ${i + 1} 行选择了“替换”，必须填写替换词`);
+            return null;
+        }
+        if (rule.mode === 'block') rule.replacement = '';
+        normalized.push(rule);
+    }
+    return normalized;
+}
+
+function openOfflineBuzzwordTool() {
+    offlineBuzzwordRuleDrafts = getOfflineBuzzwordRules().map(rule => createOfflineBuzzwordRule(rule));
+    renderOfflineBuzzwordRuleList();
+    document.getElementById('offline-bagua-modal')?.classList.add('active');
+}
+
+function closeOfflineBuzzwordTool() {
+    document.getElementById('offline-bagua-modal')?.classList.remove('active');
+    const input = document.getElementById('offline-bagua-import-input');
+    if (input) input.value = '';
+}
+
+function addOfflineBuzzwordRule() {
+    offlineBuzzwordRuleDrafts.push(createOfflineBuzzwordRule());
+    renderOfflineBuzzwordRuleList();
+}
+
+function removeOfflineBuzzwordRule() {
+    if (offlineBuzzwordRuleDrafts.length === 0) return;
+    offlineBuzzwordRuleDrafts.pop();
+    renderOfflineBuzzwordRuleList();
+}
+
+function saveOfflineBuzzwordRules() {
+    const normalized = normalizeOfflineBuzzwordRuleDraftsForSave(offlineBuzzwordRuleDrafts);
+    if (!normalized) return;
+    const settings = DB.getSettings();
+    settings.offlineBuzzwordRules = normalized;
+    DB.saveSettings(settings);
+    offlineBuzzwordRuleDrafts = normalized.map(rule => createOfflineBuzzwordRule(rule));
+    renderOfflineBuzzwordRuleList();
+    alert('去八股规则已保存');
+}
+
+function exportOfflineBuzzwordRules() {
+    const normalized = normalizeOfflineBuzzwordRuleDraftsForSave(offlineBuzzwordRuleDrafts);
+    if (!normalized) return;
+    const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        rules: normalized.map(rule => ({
+            source: rule.source,
+            mode: rule.mode,
+            replacement: rule.replacement || ''
+        }))
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `offline_bagua_rules_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function triggerOfflineBuzzwordImport() {
+    const input = document.getElementById('offline-bagua-import-input');
+    if (!input) return;
+    input.value = '';
+    input.click();
+}
+
+function importOfflineBuzzwordRules(event) {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+        try {
+            const raw = JSON.parse(String(loadEvent.target?.result || '{}'));
+            const importedRules = Array.isArray(raw) ? raw : raw.rules;
+            if (!Array.isArray(importedRules)) throw new Error('JSON 中未找到 rules 数组');
+            const normalized = normalizeOfflineBuzzwordRuleDraftsForSave(importedRules);
+            if (!normalized) return;
+            const settings = DB.getSettings();
+            settings.offlineBuzzwordRules = normalized;
+            DB.saveSettings(settings);
+            offlineBuzzwordRuleDrafts = normalized.map(rule => createOfflineBuzzwordRule(rule));
+            renderOfflineBuzzwordRuleList();
+            alert(`导入成功，已覆盖为 ${normalized.length} 条规则`);
+        } catch (error) {
+            alert(`导入失败：${error.message}`);
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file, 'utf-8');
+}
 function saveOfflineSettings() { 
     const min = parseInt(document.getElementById('offline-min-len').value) || 500; 
     const max = parseInt(document.getElementById('offline-max-len').value) || 700; 
@@ -3410,8 +7016,39 @@ function saveOfflineSettings() {
         processSave(null); 
     } 
 }
-function toggleThoughts() { const modal = document.getElementById('thoughts-modal'); if (modal.classList.contains('active')) { modal.classList.remove('active'); } else { const chat = DB.getChats()[currentChatContact.id] || []; let lastThought = "暂无心声..."; for (let i = chat.length - 1; i >= 0; i--) { if (chat[i].role === 'assistant' && chat[i].thought) { lastThought = chat[i].thought; break; } } document.getElementById('thoughts-text').innerText = lastThought; modal.classList.add('active'); } }
-function calculateChatRounds(history) { let rounds = 0; let hasUser = false; for (const msg of history) { if (msg.role === 'user') { hasUser = true; } else if (msg.role === 'assistant' && hasUser) { rounds++; hasUser = false; } } return rounds; }
+function toggleThoughts() {
+    const offlineModeEl = document.getElementById('offline-mode');
+    if (offlineModeEl?.classList.contains('active')) return;
+    const modal = document.getElementById('thoughts-modal');
+    if (modal.classList.contains('active')) {
+        modal.classList.remove('active');
+    } else {
+        const chat = DB.getChats()[currentChatContact.id] || [];
+        let lastThought = "暂无心声...";
+        for (let i = chat.length - 1; i >= 0; i--) {
+            if (chat[i].role === 'assistant' && chat[i].thought) {
+                lastThought = chat[i].thought;
+                break;
+            }
+        }
+        document.getElementById('thoughts-text').innerText = lastThought;
+        modal.classList.add('active');
+    }
+}
+function isSummarizableChatMessage(msg) {
+    if (!msg || (msg.role !== 'user' && msg.role !== 'assistant')) return false;
+    const excludedTypes = ['transfer_receipt', 'redpacket_receipt', 'pay_invite_receipt', 'gift_receipt', 'call_end'];
+    if (excludedTypes.includes(msg.type)) return false;
+    return true;
+}
+
+function countSummarizableMessages(history) {
+    return (history || []).filter(isSummarizableChatMessage).length;
+}
+
+function pickRecentSummarizableMessages(history, maxCount = 120) {
+    return (history || []).filter(isSummarizableChatMessage).slice(-maxCount);
+}
 
 function escapeHtml(str) {
     return String(str || '')
@@ -3432,6 +7069,69 @@ function sanitizeTheaterHtml(rawHtml) {
     html = html.replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '');
     html = html.replace(/<(iframe|object|embed|link|meta)[\s\S]*?>/gi, '');
     return html.trim();
+}
+
+function normalizeTheaterElementLayout(rootEl) {
+    if (!rootEl) return;
+    const nodes = [rootEl, ...rootEl.querySelectorAll('*')];
+    nodes.forEach(node => {
+        if (!(node instanceof HTMLElement)) return;
+        node.style.maxWidth = '100%';
+        node.style.boxSizing = 'border-box';
+        const widthPx = parseFloat(node.style.width);
+        if (node.style.width && node.style.width.trim().endsWith('px') && !Number.isNaN(widthPx) && widthPx > 280) {
+            node.style.width = '100%';
+        }
+        const minWidthPx = parseFloat(node.style.minWidth);
+        if (node.style.minWidth && node.style.minWidth.trim().endsWith('px') && !Number.isNaN(minWidthPx) && minWidthPx > 280) {
+            node.style.minWidth = '0';
+        }
+        const tag = node.tagName.toUpperCase();
+        if (tag === 'IMG' || tag === 'VIDEO' || tag === 'SVG' || tag === 'CANVAS' || tag === 'TABLE') {
+            node.style.maxWidth = '100%';
+            if (tag !== 'TABLE') node.style.height = 'auto';
+        }
+    });
+}
+
+function renderHtmlTheaterIntoStage(stageEl, rawHtml) {
+    if (!stageEl) return;
+    const safeHtml = sanitizeTheaterHtml(rawHtml);
+    if (!safeHtml) {
+        stageEl.innerHTML = '';
+        return;
+    }
+    stageEl.innerHTML = '';
+    if (typeof stageEl.attachShadow === 'function') {
+        const shadow = stageEl.attachShadow({ mode: 'open' });
+        const baseStyle = document.createElement('style');
+        baseStyle.textContent = `
+            :host { display: block; width: 100%; }
+            .html-theater-host {
+                display: block;
+                width: 100%;
+                max-width: 100%;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                line-height: 1.5;
+                color: #2f3152;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+            }
+            .html-theater-host * {
+                box-sizing: border-box;
+                max-width: 100%;
+            }
+        `;
+        const host = document.createElement('div');
+        host.className = 'html-theater-host';
+        host.innerHTML = safeHtml;
+        shadow.appendChild(baseStyle);
+        shadow.appendChild(host);
+        normalizeTheaterElementLayout(host);
+    } else {
+        stageEl.innerHTML = safeHtml;
+        normalizeTheaterElementLayout(stageEl);
+    }
 }
 
 function buildFallbackTheaterHtml(messageText, characterName) {
@@ -3493,7 +7193,7 @@ function getCalendarContextPrompt() {
     return "";
 }
 
-async function triggerAIResponse() {
+async function triggerAIResponse(options = {}) {
     if (!currentChatContact) return;
     const settings = DB.getSettings();
     if (!settings.key) return alert('请配置 API Key');
@@ -3507,7 +7207,7 @@ async function triggerAIResponse() {
         document.getElementById('typing-indicator').style.display = 'block';
     }
 
-    // 添加60秒超时保护
+    // 添加150秒超时保护
     const timeoutId = setTimeout(() => {
         if (isCallActive) {
             document.getElementById('call-status').innerText = "连接超时";
@@ -3517,19 +7217,24 @@ async function triggerAIResponse() {
             document.getElementById('typing-indicator').style.display = 'none';
         }
         alert('请求超时，请检查网络连接或稍后重试');
-    }, 60000);
+    }, 150000);
 
     let allChats = DB.getChats();
     let history = allChats[currentChatContact.id] || [];
     const userSettings = currentChatContact.userSettings || {};
     const contextLimit = userSettings.contextLimit || 100;
     const autoSummaryEnabled = userSettings.autoSummaryEnabled !== false;
-    const summaryInterval = userSettings.summaryInterval || 20;
+    const summaryInterval = Math.max(1, Number(userSettings.summaryInterval) || 50);
     const htmlTheaterEnabled = userSettings.enableHtmlTheater === true && !isCallActive && !isOfflineActive;
+    const isLongChainThoughtMode = userSettings.thoughtMode === 'long_chain';
     const limitedHistory = history.slice(-contextLimit);
+    const historyOffset = history.length - limitedHistory.length;
 
     let pendingTransferIndex = -1, pendingTransferAmount = 0, pendingTransferNote = '';
+    let pendingRedPacketIndex = -1, pendingRedPacketAmount = 0, pendingRedPacketNote = '';
     let pendingInviteIndex = -1;
+    let pendingPayInviteIndex = -1, pendingPayInviteAmount = 0, pendingPayInviteCurrency = 'cny', pendingPayInviteAmountText = '';
+    let pendingGiftIndex = -1, pendingGiftTitle = '', pendingGiftAmountText = '';
     
     // 检查是否已经绑定情侣空间
     const coupleData = DB.getCoupleData();
@@ -3537,16 +7242,33 @@ async function triggerAIResponse() {
     
     for (let i = limitedHistory.length - 1; i >= 0; i--) {
         if (limitedHistory[i].type === 'transfer' && limitedHistory[i].status === 'pending') {
-            pendingTransferIndex = i; pendingTransferAmount = limitedHistory[i].amount; pendingTransferNote = limitedHistory[i].note;
+            pendingTransferIndex = historyOffset + i; pendingTransferAmount = limitedHistory[i].amount; pendingTransferNote = limitedHistory[i].note;
+        }
+        if (limitedHistory[i].type === 'redpacket' && limitedHistory[i].status === 'pending') {
+            pendingRedPacketIndex = historyOffset + i; pendingRedPacketAmount = limitedHistory[i].amount; pendingRedPacketNote = limitedHistory[i].note;
         }
         // 只有在未绑定情侣空间且最后一条消息是邀请时才处理
         if (!isAlreadyCoupled && i === limitedHistory.length - 1 && limitedHistory[i].type === 'couple_invite_req') {
-            pendingInviteIndex = i;
+            pendingInviteIndex = historyOffset + i;
         }
-        if (pendingTransferIndex !== -1 || pendingInviteIndex !== -1) break;
+        if (i === limitedHistory.length - 1 && limitedHistory[i].type === 'pay_invite_req' && limitedHistory[i].status === 'pending') {
+            pendingPayInviteIndex = historyOffset + i;
+            pendingPayInviteAmount = Number(limitedHistory[i].amount) || 0;
+            pendingPayInviteCurrency = limitedHistory[i].currencyUnit || 'cny';
+            pendingPayInviteAmountText = limitedHistory[i].amountText || formatAmountByCurrency(pendingPayInviteAmount, pendingPayInviteCurrency);
+        }
+        if (i === limitedHistory.length - 1 && limitedHistory[i].type === 'gift_req' && limitedHistory[i].status === 'pending') {
+            pendingGiftIndex = historyOffset + i;
+            pendingGiftTitle = limitedHistory[i].title || '礼物';
+            pendingGiftAmountText = limitedHistory[i].amountText || formatAmountByCurrency(limitedHistory[i].amount || 0, limitedHistory[i].currencyUnit || 'cny');
+        }
+        if (pendingTransferIndex !== -1 || pendingRedPacketIndex !== -1 || pendingInviteIndex !== -1 || pendingPayInviteIndex !== -1 || pendingGiftIndex !== -1) break;
     }
     const isTransferEvent = pendingTransferIndex !== -1;
+    const isRedPacketEvent = pendingRedPacketIndex !== -1;
     const isInviteEvent = pendingInviteIndex !== -1;
+    const isPayInviteEvent = pendingPayInviteIndex !== -1;
+    const isGiftEvent = pendingGiftIndex !== -1;
     const isTimePerceptionEnabled = userSettings.enableTimePerception || false;
 
     const apiMessages = limitedHistory.map(msg => {
@@ -3561,7 +7283,17 @@ async function triggerAIResponse() {
 
         if (isTimePerceptionEnabled && msg.timestamp) { const timeStr = new Date(msg.timestamp).toLocaleString('zh-CN', { hour12: false }); content = `[发送于: ${timeStr}] ${content}`; }
         if (msg.type === 'transfer') return { role: 'user', content: `[用户向你转账 ¥${msg.amount}，备注：${msg.note || '无'}]` };
+        if (msg.type === 'redpacket') return { role: 'user', content: `[用户给你发送了红包 ¥${msg.amount}，备注：${msg.note || '无'}]` };
+        if (msg.type === 'pay_invite_req') return { role: 'user', content: `[用户邀请你代付，金额：${msg.amountText || formatAmountByCurrency(msg.amount, msg.currencyUnit || 'cny')}]` };
+        if (msg.type === 'gift_req') return { role: 'user', content: `[用户赠送你礼物：${msg.title || '礼物'}，价值：${msg.amountText || formatAmountByCurrency(msg.amount, msg.currencyUnit || 'cny')}]` };
+        if (msg.type === 'food_gift') return { role: 'user', content: `[用户向你赠送了食物：${msg.foodEmoji || ''}${msg.foodName || '食物'}]` };
         if (msg.type === 'transfer_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已收款 ¥${msg.amount}]` : `[我已拒收并退还 ¥${msg.amount}]` };
+        if (msg.type === 'redpacket_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? `[我已领取红包 ¥${msg.amount}]` : `[我已拒收并退回红包 ¥${msg.amount}]` };
+        if (msg.type === 'pay_invite_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? '[我已帮你代付]' : '[我已拒绝你的代付邀请]' };
+        if (msg.type === 'gift_receipt') return { role: 'assistant', content: msg.status === 'accepted' ? '[我已收下你的礼物]' : '[我已拒收你的礼物]' };
+        if (msg.type === 'image') return { role: msg.role, content: `[图片：${msg.imageDesc || '未描述'}]` };
+        if (msg.type === 'video') return { role: msg.role, content: `[视频：${msg.videoDesc || '未描述'}]` };
+        if (msg.type === 'voice') return { role: msg.role, content: `[语音转文字：${msg.voiceText || msg.content || ''}]` };
         if (msg.type === 'couple_invite_req') return { role: 'user', content: `[用户向你发送了“情侣空间”开通邀请]` };
         if (msg.type === 'couple_invite_accept') return { role: 'assistant', content: `[我已同意你的情侣空间邀请]` };
         if (msg.type === 'couple_invite_reject') return { role: 'assistant', content: `[我已拒绝你的情侣空间邀请]` };
@@ -3596,30 +7328,11 @@ async function triggerAIResponse() {
 
     const impressions = mems.userImpressions || createDefaultUserImpressions();
     const impressionLines = [];
-    if (impressions.profile) impressionLines.push(`- 基本画像: ${impressions.profile}`);
-    if (impressions.personality) impressionLines.push(`- 性格认知: ${impressions.personality}`);
+    if (impressions.profile) impressionLines.push(`- 基础认知: ${impressions.profile}`);
     if (impressions.relationship) impressionLines.push(`- 我们的关系: ${impressions.relationship}`);
-    if (impressions.attitude) impressionLines.push(`- 我对ta的态度: ${impressions.attitude}`);
-    if (impressions.notes) impressionLines.push(`- 互动备注: ${impressions.notes}`);
+    if (impressions.notes) impressionLines.push(`- 关于TA的注意事项: ${impressions.notes}`);
     if (impressionLines.length > 0) {
         systemContent += `\n\n[🧠 用户印象 - 常驻]\n${impressionLines.join('\n')}\n`;
-    }
-
-    const scheduleByStatus = { upcoming: [], ongoing: [], past: [] };
-    mems.scheduleMemories.forEach(item => {
-        const status = getScheduleStatus(item, nowTs);
-        if (!scheduleByStatus[status]) scheduleByStatus[status] = [];
-        scheduleByStatus[status].push(item);
-    });
-    const scheduleLines = [];
-    ['ongoing', 'upcoming', 'past'].forEach(status => {
-        scheduleByStatus[status].slice(0, 4).forEach(item => {
-            const timeText = item.eventDate ? ` (${item.eventDate}${item.endDate ? ` ~ ${item.endDate}` : ''})` : '';
-            scheduleLines.push(`- [${status}] ${item.content}${timeText}`);
-        });
-    });
-    if (scheduleLines.length > 0) {
-        systemContent += `\n\n[📅 日程记忆]\n${scheduleLines.join('\n')}\n`;
     }
 
     const triggeredShortTerm = mems.shortTermMemories
@@ -3639,7 +7352,10 @@ async function triggerAIResponse() {
 
     if (isTimePerceptionEnabled) { const nowStr = new Date().toLocaleString('zh-CN', { hour12: false }); systemContent += `\n\n[时间感知模式已开启]\n当前现实时间：${nowStr}\n请注意：\n1. 每一条消息前都标记了发送时间，这仅供你判断时间流逝。\n2. **绝对不要**在回复开头显示时间戳（如 [12:00:00]），直接回复内容即可。\n3. 请根据当前时间判断你的作息（如深夜在睡觉或熬夜，早晨在通勤）。\n4. 观察用户回复的时间间隔。如果用户隔了很久才回，请根据人设做出反应（如吐槽、担心等）。`; }
     if (isTransferEvent) systemContent += `\n\n===== 【转账处理 - 强制格式】 =====\n用户刚刚向你转账 ¥${pendingTransferAmount}，备注：${pendingTransferNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【收下】转账，回复必须以 [ACCEPT] 开头\n- 如果你决定【拒收】转账，回复必须以 [REJECT] 开头\n===================================`;
+    if (isRedPacketEvent) systemContent += `\n\n===== 【红包处理 - 强制格式】 =====\n用户刚刚向你发送了红包 ¥${pendingRedPacketAmount}，备注：${pendingRedPacketNote || '无'}。\n你必须按照以下格式回复：\n- 如果你决定【领取】红包，回复必须以 [ACCEPT_REDPACKET] 开头\n- 如果你决定【拒收】红包，回复必须以 [REJECT_REDPACKET] 开头\n===================================`;
     if (isInviteEvent) systemContent += `\n\n===== 【重要指令：情侣空间邀请处理】 =====\n用户刚刚邀请你开通情侣空间。\n你现在必须做出决定。\n\n请严格遵守以下回复格式（不要包含其他多余分析，直接给出结果）：\n- 同意邀请：必须在回复内容中包含 [ACCEPT_INVITE]\n- 拒绝邀请：必须在回复内容中包含 [REJECT_INVITE]\n\n示例：\n[THOUGHTS: 我好开心...] ||| [ACCEPT_INVITE] 好呀，我也想和你有一个小窝！\n\n注意：如果没有标签，系统将无法识别你的决定，导致开通失败！请务必带上标签！`;
+    if (isPayInviteEvent) systemContent += `\n\n===== 【代付邀请处理 - 强制格式】 =====\n用户邀请你代付订单，金额：${pendingPayInviteAmountText}。\n你必须按如下标签回复：\n- 同意代付：回复必须包含 [ACCEPT_PAY_INVITE]\n- 拒绝代付：回复必须包含 [REJECT_PAY_INVITE]\n并且最终态度必须清晰，不允许模糊。`;
+    if (isGiftEvent) systemContent += `\n\n===== 【礼物处理 - 强制格式】 =====\n用户赠送你礼物：${pendingGiftTitle}（价值 ${pendingGiftAmountText}）。\n你必须按如下标签回复：\n- 收下礼物：回复必须包含 [ACCEPT_GIFT]\n- 拒收礼物：回复必须包含 [REJECT_GIFT]\n最终回复必须明确态度。`;
 
     systemContent += getCalendarContextPrompt();
 
@@ -3649,7 +7365,7 @@ async function triggerAIResponse() {
     const boundIds = currentChatContact.boundWorldBooks || [];
     if (boundIds.length > 0) { systemContent += `\n\n[角色专属设定]\n`; boundIds.forEach(bid => { const entry = wb.entries.find(e => e.id == bid); if (entry) systemContent += `【${entry.title}】：${entry.content}\n`; }); }
 
-    const aiStickerEnabled = document.getElementById('ai-sticker-toggle').checked;
+    const aiStickerEnabled = isAiStickerEnabledForContact(currentChatContact);
     if (aiStickerEnabled) {
         const stickers = DB.getStickers();
         if (stickers.length > 0) {
@@ -3666,24 +7382,44 @@ async function triggerAIResponse() {
         systemContent += `\n\n===== 【语音通话模式】 =====\n现在你正在和用户进行语音通话。\n**重要规则**：\n1. 请像打电话一样回复，保持口语化。\n2. **严禁**使用 '|||' 分隔消息。\n3. 一次只回复一段话，字数限制在150字以内。\n4. 必须在回复前生成心声。\n格式：[THOUGHTS: 心声] ||| 回复内容`;
     } else if (isOfflineActive) {
         const offSet = currentChatContact.offlineSettings || { min: 500, max: 700, style: '' };
-        systemContent += `\n\n===== 【线下见面模式】 =====\n现在你和用户正在线下见面，面对面交流。\n**重要规则**：\n1. **严禁**使用 '|||' 分隔消息。\n2. 请使用小说般的描写手法，包含详细的动作描写、神态描写、环境描写和心理描写。\n3. 字数要求：${offSet.min} - ${offSet.max} 字。\n4. 文风要求：${offSet.style || '细腻、沉浸感强'}\n5. 必须在回复前生成心声。\n格式：[THOUGHTS: 心声] ||| 长篇描写回复内容`;
+        const perspectiveInstruction = getOfflinePerspectiveInstruction(offSet.perspective, currentChatContact.name, userSettings.userName);
+        const statusBarInstruction = getOfflineStatusBarInstruction(currentChatContact.name);
+        systemContent += `\n\n===== 【线下见面模式】 =====\n现在你和用户正在线下见面，面对面交流。\n**重要规则**：\n1. 你必须同时输出“正文回复 + 状态栏”。\n2. **严禁**使用 '|||' 分隔消息。\n3. 请严格按下面结构输出（顺序不可变）：\n【正文】\n（这里写面对面互动的正文回复，允许叙事与对话）\n【状态栏】\n【心情】（简短描述角色此时的心情）\n【服装状态】（简短描述角色现在的衣着）\n【动作】（简短描述角色此时的动作）\n【心声独白】（100字以内）\n4. **字数硬性要求（只统计【正文】部分，不统计状态栏）**：正文必须在 ${offSet.min} 到 ${offSet.max} 字之间。\n5. 如果正文字数不在上述范围内，你必须先在内部重写，直到满足字数后再输出最终答案。\n6. 正文必须是线下场景的长文描写，包含动作、神态、环境细节与情绪推进，禁止退化成线上聊天式短句。\n7. 除“心声独白”外，其他三项保持简短（建议 10-30 字）。\n8. 正文文风要求：${offSet.style || '细腻、沉浸感强'}。\n9. 正文必须遵守以下人称约束：\n${perspectiveInstruction}\n10. 状态栏必须遵守以下主体约束：\n${statusBarInstruction}\n11. 如果正文人称设置与状态栏主体发生冲突，始终以“正文遵守人称设置、状态栏只描述${currentChatContact.name}状态”为最高优先级。\n12. 不得输出线上模式的 [THOUGHTS] 格式。`;
     } else {
-        systemContent += `\n\n===== 【强制回复格式】 =====\n你必须在每次回复的**最开始**生成一段内心独白（心声），展示你此刻真实的心理活动、情绪或对用户的看法。心声必须包裹在 [THOUGHTS: ...] 中，且不超过100字。心声之后，使用 ||| 分隔，然后才是你对用户的实际回复。\n格式示例：\n[THOUGHTS: 他怎么突然问这个？有点害羞...] ||| 呃，这个嘛... ||| 其实我也不太清楚。`;
+        if (isLongChainThoughtMode) {
+            systemContent += `\n\n===== 【强制回复格式 - 仿思考链长心声模式】 =====\n你必须在每次回复的**最开始**生成一段“仿思考链长心声”，且仅输出一段。心声必须包裹在 [THOUGHTS: ...] 中，然后使用 ||| 分隔，再输出你对用户的实际回复。\n\n【长心声硬性要求】\n1. 心声字数必须在 100 到 300 字之间。\n2. 心声只写“你收到用户这条消息后的第一反应和真实情绪波动”，必须像真人脑内自言自语。\n3. 严禁 AI 式分析、严禁策略化表达、严禁计划如何回复。不要出现“我应该怎么回/先说什么再说什么/这样回复更好/为了显得xxx”等元话术。\n4. 严禁把心声写成条目、提纲、总结、教程、复盘或任务分解。\n5. 允许情绪外露、犹豫、自我打断、短暂跑题，但核心必须是“当下反应”，不是“回复规划”。\n6. 必须正确使用中文标点符号（，。！？：；、“”），禁止整段无标点或标点混乱。\n7. 心声必须换行排版，至少分成 2-4 个短段落；每段建议 1-2 句，避免一整坨长段。\n8. 心声与正文语气可以不同，但都必须符合角色设定。\n9. 如果正文拆成多条（用 ||| 分隔），仅第一条消息开头允许出现一次时间前缀，格式固定为 [发送于：YYYY/M/D HH:MM:SS]，后续消息严禁重复该前缀。\n\n格式示例：\n[THOUGHTS: 第一小段（真实反应）。\n第二小段（情绪波动）。\n第三小段（拉回当下）。] ||| [发送于：2026/6/1 18:00:00] 你的第一条消息 ||| 你的第二条消息`;
+        } else {
+            systemContent += `\n\n===== 【强制回复格式】 =====\n你必须在每次回复的**最开始**生成一段内心独白（心声），展示你此刻真实的心理活动、情绪或对用户的看法。心声必须包裹在 [THOUGHTS: ...] 中，且不超过100字。心声之后，使用 ||| 分隔，然后才是你对用户的实际回复。\n补充格式要求：如果正文拆成多条（用 ||| 分隔），仅第一条消息开头允许出现一次时间前缀，格式固定为 [发送于：YYYY/M/D HH:MM:SS]，后续消息严禁重复该前缀。\n格式示例：\n[THOUGHTS: 他怎么突然问这个？有点害羞...] ||| [发送于：2026/6/1 18:00:00] 呃，这个嘛... ||| 其实我也不太清楚。`;
+        }
         if (htmlTheaterEnabled) {
             systemContent += `\n\n===== 【html小剧场模式已开启】 =====\n在本次正文回复全部输出完后，你还必须再输出一个 html 小剧场，且仅输出一个，格式严格如下：\n[HTML_THEATER]\n<div style="...">...</div>\n[/HTML_THEATER]\n\n小剧场规则：\n1. 纯 HTML + 行内 CSS，禁止 <script>、禁止 <style>、禁止外链。\n2. 宽度不超过 280px。\n3. 必须有可触发且可反向切换的交互（推荐 details/summary）。\n4. 必须第一人称中文，禁止重复正文原句，允许延展剧情或补全背景。\n5. 视觉要生动：圆角、阴影、渐变、层叠、磨砂玻璃质感可组合，可适度颜文字。\n6. 禁止在 HTML 代码中使用 |||。\n7. 小剧场中的按钮/标签/交互文案必须中文。`;
         }
     }
 
     const messages = [{ role: "system", content: systemContent }, ...apiMessages];
+    if (options.continueFromLastAssistant === true && !isCallActive && !isOfflineActive) {
+        const lastAssistantMsg = [...limitedHistory].reverse().find(m => m.role === 'assistant' && !m.type && !m.isRetracted && m.content);
+        if (!lastAssistantMsg) {
+            document.getElementById('typing-indicator').style.display = 'none';
+            clearTimeout(timeoutId);
+            alert('没有可续写的上一条AI消息');
+            return;
+        }
+        const lastText = String(lastAssistantMsg.content || '').replace(/\s+/g, ' ').trim().slice(-120);
+        messages.push({
+            role: "user",
+            content: `[系统提示：请你只续写你“上一条助手消息”的后续内容，保持同一语气与语境，不要复述或改写已说过的话，不要重复开场。上一条末尾参考：${lastText}]`
+        });
+    }
 
     try {
         const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
         
         // 使用 AbortController 实现请求超时控制
         const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 55000); // 55秒后中断请求
+        const fetchTimeout = setTimeout(() => controller.abort(), 150000); // 150秒后中断请求
         
-        const response = await fetch(`${settings.url}/chat/completions`, { 
+        const response = await fetch(getChatCompletionsUrl(settings.url), { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, 
             body: JSON.stringify({ model: settings.model, messages: messages, temperature: temp }),
@@ -3715,14 +7451,16 @@ async function triggerAIResponse() {
         
         if (data.choices && data.choices.length > 0) {
             let content = data.choices[0].message.content;
-            
-
-            let extractedThought = null;
-            const thoughtMatch = content.match(/^\[THOUGHTS:(.*?)\]/s);
-            if (thoughtMatch) {
-                extractedThought = thoughtMatch[1].trim();
-                content = content.replace(thoughtMatch[0], '').trim();
-                content = content.replace(/^\|\|\|\s*/, '').trim();
+            const extracted = extractThoughtAndBody(content);
+            let extractedThought = extracted.thought;
+            content = extracted.content;
+            let offlineStatus = null;
+            if (isOfflineActive) {
+                const offlineParsed = parseOfflineReplyPayload(content);
+                const offlineRules = getOfflineBuzzwordRules();
+                content = applyOfflineBuzzwordRulesToText(offlineParsed.body, offlineRules);
+                offlineStatus = applyOfflineBuzzwordRulesToStatus(offlineParsed.status, offlineRules);
+                extractedThought = null;
             }
 
             if (isTransferEvent) {
@@ -3731,6 +7469,14 @@ async function triggerAIResponse() {
                 content = content.replace(/^\s*\[(ACCEPT|REJECT)\]\s*/i, '').trim();
                 if (allChats[currentChatContact.id]?.[pendingTransferIndex]) allChats[currentChatContact.id][pendingTransferIndex].status = receiptStatus;
                 allChats[currentChatContact.id].push({ role: 'assistant', type: 'transfer_receipt', status: receiptStatus, amount: pendingTransferAmount, timestamp: Date.now() });
+                DB.saveChats(allChats); renderChatHistory();
+            }
+            if (isRedPacketEvent) {
+                allChats = DB.getChats();
+                let rpStatus = content.match(/^\s*\[ACCEPT_REDPACKET\]/i) ? 'accepted' : (content.match(/^\s*\[REJECT_REDPACKET\]/i) ? 'rejected' : 'accepted');
+                content = content.replace(/^\s*\[(ACCEPT_REDPACKET|REJECT_REDPACKET)\]\s*/i, '').trim();
+                if (allChats[currentChatContact.id]?.[pendingRedPacketIndex]) allChats[currentChatContact.id][pendingRedPacketIndex].status = rpStatus;
+                allChats[currentChatContact.id].push({ role: 'assistant', type: 'redpacket_receipt', status: rpStatus, amount: pendingRedPacketAmount, timestamp: Date.now() });
                 DB.saveChats(allChats); renderChatHistory();
             }
             if (isInviteEvent) {
@@ -3773,8 +7519,53 @@ async function triggerAIResponse() {
                 }
                 DB.saveChats(allChats); renderChatHistory();
             }
+            if (isPayInviteEvent) {
+                allChats = DB.getChats();
+                const accepted = /\[ACCEPT_PAY_INVITE\]/i.test(content) && !/\[REJECT_PAY_INVITE\]/i.test(content);
+                content = content.replace(/\[(ACCEPT_PAY_INVITE|REJECT_PAY_INVITE)\]/gi, '').trim();
+                if (allChats[currentChatContact.id]?.[pendingPayInviteIndex]) {
+                    allChats[currentChatContact.id][pendingPayInviteIndex].status = accepted ? 'accepted' : 'rejected';
+                }
+                allChats[currentChatContact.id].push({
+                    role: 'assistant',
+                    type: 'pay_invite_receipt',
+                    status: accepted ? 'accepted' : 'rejected',
+                    amount: pendingPayInviteAmount,
+                    currencyUnit: pendingPayInviteCurrency,
+                    amountText: pendingPayInviteAmountText,
+                    content: accepted ? '我已帮你代付' : '我已拒绝你的代付邀请',
+                    timestamp: Date.now()
+                });
+                DB.saveChats(allChats);
+                renderChatHistory();
+                if (accepted) {
+                    completeShoppingOrder('agent');
+                    openApp('app-vk');
+                    const contacts = DB.getContacts();
+                    const refreshed = contacts.find(item => item.id === currentChatContact.id) || currentChatContact;
+                    openChat(refreshed);
+                }
+            }
+            if (isGiftEvent) {
+                allChats = DB.getChats();
+                const accepted = /\[ACCEPT_GIFT\]/i.test(content) && !/\[REJECT_GIFT\]/i.test(content);
+                content = content.replace(/\[(ACCEPT_GIFT|REJECT_GIFT)\]/gi, '').trim();
+                if (allChats[currentChatContact.id]?.[pendingGiftIndex]) {
+                    allChats[currentChatContact.id][pendingGiftIndex].status = accepted ? 'accepted' : 'rejected';
+                }
+                allChats[currentChatContact.id].push({
+                    role: 'assistant',
+                    type: 'gift_receipt',
+                    status: accepted ? 'accepted' : 'rejected',
+                    title: pendingGiftTitle,
+                    content: accepted ? '我已收下你的礼物' : '我已拒收你的礼物',
+                    timestamp: Date.now()
+                });
+                DB.saveChats(allChats);
+                renderChatHistory();
+            }
             if (content && content.trim()) {
-                content = content.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
+                content = stripLeadingLeakedTimePrefix(content);
                 
                 if (aiStickerEnabled) {
                     const stickerRegex = /\[STICKER:(.*?)\]/g;
@@ -3816,15 +7607,28 @@ async function triggerAIResponse() {
                 if (isCallActive || isOfflineActive) {
                     if (content) {
                         saveMessage('assistant', content, null, extractedThought);
+                        if (isOfflineActive) {
+                            const chats = DB.getChats();
+                            const contactChats = chats[currentChatContact.id] || [];
+                            const lastMsg = contactChats[contactChats.length - 1];
+                            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.mode === 'offline') {
+                                lastMsg.offlineStatus = offlineStatus || extractOfflineStatusBlock(content);
+                                DB.saveChats(chats);
+                            }
+                            refreshOfflineStatusBarFromChat();
+                        }
                     }
                 } else {
-                    const parts = content.split('|||').filter(p => p.trim()).map(p => p.trim());
+                    const parts = normalizeSingleSendAtPrefixParts(
+                        content.split('|||').filter(p => p.trim()).map(p => p.trim()),
+                        { ensureFirstPrefix: true }
+                    );
                     const finalPart = parts.length > 0 ? parts[parts.length - 1] : '';
                     const responseContactId = currentChatContact.id;
                     const responseCharacterName = currentChatContact.name;
-                    let delay = isTransferEvent ? 500 : 0;
+                    let delay = (isTransferEvent || isRedPacketEvent) ? 500 : 0;
                     parts.forEach((part, index) => { 
-                        const clean = part; 
+                        const clean = stripLeadingLeakedTimePrefix(part); 
                         if (clean) { 
                             setTimeout(() => {
                                 const isLastPart = index === parts.length - 1;
@@ -3842,10 +7646,26 @@ async function triggerAIResponse() {
                 }
                 
                 if (autoSummaryEnabled) {
-                    const updatedHistory = DB.getChats()[currentChatContact.id] || [];
-                    const currentRounds = calculateChatRounds(updatedHistory);
-                    if (currentRounds > 0 && currentRounds % summaryInterval === 0) {
-                        generateSummary(currentChatContact, updatedHistory.slice(-summaryInterval * 4));
+                    const contactId = currentChatContact.id;
+                    const updatedHistory = DB.getChats()[contactId] || [];
+                    const currentMessageCount = countSummarizableMessages(updatedHistory);
+                    const lastSummaryCount = Number(currentChatContact.userSettings?.lastAutoSummaryMessageCount) || 0;
+                    if (!AUTO_SUMMARY_LOCKS[contactId] && currentMessageCount - lastSummaryCount >= summaryInterval) {
+                        AUTO_SUMMARY_LOCKS[contactId] = true;
+                        const recentMessagesForSummary = pickRecentSummarizableMessages(updatedHistory, Math.max(summaryInterval * 2, 120));
+                        generateSummary(currentChatContact, recentMessagesForSummary).finally(() => {
+                            const contacts = DB.getContacts();
+                            const idx = contacts.findIndex(c => c.id === contactId);
+                            if (idx !== -1) {
+                                contacts[idx].userSettings = {
+                                    ...(contacts[idx].userSettings || {}),
+                                    lastAutoSummaryMessageCount: currentMessageCount
+                                };
+                                DB.saveContacts(contacts);
+                                if (currentChatContact && currentChatContact.id === contactId) currentChatContact = contacts[idx];
+                            }
+                            AUTO_SUMMARY_LOCKS[contactId] = false;
+                        });
                     }
                 }
             }
@@ -3875,11 +7695,34 @@ async function triggerAIResponse() {
 
 async function generateSummary(contact, recentMessages) {
     const settings = DB.getSettings(); if (!settings.key) return;
-    const msgsText = recentMessages.map(m => { const time = m.timestamp ? new Date(m.timestamp).toLocaleString('zh-CN', {hour12:false}) : "未知时间"; return `[${time}] ${m.role === 'user' ? 'User' : 'Me'}: ${m.content}`; }).join('\n');
+    const msgsText = recentMessages.map(m => {
+        const time = m.timestamp ? new Date(m.timestamp).toLocaleString('zh-CN', {hour12:false}) : "未知时间";
+        return `[${time}] ${m.role === 'user' ? '用户' : '我'}: ${m.content || ''}`;
+    }).join('\n');
     const nowStr = new Date().toLocaleString('zh-CN', { hour12: false });
-    const prompt = `你现在是 ${contact.name}。请阅读以下你与用户的近期对话记录，并以【第一人称】（我...）总结关键事件。要求：1.包含具体时间点。2.提取3-5个关键词。3.如果无重要信息，content返回"无"。4.若存在稳定事实可输出 longTermMemory。5.若有明确时间安排可输出 scheduleMemory。6.若形成对用户的新看法可输出 userImpression。严格返回JSON：{"content":"...","keywords":["..."],"longTermMemory":"...","scheduleMemory":{"content":"...","eventDate":"...","endDate":"..."},"userImpression":{"section":"profile|personality|relationship|attitude|notes","content":"..."}}。对话记录：\n${msgsText}\n当前时间：${nowStr}`;
+    const prompt = `你是角色「${contact.name}」，请基于下列对话生成一次记忆总结。
+
+[角色人设]
+${contact.persona || '（未设置）'}
+
+[要求]
+1. 必须以角色第一人称（我）书写，语气和价值观严格遵循角色人设。
+2. 表达要自然、有温度，禁止机械、冷淡、官话式总结。
+3. content 为 60-120 字，提炼真正值得记住的互动。
+4. keywords 输出 3-5 个。
+5. longTermMemory 仅在确有长期稳定价值时输出，否则填空字符串。
+6. userImpression 仅允许 section 为 profile|relationship|notes，内容需可直接用于“用户印象”。
+7. 若无重要信息，content 返回"无"。
+
+严格返回 JSON：
+{"content":"...","keywords":["..."],"longTermMemory":"...","userImpression":{"section":"profile|relationship|notes","content":"..."}}
+
+对话记录：
+${msgsText}
+
+当前时间：${nowStr}`;
     try {
-        const res = await fetch(`${settings.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.5 }) });
+        const res = await fetch(getChatCompletionsUrl(settings.url), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` }, body: JSON.stringify({ model: settings.model, messages: [{ role: "user", content: prompt }], temperature: 0.5 }) });
         const data = await res.json();
         if (data.choices?.length > 0) {
             let raw = data.choices[0].message.content.trim().replace(/```json/g, '').replace(/```/g, '').trim();
@@ -3906,18 +7749,6 @@ async function generateSummary(contact, recentMessages) {
                         timestamp: Date.now()
                     });
                     hasWrite = true;
-                }
-                if (result.scheduleMemory && typeof result.scheduleMemory === 'object') {
-                    const schedule = normalizeScheduleItem({
-                        content: result.scheduleMemory.content || '',
-                        eventDate: result.scheduleMemory.eventDate || '',
-                        endDate: result.scheduleMemory.endDate || '',
-                        timestamp: Date.now()
-                    });
-                    if (schedule) {
-                        bucket.scheduleMemories.push(schedule);
-                        hasWrite = true;
-                    }
                 }
                 if (result.userImpression && typeof result.userImpression === 'object') {
                     const section = result.userImpression.section;
@@ -4147,7 +7978,7 @@ ${userPersona ? `关于 ${userName}：${userPersona}` : ''}
 
     const temp = settings.temperature !== undefined ? settings.temperature : 0.7;
     
-    const res = await fetch(`${settings.url}/chat/completions`, {
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json', 
@@ -4288,6 +8119,7 @@ function resetAddMusicForm() {
     document.getElementById('music-cover-url').value = '';
     document.getElementById('music-cover-file').value = '';
     document.getElementById('music-lyrics-input').value = '';
+    document.getElementById('music-lyrics-file').value = '';
     
     const preview = document.getElementById('music-cover-preview');
     preview.innerHTML = '<span>点击上传封面</span>';
@@ -4300,6 +8132,25 @@ function resetAddMusicForm() {
     document.getElementById('cover-tab-url').classList.remove('active');
     document.getElementById('cover-file-section').style.display = 'block';
     document.getElementById('cover-url-section').style.display = 'none';
+}
+
+// 上传并读取LRC歌词文件
+function handleLyricsFileUpload(input) {
+    if (!input.files || !input.files[0]) return;
+    
+    const file = input.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+        const content = String(e.target.result || '').replace(/\r\n/g, '\n');
+        document.getElementById('music-lyrics-input').value = content.trim();
+    };
+    
+    reader.onerror = () => {
+        alert('LRC文件读取失败，请重试');
+    };
+    
+    reader.readAsText(file, 'UTF-8');
 }
 
 // 切换封面上传方式
@@ -4359,7 +8210,6 @@ function saveNewMusic() {
     const artist = document.getElementById('music-artist-input').value.trim();
     const url = document.getElementById('music-url-input').value.trim();
     const style = document.getElementById('music-style-input').value.trim();
-    const lyrics = document.getElementById('music-lyrics-input').value.trim();
     
     if (!title) {
         alert('请输入音乐标题');
@@ -4368,6 +8218,11 @@ function saveNewMusic() {
     
     if (!artist) {
         alert('请输入歌手/制作者');
+        return;
+    }
+
+    if (!url) {
+        alert('请输入音乐直链');
         return;
     }
     
@@ -4388,8 +8243,32 @@ function saveNewMusic() {
             }
         });
     };
+
+    // 获取歌词（优先文本框，若为空则读取上传的LRC文件）
+    const getLyrics = () => {
+        return new Promise((resolve) => {
+            const inputLyrics = document.getElementById('music-lyrics-input').value.trim();
+            if (inputLyrics) {
+                resolve(inputLyrics);
+                return;
+            }
+            
+            const lyricsFileInput = document.getElementById('music-lyrics-file');
+            if (lyricsFileInput.files && lyricsFileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = String(e.target.result || '').replace(/\r\n/g, '\n');
+                    resolve(content.trim());
+                };
+                reader.onerror = () => resolve('');
+                reader.readAsText(lyricsFileInput.files[0], 'UTF-8');
+            } else {
+                resolve('');
+            }
+        });
+    };
     
-    getCover().then(cover => {
+    Promise.all([getCover(), getLyrics()]).then(([cover, finalLyrics]) => {
         const newMusic = {
             id: Date.now(),
             title: title,
@@ -4397,7 +8276,7 @@ function saveNewMusic() {
             url: url,
             style: style,
             cover: cover,
-            lyrics: lyrics,
+            lyrics: finalLyrics,
             timestamp: Date.now()
         };
         
@@ -5197,7 +9076,7 @@ ${chatHistory || '（暂无聊天记录）'}
 
     const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
     
-    const res = await fetch(`${settings.url}/chat/completions`, {
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json', 
@@ -5726,7 +9605,7 @@ async function callMessageBoardAPI(partner, type, userContent = '', contextConte
     }
     
     const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
-    const res = await fetch(`${settings.url}/chat/completions`, {
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
         body: JSON.stringify({
@@ -5769,18 +9648,495 @@ let currentForumTab = 'following';
 let currentEditingPostId = null;
 let isForumDeleteMode = false;
 let selectedForumPostIds = new Set();
+let currentForumView = 'home';
+let currentForumAccountId = '';
+let currentForumProfileSection = 'posts';
+let forumDraftTags = [];
+const forumFabState = {
+    inited: false,
+    pointerId: null,
+    moved: false,
+    downX: 0,
+    downY: 0,
+    startLeft: 0,
+    startTop: 0
+};
+
+function parseForumPostRange(minRaw, maxRaw, defaultMin = 5, defaultMax = 10) {
+    let min = parseInt(minRaw, 10);
+    let max = parseInt(maxRaw, 10);
+    if (!Number.isFinite(min) || min < 1) min = defaultMin;
+    if (!Number.isFinite(max) || max < 1) max = defaultMax;
+    if (min > max) [min, max] = [max, min];
+    return { min, max };
+}
+
+function normalizeForumSettings(rawSettings) {
+    const settings = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
+    const characterRange = parseForumPostRange(settings.characterPostMin, settings.characterPostMax, 5, 10);
+    const npcRange = parseForumPostRange(settings.npcPostMin, settings.npcPostMax, 5, 10);
+    const roleLocalWorldBooks = {};
+    if (settings.roleLocalWorldBooks && typeof settings.roleLocalWorldBooks === 'object') {
+        Object.entries(settings.roleLocalWorldBooks).forEach(([contactId, ids]) => {
+            const normalizedIds = Array.isArray(ids) ? ids.map(id => String(id)) : [];
+            roleLocalWorldBooks[String(contactId)] = Array.from(new Set(normalizedIds));
+        });
+    }
+    return {
+        systemPrompt: typeof settings.systemPrompt === 'string' ? settings.systemPrompt : '',
+        characterPostMin: characterRange.min,
+        characterPostMax: characterRange.max,
+        npcPostMin: npcRange.min,
+        npcPostMax: npcRange.max,
+        useGlobalWorldBook: settings.useGlobalWorldBook !== false,
+        roleLocalWorldBooks
+    };
+}
+
+function normalizeForumData(raw) {
+    const accounts = DB.getUserAccounts();
+    const fallbackAccountId = accounts[0]?.id || '';
+    const data = raw && typeof raw === 'object' ? raw : {};
+    const normalized = {
+        settings: normalizeForumSettings(data.settings),
+        mainAccountId: typeof data.mainAccountId === 'string' ? data.mainAccountId : '',
+        accountData: {}
+    };
+
+    if (data.accountData && typeof data.accountData === 'object') {
+        Object.entries(data.accountData).forEach(([accountId, accountData]) => {
+            const posts = Array.isArray(accountData?.posts) ? accountData.posts : [];
+            const likedPosts = Array.isArray(accountData?.likedPosts) ? accountData.likedPosts : [];
+            const profile = accountData?.profile && typeof accountData.profile === 'object' ? accountData.profile : {};
+            normalized.accountData[accountId] = {
+                posts,
+                likedPosts,
+                profile: {
+                    wallpaper: typeof profile.wallpaper === 'string' ? profile.wallpaper : ''
+                },
+                fabPos: (accountData?.fabPos && typeof accountData.fabPos === 'object') ? accountData.fabPos : null
+            };
+        });
+    }
+
+    // 兼容旧版：把全局帖子迁移到主账号桶
+    if (Array.isArray(data.posts) && data.posts.length > 0) {
+        const targetAccountId = normalized.mainAccountId || fallbackAccountId;
+        if (targetAccountId) {
+            if (!normalized.accountData[targetAccountId]) {
+                normalized.accountData[targetAccountId] = { posts: [], likedPosts: [], profile: { wallpaper: '' }, fabPos: null };
+            }
+            const migratedPosts = data.posts.map(post => ({
+                ...post,
+                accountId: targetAccountId
+            }));
+            normalized.accountData[targetAccountId].posts.push(...migratedPosts);
+        }
+    }
+
+    return normalized;
+}
+
+function getForumBoundContacts(accountId) {
+    if (!accountId) return [];
+    return DB.getContacts().filter(contact => String(contact.userAccountId || '') === String(accountId));
+}
 
 // 获取论坛数据
 DB.getForumData = () => {
     const theme = DB.getTheme();
-    return theme.forumData || { settings: { systemPrompt: '' }, posts: [] };
+    return normalizeForumData(theme.forumData || {});
 };
 
 DB.saveForumData = (data) => {
     const theme = DB.getTheme();
-    theme.forumData = data;
+    theme.forumData = normalizeForumData(data || {});
     DB.saveTheme(theme);
 };
+
+function getForumAccountBucket(forumData, accountId, createIfMissing = true) {
+    if (!forumData.accountData) forumData.accountData = {};
+    if (!accountId) return { posts: [], likedPosts: [], profile: { wallpaper: '' }, fabPos: null };
+    if (!forumData.accountData[accountId] && createIfMissing) {
+        forumData.accountData[accountId] = { posts: [], likedPosts: [], profile: { wallpaper: '' }, fabPos: null };
+    }
+    const bucket = forumData.accountData[accountId] || { posts: [], likedPosts: [], profile: { wallpaper: '' }, fabPos: null };
+    if (!Array.isArray(bucket.posts)) bucket.posts = [];
+    if (!Array.isArray(bucket.likedPosts)) bucket.likedPosts = [];
+    if (!bucket.profile || typeof bucket.profile !== 'object') bucket.profile = { wallpaper: '' };
+    if (typeof bucket.profile.wallpaper !== 'string') bucket.profile.wallpaper = '';
+    if (!bucket.fabPos || typeof bucket.fabPos !== 'object') bucket.fabPos = null;
+    return bucket;
+}
+
+function getForumCurrentAccount() {
+    if (!currentForumAccountId) return null;
+    return getUserAccountById(currentForumAccountId);
+}
+
+function buildForumAccountAvatar(account) {
+    return account?.avatar || DEFAULT_USER_ACCOUNT_PREVIEW_AVATAR;
+}
+
+function buildForumAccountListItem(account, isActive = false) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `forum-account-item${isActive ? ' active' : ''}`;
+    btn.innerHTML = `
+        <img class="forum-account-item-avatar" src="${buildForumAccountAvatar(account)}" alt="头像">
+        <div>
+            <div class="forum-account-item-name">${account.name || '我'}</div>
+            <div class="forum-account-item-persona">${account.persona || '未设置人设'}</div>
+        </div>
+    `;
+    return btn;
+}
+
+function setForumMainAccount(accountId) {
+    const forumData = DB.getForumData();
+    forumData.mainAccountId = accountId;
+    getForumAccountBucket(forumData, accountId, true);
+    DB.saveForumData(forumData);
+    currentForumAccountId = accountId;
+    applyForumFabPositionFromData();
+}
+
+function openForumAccountRequiredModal() {
+    const modal = document.getElementById('forum-account-required-modal');
+    const list = document.getElementById('forum-account-required-list');
+    if (!modal || !list) return;
+
+    const accounts = DB.getUserAccounts();
+    list.innerHTML = '';
+    if (accounts.length === 0) {
+        list.innerHTML = '<div style="font-size:13px; color:#666;">请先在通讯录创建用户人设。</div>';
+        modal.classList.add('active');
+        return;
+    }
+
+    accounts.forEach(account => {
+        const item = buildForumAccountListItem(account, false);
+        item.onclick = () => {
+            setForumMainAccount(account.id);
+            modal.classList.remove('active');
+            renderForumByCurrentView();
+        };
+        list.appendChild(item);
+    });
+
+    modal.classList.add('active');
+}
+
+function openForumAccountSwitchModal() {
+    const modal = document.getElementById('forum-account-switch-modal');
+    const list = document.getElementById('forum-account-switch-list');
+    if (!modal || !list) return;
+
+    const accounts = DB.getUserAccounts();
+    list.innerHTML = '';
+    accounts.forEach(account => {
+        const item = buildForumAccountListItem(account, account.id === currentForumAccountId);
+        item.onclick = () => {
+            setForumMainAccount(account.id);
+            closeForumAccountSwitchModal();
+            renderForumByCurrentView();
+        };
+        list.appendChild(item);
+    });
+    modal.classList.add('active');
+}
+
+function closeForumAccountSwitchModal() {
+    const modal = document.getElementById('forum-account-switch-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function ensureForumMainAccountSelected() {
+    const accounts = DB.getUserAccounts();
+    if (accounts.length === 0) {
+        alert('请先在通讯录创建至少一个用户人设账号');
+        goHome();
+        return false;
+    }
+
+    const forumData = DB.getForumData();
+    const hasValidMain = !!forumData.mainAccountId && !!getUserAccountById(forumData.mainAccountId);
+    if (!hasValidMain) {
+        currentForumAccountId = '';
+        openForumAccountRequiredModal();
+        return false;
+    }
+
+    currentForumAccountId = forumData.mainAccountId;
+    return true;
+}
+
+function initForumApp() {
+    if (!ensureForumMainAccountSelected()) return;
+    initForumFab();
+    applyForumFabPositionFromData();
+    switchForumView(currentForumView);
+    renderForumPosts();
+    renderForumProfileView();
+}
+
+function renderForumDraftTags() {
+    const list = document.getElementById('forum-selected-tag-list');
+    if (!list) return;
+    list.innerHTML = '';
+    forumDraftTags.forEach(tag => {
+        const item = document.createElement('span');
+        item.className = 'forum-selected-tag-item';
+        item.textContent = `#${tag}`;
+        item.title = '点击移除';
+        item.onclick = () => removeForumDraftTag(tag);
+        list.appendChild(item);
+    });
+}
+
+function addForumDraftTag(rawTag) {
+    const normalized = String(rawTag || '').trim().replace(/^#+/, '').slice(0, 20);
+    if (!normalized) return;
+    if (forumDraftTags.includes(normalized)) return;
+    if (forumDraftTags.length >= 8) {
+        alert('一个帖子最多只能带 8 个标签');
+        return;
+    }
+    forumDraftTags.push(normalized);
+    renderForumDraftTags();
+}
+
+function removeForumDraftTag(tag) {
+    forumDraftTags = forumDraftTags.filter(item => item !== tag);
+    renderForumDraftTags();
+}
+
+function addForumDraftTagFromInput() {
+    const input = document.getElementById('forum-create-tag-input');
+    if (!input) return;
+    addForumDraftTag(input.value);
+    input.value = '';
+}
+
+function handleForumTagInputKeydown(event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addForumDraftTagFromInput();
+}
+
+function openForumCreatePostModal() {
+    if (!ensureForumMainAccountSelected()) return;
+    forumDraftTags = [];
+    const textInput = document.getElementById('forum-create-text');
+    const tagInput = document.getElementById('forum-create-tag-input');
+    if (textInput) textInput.value = '';
+    if (tagInput) tagInput.value = '';
+    renderForumDraftTags();
+    document.getElementById('forum-create-post-modal').classList.add('active');
+}
+
+function closeForumCreatePostModal() {
+    document.getElementById('forum-create-post-modal').classList.remove('active');
+}
+
+function submitForumUserPost() {
+    if (!ensureForumMainAccountSelected()) return;
+    const textInput = document.getElementById('forum-create-text');
+    const content = String(textInput?.value || '').trim();
+    if (!content) {
+        alert('请输入发帖内容');
+        return;
+    }
+    const account = getForumCurrentAccount();
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const newPost = {
+        id: Date.now() + Math.random(),
+        type: 'user',
+        username: account?.name || '我',
+        avatar: account?.avatar || '',
+        content,
+        imageDesc: null,
+        tags: forumDraftTags.slice(0, 8),
+        comments: [],
+        timestamp: Date.now(),
+        accountId: currentForumAccountId,
+        characterId: null
+    };
+    bucket.posts.push(newPost);
+    DB.saveForumData(forumData);
+    closeForumCreatePostModal();
+    renderForumPosts();
+    renderForumProfileView();
+    generateForumCommentsForUserPost(newPost.id, currentForumAccountId);
+}
+
+function normalizeForumCommentText(text) {
+    return String(text || '')
+        .replace(/```/g, '')
+        .replace(/^["'`]+|["'`]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 50);
+}
+
+async function generateForumCommentsForUserPost(postId, accountId) {
+    const settings = DB.getSettings();
+    if (!settings.key || !settings.url || !settings.model) return;
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, accountId, true);
+    const post = bucket.posts.find(item => String(item.id) === String(postId));
+    if (!post) return;
+    const contacts = getForumBoundContacts(accountId);
+    if (contacts.length === 0) return;
+    const forumSettings = normalizeForumSettings(forumData.settings);
+    const systemPrompt = forumSettings.systemPrompt || '这是一个普通的论坛';
+    const postTagsText = Array.isArray(post.tags) && post.tags.length > 0
+        ? `\n帖子标签：${post.tags.map(tag => `#${tag}`).join(' ')}`
+        : '';
+
+    const comments = [];
+    for (const contact of contacts) {
+        const worldBookContext = buildForumWorldBookContext(contact.id, forumSettings);
+        const prompt = `你正在扮演论坛用户 ${contact.name}。人设：${contact.persona || '未填写'}
+
+论坛设定：${systemPrompt}
+${worldBookContext}
+
+现在你看到用户 ${post.username} 发布的帖子：
+${post.content}${postTagsText}
+
+请只生成一条评论，要求：
+1. 字数不超过50字
+2. 只评论用户帖子本身
+3. 不要和其他角色互动
+4. 直接返回评论文本，不要JSON，不要解释`;
+        try {
+            const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+            const res = await fetch(getChatCompletionsUrl(settings.url), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+                body: JSON.stringify({
+                    model: settings.model,
+                    messages: [{ role: "user", content: prompt }],
+                    temperature: temp
+                })
+            });
+            const data = await res.json();
+            const rawContent = data?.choices?.[0]?.message?.content;
+            const content = normalizeForumCommentText(rawContent);
+            if (!content) continue;
+            comments.push({
+                id: Date.now() + Math.random(),
+                characterId: contact.id,
+                username: contact.name,
+                avatar: contact.avatar || '',
+                content,
+                timestamp: Date.now()
+            });
+        } catch (err) {
+            console.warn('generate forum comment failed:', err);
+        }
+    }
+
+    if (comments.length === 0) return;
+    const freshData = DB.getForumData();
+    const freshBucket = getForumAccountBucket(freshData, accountId, true);
+    const freshPost = freshBucket.posts.find(item => String(item.id) === String(postId));
+    if (!freshPost) return;
+    freshPost.comments = comments;
+    DB.saveForumData(freshData);
+    renderForumPosts();
+    if (currentForumView === 'my') renderForumProfileView();
+}
+
+function initForumFab() {
+    if (forumFabState.inited) return;
+    const fab = document.getElementById('forum-fab');
+    const app = document.getElementById('app-forum');
+    if (!fab || !app) return;
+    forumFabState.inited = true;
+
+    fab.addEventListener('click', (evt) => {
+        if (forumFabState.moved) {
+            evt.preventDefault();
+            return;
+        }
+        openForumCreatePostModal();
+    });
+
+    fab.addEventListener('pointerdown', (evt) => {
+        forumFabState.pointerId = evt.pointerId;
+        forumFabState.moved = false;
+        forumFabState.downX = evt.clientX;
+        forumFabState.downY = evt.clientY;
+        forumFabState.startLeft = Number(fab.dataset.left || 0);
+        forumFabState.startTop = Number(fab.dataset.top || 0);
+        fab.setPointerCapture(evt.pointerId);
+    });
+
+    fab.addEventListener('pointermove', (evt) => {
+        if (forumFabState.pointerId !== evt.pointerId) return;
+        const dx = evt.clientX - forumFabState.downX;
+        const dy = evt.clientY - forumFabState.downY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) forumFabState.moved = true;
+        if (!forumFabState.moved) return;
+
+        const maxLeft = Math.max(8, app.clientWidth - fab.offsetWidth - 8);
+        const maxTop = Math.max(96, app.clientHeight - fab.offsetHeight - 76);
+        const nextLeft = Math.max(8, Math.min(maxLeft, forumFabState.startLeft + dx));
+        const nextTop = Math.max(96, Math.min(maxTop, forumFabState.startTop + dy));
+        placeForumFab(nextLeft, nextTop);
+    });
+
+    fab.addEventListener('pointerup', (evt) => {
+        if (forumFabState.pointerId !== evt.pointerId) return;
+        fab.releasePointerCapture(evt.pointerId);
+        forumFabState.pointerId = null;
+        saveForumFabPosition();
+        setTimeout(() => { forumFabState.moved = false; }, 0);
+    });
+}
+
+function placeForumFab(left, top) {
+    const fab = document.getElementById('forum-fab');
+    if (!fab) return;
+    fab.style.left = `${left}px`;
+    fab.style.top = `${top}px`;
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+    fab.dataset.left = String(left);
+    fab.dataset.top = String(top);
+}
+
+function applyForumFabPositionFromData() {
+    const app = document.getElementById('app-forum');
+    const fab = document.getElementById('forum-fab');
+    if (!app || !fab) return;
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const x = Number(bucket.fabPos?.x);
+    const y = Number(bucket.fabPos?.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+        placeForumFab(x, y);
+        return;
+    }
+    const defaultLeft = Math.max(8, app.clientWidth - fab.offsetWidth - 18);
+    const defaultTop = Math.max(96, app.clientHeight - fab.offsetHeight - 96);
+    placeForumFab(defaultLeft, defaultTop);
+}
+
+function saveForumFabPosition() {
+    const fab = document.getElementById('forum-fab');
+    if (!fab) return;
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    bucket.fabPos = {
+        x: Number(fab.dataset.left || 0),
+        y: Number(fab.dataset.top || 0)
+    };
+    DB.saveForumData(forumData);
+}
 
 // 切换论坛标签
 function switchForumTab(tab) {
@@ -5790,11 +10146,97 @@ function switchForumTab(tab) {
     renderForumPosts();
 }
 
+function switchForumView(view) {
+    currentForumView = view;
+    const header = document.querySelector('#app-forum .forum-header');
+    const feedView = document.getElementById('forum-feed-view');
+    const profileView = document.getElementById('forum-profile-view');
+    const navHome = document.getElementById('forum-nav-home');
+    const navMy = document.getElementById('forum-nav-my');
+    const addBtn = document.querySelector('#app-forum .forum-add-btn');
+    const settingsBtn = document.querySelector('#app-forum .forum-settings-btn');
+
+    if (header) header.style.display = view === 'home' ? 'flex' : 'none';
+    if (feedView) feedView.style.display = view === 'home' ? 'block' : 'none';
+    if (profileView) profileView.style.display = view === 'my' ? 'block' : 'none';
+    if (navHome) navHome.classList.toggle('active', view === 'home');
+    if (navMy) navMy.classList.toggle('active', view === 'my');
+    if (addBtn) addBtn.style.display = view === 'home' ? 'flex' : 'none';
+    if (settingsBtn) settingsBtn.style.display = view === 'home' ? 'flex' : 'none';
+
+    if (view === 'home') renderForumPosts();
+    if (view === 'my') renderForumProfileView();
+}
+
+function renderForumByCurrentView() {
+    if (currentForumView === 'my') renderForumProfileView();
+    else renderForumPosts();
+    renderForumBindCharacters();
+}
+
+function buildForumCommentsHtml(post) {
+    const comments = Array.isArray(post.comments) ? post.comments : [];
+    if (comments.length === 0) return '';
+    const rows = comments.map(comment => `
+        <div class="forum-comment-row">
+            <span class="forum-comment-name">${comment.username}</span>
+            <span class="forum-comment-text">${comment.content}</span>
+        </div>
+    `).join('');
+    return `<div class="forum-comments">${rows}</div>`;
+}
+
+function isForumPostLiked(postId) {
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    return bucket.likedPosts.some(post => String(post.sourcePostId) === String(postId));
+}
+
+function createForumPostSnapshot(post) {
+    return {
+        sourcePostId: post.id,
+        type: post.type,
+        username: post.username,
+        avatar: post.avatar || null,
+        content: post.content,
+        imageDesc: post.imageDesc || null,
+        tags: Array.isArray(post.tags) ? [...post.tags] : [],
+        comments: Array.isArray(post.comments) ? [...post.comments] : [],
+        timestamp: post.timestamp || Date.now(),
+        likedAt: Date.now()
+    };
+}
+
+function toggleForumLike(postId, evt = null) {
+    if (evt) evt.stopPropagation();
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const existingIndex = bucket.likedPosts.findIndex(post => String(post.sourcePostId) === String(postId));
+    if (existingIndex !== -1) {
+        bucket.likedPosts.splice(existingIndex, 1);
+    } else {
+        const sourcePost = bucket.posts.find(post => String(post.id) === String(postId));
+        if (!sourcePost) return;
+        bucket.likedPosts.push(createForumPostSnapshot(sourcePost));
+    }
+    DB.saveForumData(forumData);
+    renderForumPosts();
+    if (currentForumView === 'my') renderForumProfileView();
+}
+
 // 渲染论坛帖子
 function renderForumPosts() {
     const container = document.getElementById('forum-posts-container');
+    if (!container) return;
+    if (!ensureForumMainAccountSelected()) {
+        container.innerHTML = '';
+        return;
+    }
+
     const forumData = DB.getForumData();
-    const posts = forumData.posts || [];
+    const accountBucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const posts = accountBucket.posts || [];
+    const boundContactIds = new Set(getForumBoundContacts(currentForumAccountId).map(c => String(c.id)));
     
     container.innerHTML = '';
     
@@ -5804,7 +10246,9 @@ function renderForumPosts() {
     // 根据当前标签过滤
     const filteredPosts = sortedPosts.filter(post => {
         if (currentForumTab === 'following') {
-            return post.type === 'character';
+            if (post.type !== 'character') return false;
+            if (!post.characterId) return true;
+            return boundContactIds.has(String(post.characterId));
         } else {
             return post.type === 'passerby';
         }
@@ -5848,6 +10292,7 @@ function renderForumPosts() {
             avatarHtml = `<div class="forum-post-avatar" style="background: ${color};">${initial}</div>`;
         }
         
+        const tags = Array.isArray(post.tags) ? post.tags.slice(0, 8) : [];
         let contentHtml = `
             <div class="forum-post-header">
                 ${avatarHtml}
@@ -5864,6 +10309,18 @@ function renderForumPosts() {
         if (post.imageDesc) {
             contentHtml += `<div class="forum-post-image-desc">${post.imageDesc}</div>`;
         }
+
+        if (tags.length > 0) {
+            contentHtml += `<div class="forum-post-tags">${tags.map(tag => `<span class="forum-post-tag">#${String(tag).replace(/^#/, '')}</span>`).join('')}</div>`;
+        }
+
+        const liked = isForumPostLiked(post.id);
+        contentHtml += `
+            <div class="forum-post-actions">
+                <button class="forum-post-like-btn" type="button" onclick="toggleForumLike(${post.id}, event)">${liked ? '❤' : '♡'}</button>
+            </div>
+        `;
+        contentHtml += buildForumCommentsHtml(post);
         
         postEl.innerHTML += contentHtml;
         
@@ -5900,9 +10357,11 @@ function handleForumDeleteAction() {
     if (!currentEditingPostId) return;
     if (confirm('确定要删除这条帖子吗？')) {
         const forumData = DB.getForumData();
-        forumData.posts = forumData.posts.filter(p => p.id !== currentEditingPostId);
+        const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+        bucket.posts = bucket.posts.filter(p => p.id !== currentEditingPostId);
         DB.saveForumData(forumData);
         renderForumPosts();
+        if (currentForumView === 'my') renderForumProfileView();
     }
     closeForumActionSheet();
 }
@@ -5912,15 +10371,25 @@ function deleteForumPost(postId) {
     if (!confirm('确定要删除这条帖子吗？')) return;
     
     const forumData = DB.getForumData();
-    forumData.posts = forumData.posts.filter(p => p.id !== postId);
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    bucket.posts = bucket.posts.filter(p => p.id !== postId);
     DB.saveForumData(forumData);
     renderForumPosts();
+    if (currentForumView === 'my') renderForumProfileView();
 }
 
 // 打开设置弹窗
 function openForumSettings() {
+    if (!ensureForumMainAccountSelected()) return;
     const forumData = DB.getForumData();
-    document.getElementById('forum-system-prompt').value = forumData.settings?.systemPrompt || '';
+    const forumSettings = normalizeForumSettings(forumData.settings);
+    document.getElementById('forum-system-prompt').value = forumSettings.systemPrompt || '';
+    document.getElementById('forum-character-post-min').value = forumSettings.characterPostMin;
+    document.getElementById('forum-character-post-max').value = forumSettings.characterPostMax;
+    document.getElementById('forum-npc-post-min').value = forumSettings.npcPostMin;
+    document.getElementById('forum-npc-post-max').value = forumSettings.npcPostMax;
+    document.getElementById('forum-use-global-worldbook').checked = forumSettings.useGlobalWorldBook !== false;
+    renderForumWorldBookBindings();
     renderForumBindCharacters();
     document.getElementById('forum-settings-modal').classList.add('active');
 }
@@ -5928,27 +10397,125 @@ function openForumSettings() {
 // 渲染论坛绑定角色列表
 function renderForumBindCharacters() {
     const container = document.getElementById('forum-bind-characters');
-    const contacts = DB.getContacts();
-    const forumData = DB.getForumData();
-    const boundCharacters = forumData.settings?.boundCharacters || [];
+    if (!container) return;
+    if (!ensureForumMainAccountSelected()) {
+        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">请先选择论坛主账号</div>';
+        return;
+    }
+    const contacts = getForumBoundContacts(currentForumAccountId);
     
     container.innerHTML = '';
     
     if (contacts.length === 0) {
-        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">暂无联系人</div>';
+        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">当前账号下暂无绑定角色</div>';
         return;
     }
     
     contacts.forEach(contact => {
-        const isChecked = boundCharacters.includes(contact.id.toString());
         const item = document.createElement('div');
         item.style.cssText = 'display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #333;';
         item.innerHTML = `
-            <input type="checkbox" id="forum-bind-char-${contact.id}" value="${contact.id}" ${isChecked ? 'checked' : ''} style="margin-right: 10px;">
-            <label for="forum-bind-char-${contact.id}" style="flex: 1; cursor: pointer; color: #fff;">${contact.name}</label>
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:10px; background:#5856d6;"></span>
+            <div style="flex: 1; color: #fff;">${contact.name}</div>
         `;
         container.appendChild(item);
     });
+}
+
+function renderForumWorldBookBindings() {
+    const container = document.getElementById('forum-worldbook-bind-roles');
+    if (!container) return;
+    if (!ensureForumMainAccountSelected()) {
+        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">请先选择论坛主账号</div>';
+        return;
+    }
+
+    const contacts = getForumBoundContacts(currentForumAccountId);
+    const wb = DB.getWorldBook();
+    const localEntries = (wb.entries || []).filter(e => e.type === 'local');
+    const forumData = DB.getForumData();
+    const forumSettings = normalizeForumSettings(forumData.settings);
+    const roleLocalWorldBooks = forumSettings.roleLocalWorldBooks || {};
+
+    container.innerHTML = '';
+    if (contacts.length === 0) {
+        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">当前账号下暂无绑定角色</div>';
+        return;
+    }
+    if (localEntries.length === 0) {
+        container.innerHTML = '<div style="padding: 10px; color: #999; font-size: 12px;">世界书中暂无“局部”条目</div>';
+        return;
+    }
+
+    contacts.forEach(contact => {
+        const roleBlock = document.createElement('div');
+        roleBlock.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #333;';
+
+        const title = document.createElement('div');
+        title.style.cssText = 'font-size:13px; color:#fff; margin-bottom:6px; font-weight:600;';
+        title.textContent = contact.name;
+        roleBlock.appendChild(title);
+
+        const boundIds = roleLocalWorldBooks[String(contact.id)] || [];
+        localEntries.forEach(entry => {
+            const row = document.createElement('label');
+            row.style.cssText = 'display:flex; align-items:center; gap:8px; color:#ddd; font-size:12px; margin:4px 0; cursor:pointer;';
+            row.innerHTML = `
+                <input type="checkbox" data-forum-role-wb="${contact.id}" value="${entry.id}" ${boundIds.includes(String(entry.id)) ? 'checked' : ''}>
+                <span>${entry.title}</span>
+            `;
+            roleBlock.appendChild(row);
+        });
+        container.appendChild(roleBlock);
+    });
+}
+
+function randomIntInclusive(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function distributeForumPostCounts(total, roleCount, ensureEachAtLeastOne) {
+    const counts = Array(roleCount).fill(0);
+    if (roleCount <= 0 || total <= 0) return counts;
+    let remaining = total;
+    if (ensureEachAtLeastOne && total >= roleCount) {
+        for (let i = 0; i < roleCount; i++) counts[i] = 1;
+        remaining -= roleCount;
+    }
+    while (remaining > 0) {
+        const idx = Math.floor(Math.random() * roleCount);
+        counts[idx] += 1;
+        remaining -= 1;
+    }
+    return counts;
+}
+
+function buildForumWorldBookContext(contactId = null, forumSettings = null) {
+    const settings = forumSettings || normalizeForumSettings(DB.getForumData().settings);
+    const wb = DB.getWorldBook();
+    const lines = [];
+
+    if (settings.useGlobalWorldBook) {
+        const globalEntries = (wb.entries || []).filter(e => e.type === 'global');
+        if (globalEntries.length > 0) {
+            lines.push('[全局世界书]');
+            globalEntries.forEach(entry => lines.push(`【${entry.title}】：${entry.content}`));
+        }
+    }
+
+    if (contactId != null) {
+        const boundIds = (settings.roleLocalWorldBooks && settings.roleLocalWorldBooks[String(contactId)]) || [];
+        const localEntries = boundIds
+            .map(id => (wb.entries || []).find(e => String(e.id) === String(id) && e.type === 'local'))
+            .filter(Boolean);
+        if (localEntries.length > 0) {
+            lines.push('[角色局部世界书]');
+            localEntries.forEach(entry => lines.push(`【${entry.title}】：${entry.content}`));
+        }
+    }
+
+    if (lines.length === 0) return '';
+    return `\n\n世界书设定：\n${lines.join('\n')}`;
 }
 
 // 关闭设置弹窗
@@ -5959,13 +10526,36 @@ function closeForumSettings() {
 // 保存论坛设置
 function saveForumSettings() {
     const systemPrompt = document.getElementById('forum-system-prompt').value.trim();
-    const boundCharacters = [...document.querySelectorAll('#forum-bind-characters input:checked')].map(cb => cb.value);
-    
+    const characterRange = parseForumPostRange(
+        document.getElementById('forum-character-post-min').value,
+        document.getElementById('forum-character-post-max').value,
+        5,
+        10
+    );
+    const npcRange = parseForumPostRange(
+        document.getElementById('forum-npc-post-min').value,
+        document.getElementById('forum-npc-post-max').value,
+        5,
+        10
+    );
+    const useGlobalWorldBook = document.getElementById('forum-use-global-worldbook').checked;
+    const roleLocalWorldBooks = {};
+    const contacts = getForumBoundContacts(currentForumAccountId);
+    contacts.forEach(contact => {
+        const checked = [...document.querySelectorAll(`input[data-forum-role-wb="${contact.id}"]:checked`)].map(el => String(el.value));
+        roleLocalWorldBooks[String(contact.id)] = checked;
+    });
+
     const forumData = DB.getForumData();
-    forumData.settings = { 
-        systemPrompt: systemPrompt,
-        boundCharacters: boundCharacters
-    };
+    forumData.settings = normalizeForumSettings({
+        systemPrompt,
+        characterPostMin: characterRange.min,
+        characterPostMax: characterRange.max,
+        npcPostMin: npcRange.min,
+        npcPostMax: npcRange.max,
+        useGlobalWorldBook,
+        roleLocalWorldBooks
+    });
     DB.saveForumData(forumData);
     closeForumSettings();
     alert('论坛设置已保存');
@@ -5973,18 +10563,20 @@ function saveForumSettings() {
 
 // 清空所有帖子
 function clearAllForumPosts() {
-    if (!confirm('确定要清空所有帖子吗？（不包括用户自己发的帖）')) return;
+    if (!confirm('确定要清空当前论坛账号下的所有帖子吗？')) return;
     
     const forumData = DB.getForumData();
-    forumData.posts = [];
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    bucket.posts = [];
     DB.saveForumData(forumData);
     renderForumPosts();
     closeForumSettings();
-    alert('所有帖子已清空');
+    alert('当前账号帖子已清空');
 }
 
 // 打开添加帖子弹窗
 function openForumAddModal() {
+    if (!ensureForumMainAccountSelected()) return;
     document.getElementById('forum-add-modal').classList.add('active');
 }
 
@@ -5995,6 +10587,7 @@ function closeForumAddModal() {
 
 // 生成论坛帖子
 async function generateForumPosts(type) {
+    if (!ensureForumMainAccountSelected()) return;
     const settings = DB.getSettings();
     if (!settings.key) {
         alert('请先在设置中配置 API Key');
@@ -6003,11 +10596,9 @@ async function generateForumPosts(type) {
     
     // 如果是角色帖子，检查是否有绑定的角色
     if (type === 'character') {
-        const forumData = DB.getForumData();
-        const boundCharacters = forumData.settings?.boundCharacters || [];
-        
-        if (boundCharacters.length === 0) {
-            alert('请先在论坛设置中绑定角色');
+        const boundContacts = getForumBoundContacts(currentForumAccountId);
+        if (boundContacts.length === 0) {
+            alert('当前论坛账号下暂无可发帖角色，请先在通讯录把角色绑定到该用户人设');
             return;
         }
     }
@@ -6016,18 +10607,21 @@ async function generateForumPosts(type) {
     alert('正在生成帖子，请稍候...');
     
     try {
-        const posts = await callForumAPI(type);
+        const posts = await callForumAPI(type, currentForumAccountId);
         if (posts && posts.length > 0) {
             const forumData = DB.getForumData();
+            const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
             posts.forEach(postData => {
-                forumData.posts.push({
+                bucket.posts.push({
                     id: Date.now() + Math.random(),
                     type: type,
                     username: postData.username,
                     avatar: postData.avatar || null,
                     content: postData.content,
                     imageDesc: postData.imageDesc || null,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    accountId: currentForumAccountId,
+                    characterId: postData.characterId || null
                 });
             });
             DB.saveForumData(forumData);
@@ -6040,70 +10634,83 @@ async function generateForumPosts(type) {
 }
 
 // 调用API生成帖子
-async function callForumAPI(type) {
+async function callForumAPI(type, accountId) {
     const settings = DB.getSettings();
     const forumData = DB.getForumData();
-    const systemPrompt = forumData.settings?.systemPrompt || '这是一个普通的论坛';
-    
-    let prompt = '';
+    const forumSettings = normalizeForumSettings(forumData.settings);
+    const systemPrompt = forumSettings.systemPrompt || '这是一个普通的论坛';
     
     if (type === 'character') {
-        // 角色帖子
-        const contacts = DB.getContacts();
+        const contacts = getForumBoundContacts(accountId);
         if (contacts.length === 0) {
-            throw new Error('请先在通讯录添加角色');
+            throw new Error('当前论坛账号下暂无绑定角色');
         }
-        
-        const contact = contacts[0]; // 使用第一个联系人
-        
-        prompt = `你正在扮演 ${contact.name}。人设：${contact.persona}
+
+        const totalPosts = randomIntInclusive(forumSettings.characterPostMin, forumSettings.characterPostMax);
+        const ensureEachAtLeastOne = forumSettings.characterPostMin >= contacts.length;
+        const rolePostCounts = distributeForumPostCounts(totalPosts, contacts.length, ensureEachAtLeastOne);
+        const allPosts = [];
+        for (let i = 0; i < contacts.length; i++) {
+            const contact = contacts[i];
+            const targetCount = rolePostCounts[i];
+            if (targetCount <= 0) continue;
+            const worldBookContext = buildForumWorldBookContext(contact.id, forumSettings);
+            const prompt = `你正在扮演 ${contact.name}。人设：${contact.persona || '未填写'}
 
 论坛设定：${systemPrompt}
+${worldBookContext}
 
-请生成 5-10 条你在这个论坛上发布的帖子。
+请生成 ${targetCount} 条你在这个论坛上发布的帖子。
 
 要求：
 1. 以第一人称（我）发帖
 2. 每条帖子不超过100字
 3. 内容符合你的人设和性格
-4. 至少生成1条带图帖子（不需要真实图片，只生成图片描述）
-5. 严格返回JSON数组格式：
+4. 严格返回JSON数组格式：
 [
   {
     "content": "帖子文本内容",
     "imageDesc": "图片描述（可选，如果没有图则为 null）"
   }
 ]`;
-        
-        const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
-        const res = await fetch(`${settings.url}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
-            body: JSON.stringify({
-                model: settings.model,
-                messages: [{ role: "user", content: prompt }],
-                temperature: temp
-            })
-        });
-        
-        const data = await res.json();
-        if (data.choices && data.choices.length > 0) {
+
+            const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
+            const res = await fetch(getChatCompletionsUrl(settings.url), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
+                body: JSON.stringify({
+                    model: settings.model,
+                    messages: [{ role: "user", content: prompt }],
+                    temperature: temp
+                })
+            });
+            const data = await res.json();
+            if (!(data.choices && data.choices.length > 0)) continue;
+
             let content = data.choices[0].message.content.trim();
             content = content.replace(/```json/g, '').replace(/```/g, '').trim();
-            
             const postsData = JSON.parse(content);
-            return postsData.map(p => ({
-                username: contact.name,
-                avatar: contact.avatar,
-                content: p.content,
-                imageDesc: p.imageDesc
-            }));
+            if (!Array.isArray(postsData)) continue;
+            postsData.slice(0, targetCount).forEach(p => {
+                if (!p || !p.content) return;
+                allPosts.push({
+                    username: contact.name,
+                    avatar: contact.avatar,
+                    content: p.content,
+                    imageDesc: p.imageDesc || null,
+                    characterId: contact.id
+                });
+            });
         }
+        return allPosts;
     } else {
         // 路人帖子
-        prompt = `论坛设定：${systemPrompt}
+        const npcCount = randomIntInclusive(forumSettings.npcPostMin, forumSettings.npcPostMax);
+        const worldBookContext = buildForumWorldBookContext(null, forumSettings);
+        const prompt = `论坛设定：${systemPrompt}
+${worldBookContext}
 
-请生成 4-8 条路人在这个论坛上发布的帖子。
+请生成 ${npcCount} 条路人在这个论坛上发布的帖子。
 
 要求：
 1. 随机生成网名
@@ -6127,7 +10734,7 @@ async function callForumAPI(type) {
 ]`;
         
         const temp = settings.temperature !== undefined ? settings.temperature : 0.9;
-        const res = await fetch(`${settings.url}/chat/completions`, {
+        const res = await fetch(getChatCompletionsUrl(settings.url), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.key}` },
             body: JSON.stringify({
@@ -6142,7 +10749,9 @@ async function callForumAPI(type) {
             let content = data.choices[0].message.content.trim();
             content = content.replace(/```json/g, '').replace(/```/g, '').trim();
             
-            return JSON.parse(content);
+            const parsed = JSON.parse(content);
+            if (!Array.isArray(parsed)) return [];
+            return parsed.slice(0, npcCount);
         }
     }
     
@@ -6153,7 +10762,8 @@ async function callForumAPI(type) {
 function openForumEditModal(postId) {
     currentEditingPostId = postId;
     const forumData = DB.getForumData();
-    const post = forumData.posts.find(p => p.id === postId);
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const post = bucket.posts.find(p => p.id === postId);
     
     if (!post) return;
     
@@ -6178,12 +10788,14 @@ function saveForumPostEdit() {
     }
     
     const forumData = DB.getForumData();
-    const post = forumData.posts.find(p => p.id === currentEditingPostId);
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const post = bucket.posts.find(p => p.id === currentEditingPostId);
     
     if (post) {
         post.content = newContent;
         DB.saveForumData(forumData);
         renderForumPosts();
+        if (currentForumView === 'my') renderForumProfileView();
         closeForumEditModal();
         alert('帖子已更新');
     }
@@ -6193,8 +10805,10 @@ function saveForumPostEdit() {
 function enterForumDeleteMode() {
     isForumDeleteMode = true;
     selectedForumPostIds.clear();
-    document.getElementById('forum-posts-container').classList.add('forum-delete-mode');
-    document.getElementById('forum-delete-bar').classList.add('active');
+    const container = document.getElementById('forum-posts-container');
+    const deleteBar = document.getElementById('forum-delete-bar');
+    if (container) container.classList.add('forum-delete-mode');
+    if (deleteBar) deleteBar.classList.add('active');
     renderForumPosts();
 }
 
@@ -6202,8 +10816,10 @@ function enterForumDeleteMode() {
 function exitForumDeleteMode() {
     isForumDeleteMode = false;
     selectedForumPostIds.clear();
-    document.getElementById('forum-posts-container').classList.remove('forum-delete-mode');
-    document.getElementById('forum-delete-bar').classList.remove('active');
+    const container = document.getElementById('forum-posts-container');
+    const deleteBar = document.getElementById('forum-delete-bar');
+    if (container) container.classList.remove('forum-delete-mode');
+    if (deleteBar) deleteBar.classList.remove('active');
     renderForumPosts();
 }
 
@@ -6226,10 +10842,117 @@ function confirmDeleteForumPosts() {
     
     if (confirm(`确定要删除选中的 ${selectedForumPostIds.size} 条帖子吗？`)) {
         const forumData = DB.getForumData();
-        forumData.posts = forumData.posts.filter(p => !selectedForumPostIds.has(p.id));
+        const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+        bucket.posts = bucket.posts.filter(p => !selectedForumPostIds.has(p.id));
         DB.saveForumData(forumData);
         exitForumDeleteMode();
     }
+}
+
+function switchForumProfileSection(section) {
+    currentForumProfileSection = section === 'likes' ? 'likes' : 'posts';
+    const postsTab = document.getElementById('forum-profile-tab-posts');
+    const likesTab = document.getElementById('forum-profile-tab-likes');
+    if (postsTab) postsTab.classList.toggle('active', currentForumProfileSection === 'posts');
+    if (likesTab) likesTab.classList.toggle('active', currentForumProfileSection === 'likes');
+    renderForumProfileSectionList();
+}
+
+function formatForumTime(timestamp) {
+    const date = new Date(timestamp || Date.now());
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderForumProfileSectionList() {
+    const listEl = document.getElementById('forum-profile-post-list');
+    if (!listEl) return;
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+    const sourceList = currentForumProfileSection === 'likes'
+        ? [...bucket.likedPosts].sort((a, b) => (b.likedAt || 0) - (a.likedAt || 0))
+        : [...bucket.posts].filter(post => post.type === 'user').sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    if (sourceList.length === 0) {
+        listEl.innerHTML = `<div style="color:#999; font-size:13px; text-align:center; padding:18px 0;">${currentForumProfileSection === 'likes' ? '还没有喜欢的帖子' : '还没有发布帖子'}</div>`;
+        return;
+    }
+
+    listEl.innerHTML = '';
+    sourceList.forEach(post => {
+        const postEl = document.createElement('div');
+        postEl.className = 'forum-post';
+        const avatar = post.avatar || buildForumAccountAvatar(getForumCurrentAccount());
+        const tags = Array.isArray(post.tags) ? post.tags.slice(0, 8) : [];
+        const sourcePostId = post.sourcePostId || post.id;
+        const liked = isForumPostLiked(sourcePostId);
+        const canEdit = currentForumProfileSection === 'posts' && post.type === 'user' && post.id;
+        postEl.innerHTML = `
+            <div class="forum-post-header">
+                <div class="forum-post-avatar"><img src="${avatar}"></div>
+                <div class="forum-post-info">
+                    <div class="forum-post-username">${post.username || '我'}</div>
+                    <div class="forum-post-time">${formatForumTime(post.timestamp)}</div>
+                </div>
+                ${canEdit ? `<div class="forum-post-menu" onclick="openForumPostMenu(${post.id})">⋯</div>` : ''}
+            </div>
+            <div class="forum-post-content">${post.content || ''}</div>
+            ${post.imageDesc ? `<div class="forum-post-image-desc">${post.imageDesc}</div>` : ''}
+            ${tags.length ? `<div class="forum-post-tags">${tags.map(tag => `<span class="forum-post-tag">#${String(tag).replace(/^#/, '')}</span>`).join('')}</div>` : ''}
+            <div class="forum-post-actions">
+                <button class="forum-post-like-btn" type="button" onclick="toggleForumLike('${String(sourcePostId)}', event)">${liked ? '❤' : '♡'}</button>
+            </div>
+            ${buildForumCommentsHtml(post)}
+        `;
+        listEl.appendChild(postEl);
+    });
+}
+
+function renderForumProfileView() {
+    const account = getForumCurrentAccount();
+    const nameEl = document.getElementById('forum-profile-name');
+    const avatarEl = document.getElementById('forum-profile-avatar-img');
+    const wallpaperEl = document.getElementById('forum-profile-wallpaper');
+    if (!nameEl || !avatarEl || !wallpaperEl) return;
+
+    if (!account) {
+        nameEl.textContent = '未选择账号';
+        avatarEl.src = DEFAULT_USER_ACCOUNT_PREVIEW_AVATAR;
+        wallpaperEl.style.backgroundImage = '';
+        wallpaperEl.classList.remove('has-image');
+        renderForumProfileSectionList();
+        return;
+    }
+
+    const forumData = DB.getForumData();
+    const bucket = getForumAccountBucket(forumData, account.id, true);
+    const wallpaper = bucket.profile?.wallpaper || '';
+
+    nameEl.textContent = account.name || '我';
+    avatarEl.src = buildForumAccountAvatar(account);
+    wallpaperEl.style.backgroundImage = wallpaper ? `url(${wallpaper})` : 'none';
+    wallpaperEl.classList.toggle('has-image', !!wallpaper);
+    switchForumProfileSection(currentForumProfileSection);
+}
+
+function triggerForumWallpaperUpload() {
+    if (!ensureForumMainAccountSelected()) return;
+    const input = document.getElementById('forum-profile-wallpaper-input');
+    if (input) input.click();
+}
+
+function uploadForumProfileWallpaper(input) {
+    if (!input.files?.[0]) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const forumData = DB.getForumData();
+        const bucket = getForumAccountBucket(forumData, currentForumAccountId, true);
+        if (!bucket.profile) bucket.profile = {};
+        bucket.profile.wallpaper = e.target.result || '';
+        DB.saveForumData(forumData);
+        renderForumProfileView();
+        input.value = '';
+    };
+    reader.readAsDataURL(input.files[0]);
 }
 
 // 在 openApp 函数中添加论坛的渲染
@@ -6237,7 +10960,7 @@ const originalOpenAppForForum = openApp;
 openApp = function(appId) {
     originalOpenAppForForum(appId);
     if (appId === 'app-forum') {
-        renderForumPosts();
+        initForumApp();
     }
 };
 
@@ -6329,16 +11052,27 @@ function resetSpyTheme() {
     alert("角色手机美化已重置");
 }
 
+function getDefaultSpyIconMarkup(iconId, label) {
+    const iconMap = {
+        'spy-icon-vk': `<div class="spy-icon-graphic"><img src="https://img.cdn1.vip/i/6a02ad3833ea4_1778560312.jpg" alt="Vkontakte"></div>`,
+        'spy-icon-memos': `<div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></svg></div>`,
+        'spy-icon-browser': `<div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 15H17a2 2 0 0 0-2 2v4.54"/><path d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17"/><path d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05"/><circle cx="12" cy="12" r="10"/></svg></div>`,
+        'spy-icon-diary': `<div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M16 2v20"/></svg></div>`,
+        'spy-icon-settings': `<div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></div>`
+    };
+    return `${iconMap[iconId] || ''}<div class="app-label">${label}</div>`;
+}
+
 function applySpyTheme() {
     if (!currentSpyContact) return;
     const sd = DB.getSpyData();
-    const theme = (sd[currentSpyContact.id] && sd[currentSpyContact.id].theme) || { wallpaperType: 'color', wallpaperValue: '#ffffff' };
+    const theme = (sd[currentSpyContact.id] && sd[currentSpyContact.id].theme) || { wallpaperType: 'color', wallpaperValue: '#f2f4f5' };
     
     currentSpyThemeType = theme.wallpaperType || 'color';
     switchSpyThemeType(currentSpyThemeType);
     
     if (theme.wallpaperType === 'color') {
-        document.getElementById('spy-theme-wallpaper-color').value = theme.wallpaperValue || '#ffffff';
+        document.getElementById('spy-theme-wallpaper-color').value = theme.wallpaperValue || '#f2f4f5';
     } else {
         if (theme.wallpaperValue && theme.wallpaperValue.startsWith('http')) {
             document.getElementById('spy-theme-wallpaper-url').value = theme.wallpaperValue;
@@ -6355,7 +11089,7 @@ function applySpyTheme() {
         spyHome.style.backgroundColor = 'transparent';
     } else {
         spyHome.style.backgroundImage = 'none';
-        spyHome.style.backgroundColor = theme.wallpaperValue || '#ffffff';
+        spyHome.style.backgroundColor = theme.wallpaperValue || '#f2f4f5';
     }
     
     const spyAppIds = ['spy-icon-vk', 'spy-icon-memos', 'spy-icon-browser', 'spy-icon-diary', 'spy-icon-settings'];
@@ -6364,40 +11098,18 @@ function applySpyTheme() {
     spyAppIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            el.style.background = '';
-            el.style.backgroundColor = '';
-            el.style.backgroundImage = '';
+            el.style.cssText = '';
             el.innerHTML = '';
             
             if (theme.appIcons && theme.appIcons[id]) {
-                el.style.background = 'none';
-                el.style.backgroundColor = 'transparent';
+                el.style.background = '#fff';
                 el.style.backgroundImage = `url(${theme.appIcons[id]})`;
                 el.style.backgroundSize = 'cover';
                 el.style.backgroundPosition = 'center';
+                el.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.16)';
                 el.innerHTML = `<div class="app-label">${spyAppNames[id]}</div>`;
             } else {
-                let emoji = '';
-                let bgColor = '';
-                let color = '#fff';
-                let label = spyAppNames[id];
-                
-                switch(id) {
-                    case 'spy-icon-vk': emoji = 'VK'; bgColor = ''; color = ''; break;
-                    case 'spy-icon-memos': emoji = '📝'; bgColor = '#f1c40f'; color = '#000'; break;
-                    case 'spy-icon-browser': emoji = '🌐'; bgColor = '#007aff'; color = '#fff'; break;
-                    case 'spy-icon-diary': emoji = '📔'; bgColor = '#8e44ad'; color = '#fff'; break;
-                    case 'spy-icon-settings': emoji = '⚙️'; bgColor = '#8e8e93'; color = '#fff'; break;
-                }
-                
-                if (id === 'spy-icon-vk') {
-                    el.removeAttribute('style');
-                    el.innerHTML = `VK<div class="app-label">Vkontakte</div>`;
-                } else {
-                    el.style.backgroundColor = bgColor;
-                    el.style.color = color;
-                    el.innerHTML = `${emoji}<div class="app-label">${label}</div>`;
-                }
+                el.innerHTML = getDefaultSpyIconMarkup(id, spyAppNames[id]);
             }
         }
     });
@@ -6819,7 +11531,7 @@ async function callPhotoCommentAPI(partner, photo) {
 
     const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
     
-    const res = await fetch(`${settings.url}/chat/completions`, {
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json', 
@@ -6926,7 +11638,7 @@ ${chatHistory || '（暂无聊天记录）'}
 
     const temp = settings.temperature !== undefined ? settings.temperature : 0.8;
     
-    const res = await fetch(`${settings.url}/chat/completions`, {
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json', 
@@ -7200,7 +11912,7 @@ async function generateTomatoPlan(goal) {
 }
 只返回JSON，不要Markdown，不要解释。`;
 
-    const res = await fetch(`${settings.url}/chat/completions`, {
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -7484,7 +12196,7 @@ async function requestTomatoCharacterMessage() {
 ${recent || '无'}`;
 
     try {
-        const res = await fetch(`${settings.url}/chat/completions`, {
+        const res = await fetch(getChatCompletionsUrl(settings.url), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -8140,4 +12852,1181 @@ function clearSuikaBallImage(type) {
     saveSuikaGameData();
     renderSuikaSettingsList();
     drawSuikaBoard();
+}
+
+const shoppingState = {
+    loading: false,
+    deleteMode: false,
+    selectedDeleteIds: new Set(),
+    selectedGiftPurchasedId: '',
+    fabInited: false,
+    fabPointerId: null,
+    fabMoved: false,
+    fabDownX: 0,
+    fabDownY: 0,
+    fabStartLeft: 0,
+    fabStartTop: 0
+};
+
+function getShoppingDataNormalized() {
+    const raw = DB.getShoppingData();
+    return {
+        products: Array.isArray(raw?.products) ? raw.products : [],
+        cart: Array.isArray(raw?.cart) ? raw.cart : [],
+        purchasedOrders: Array.isArray(raw?.purchasedOrders) ? raw.purchasedOrders : [],
+        fabPos: (raw?.fabPos && typeof raw.fabPos === 'object') ? raw.fabPos : null
+    };
+}
+
+function saveShoppingDataNormalized(nextData) {
+    const prev = getShoppingDataNormalized();
+    DB.saveShoppingData({
+        products: Array.isArray(nextData?.products) ? nextData.products : prev.products,
+        cart: Array.isArray(nextData?.cart) ? nextData.cart : prev.cart,
+        purchasedOrders: Array.isArray(nextData?.purchasedOrders) ? nextData.purchasedOrders : prev.purchasedOrders,
+        fabPos: nextData?.fabPos || prev.fabPos || null
+    });
+}
+
+function getShoppingProducts() {
+    return getShoppingDataNormalized().products;
+}
+
+function saveShoppingProducts(products) {
+    const data = getShoppingDataNormalized();
+    data.products = products;
+    saveShoppingDataNormalized(data);
+}
+
+function getShoppingCartItems() {
+    return getShoppingDataNormalized().cart;
+}
+
+function saveShoppingCartItems(cart) {
+    const data = getShoppingDataNormalized();
+    data.cart = cart;
+    saveShoppingDataNormalized(data);
+}
+
+function getShoppingPurchasedOrders() {
+    return getShoppingDataNormalized().purchasedOrders;
+}
+
+function saveShoppingPurchasedOrders(orders) {
+    const data = getShoppingDataNormalized();
+    data.purchasedOrders = orders;
+    saveShoppingDataNormalized(data);
+}
+
+function renderShoppingApp() {
+    renderShoppingProductList();
+    renderShoppingDeleteModeUI();
+    renderShoppingCartList();
+    renderShoppingPurchasedList();
+    initShoppingCartFab();
+}
+
+function openShoppingEntryModal() {
+    const modal = document.getElementById('shopping-entry-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingEntryModal() {
+    const modal = document.getElementById('shopping-entry-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openShoppingRoleModal() {
+    closeShoppingEntryModal();
+    const contacts = DB.getContacts();
+    const list = document.getElementById('shopping-role-list');
+    if (!list) return;
+    if (!contacts.length) {
+        list.innerHTML = '<div style="color:#999;font-size:13px;padding:8px 0;">请先去通讯录添加角色</div>';
+    } else {
+        list.innerHTML = '';
+        contacts.forEach(contact => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'shopping-role-item';
+            const persona = String(contact.persona || '').trim();
+            item.innerHTML = `
+                <span>${escapeHTML(contact.name || '未命名角色')}</span>
+                <span style="color:#888;font-size:12px;">${escapeHTML(persona ? '有角色设定' : '无角色设定')}</span>
+            `;
+            item.onclick = () => handleShoppingGuessLike(contact.id);
+            list.appendChild(item);
+        });
+    }
+    const modal = document.getElementById('shopping-role-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingRoleModal() {
+    const modal = document.getElementById('shopping-role-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openShoppingCustomModal() {
+    closeShoppingEntryModal();
+    const modal = document.getElementById('shopping-custom-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingCustomModal() {
+    const modal = document.getElementById('shopping-custom-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openShoppingDetailModal(text) {
+    const detail = document.getElementById('shopping-detail-text');
+    if (detail) detail.innerText = text || '还没有商品描述';
+    const modal = document.getElementById('shopping-detail-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingDetailModal() {
+    const modal = document.getElementById('shopping-detail-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openShoppingCartModal() {
+    renderShoppingCartList();
+    const modal = document.getElementById('shopping-cart-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingCartModal() {
+    const modal = document.getElementById('shopping-cart-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openShoppingCheckoutView() {
+    closeShoppingCartModal();
+    renderShoppingCheckoutView();
+    const view = document.getElementById('shopping-checkout-view');
+    if (view) view.classList.add('active');
+}
+
+function closeShoppingCheckoutView() {
+    const view = document.getElementById('shopping-checkout-view');
+    if (view) view.classList.remove('active');
+}
+
+function openShoppingAgentPayModal() {
+    const roleList = document.getElementById('shopping-agent-pay-role-list');
+    if (!roleList) return;
+    const contacts = DB.getContacts();
+    if (!contacts.length) {
+        roleList.innerHTML = '<div style="color:#999;font-size:13px;padding:8px 0;">请先去通讯录添加角色</div>';
+    } else {
+        roleList.innerHTML = '';
+        contacts.forEach(contact => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'shopping-role-item';
+            btn.innerHTML = `
+                <span>${escapeHTML(contact.name || '未命名角色')}</span>
+                <span style="color:#888;font-size:12px;">${escapeHTML(contact.persona ? '可代付' : '未设定人设')}</span>
+            `;
+            btn.onclick = () => confirmShoppingAgentPay(contact.id);
+            roleList.appendChild(btn);
+        });
+    }
+    const modal = document.getElementById('shopping-agent-pay-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingAgentPayModal() {
+    const modal = document.getElementById('shopping-agent-pay-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openShoppingPurchasedView() {
+    renderShoppingPurchasedList();
+    const view = document.getElementById('shopping-purchased-view');
+    if (view) view.classList.add('active');
+}
+
+function closeShoppingPurchasedView() {
+    const view = document.getElementById('shopping-purchased-view');
+    if (view) view.classList.remove('active');
+}
+
+function openShoppingGiftModal(purchasedId) {
+    shoppingState.selectedGiftPurchasedId = purchasedId || '';
+    const roleList = document.getElementById('shopping-gift-role-list');
+    if (!roleList) return;
+    const contacts = DB.getContacts();
+    if (!contacts.length) {
+        roleList.innerHTML = '<div style="color:#999;font-size:13px;padding:8px 0;">请先去通讯录添加角色</div>';
+    } else {
+        roleList.innerHTML = '';
+        contacts.forEach(contact => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'shopping-role-item';
+            btn.innerHTML = `
+                <span>${escapeHTML(contact.name || '未命名角色')}</span>
+                <span style="color:#888;font-size:12px;">${escapeHTML(contact.persona ? '可赠送' : '未设定人设')}</span>
+            `;
+            btn.onclick = () => confirmShoppingGift(contact.id);
+            roleList.appendChild(btn);
+        });
+    }
+    const modal = document.getElementById('shopping-gift-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeShoppingGiftModal() {
+    const modal = document.getElementById('shopping-gift-modal');
+    if (modal) modal.classList.remove('active');
+    shoppingState.selectedGiftPurchasedId = '';
+}
+
+function setShoppingLoading(loading, text = '') {
+    shoppingState.loading = !!loading;
+    const empty = document.getElementById('shopping-empty');
+    if (!empty) return;
+    if (shoppingState.loading) {
+        empty.innerText = text || '正在生成商品...';
+        empty.style.display = 'block';
+    }
+}
+
+function formatShoppingPrice(input) {
+    if (typeof input === 'string') {
+        const text = input.trim();
+        if (!text) return '¥0.00';
+        if (/¥|￥|RMB|CNY|\$|€|£|NT\$|HK\$/i.test(text)) return text;
+        const maybeNum = Number(text.replace(/[^\d.]/g, ''));
+        if (Number.isFinite(maybeNum)) return `¥${maybeNum.toFixed(2)}`;
+        return text;
+    }
+    const num = Number(input);
+    if (!Number.isFinite(num)) return '¥0.00';
+    return `¥${num.toFixed(2)}`;
+}
+
+function parseShoppingPriceNumber(input) {
+    if (typeof input === 'number') return Number.isFinite(input) ? input : 0;
+    const num = Number(String(input || '').replace(/[^\d.]/g, ''));
+    return Number.isFinite(num) ? num : 0;
+}
+
+function normalizeShoppingProduct(raw, source = 'ai') {
+    const title = String(raw?.title || raw?.name || '').trim() || '未命名商品';
+    const description = String(raw?.description || raw?.desc || '').trim();
+    const image = String(raw?.image || raw?.cover || '').trim();
+    return {
+        id: `sp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        price: formatShoppingPrice(raw?.price),
+        description,
+        image,
+        source,
+        createdAt: Date.now()
+    };
+}
+
+function renderShoppingDeleteModeUI() {
+    const deleteBtn = document.getElementById('shopping-delete-btn');
+    const toolbar = document.getElementById('shopping-delete-toolbar');
+    if (deleteBtn) deleteBtn.classList.toggle('active', shoppingState.deleteMode);
+    if (toolbar) toolbar.classList.toggle('active', shoppingState.deleteMode);
+}
+
+function toggleShoppingDeleteMode() {
+    shoppingState.deleteMode = !shoppingState.deleteMode;
+    if (!shoppingState.deleteMode) shoppingState.selectedDeleteIds.clear();
+    renderShoppingDeleteModeUI();
+    renderShoppingProductList();
+}
+
+function cancelShoppingDeleteMode() {
+    shoppingState.deleteMode = false;
+    shoppingState.selectedDeleteIds.clear();
+    renderShoppingDeleteModeUI();
+    renderShoppingProductList();
+}
+
+function confirmShoppingDeleteSelected() {
+    const ids = Array.from(shoppingState.selectedDeleteIds);
+    if (!ids.length) return alert('请先勾选要删除的商品');
+    const products = getShoppingProducts().filter(item => !ids.includes(item.id));
+    saveShoppingProducts(products);
+    const nextCart = getShoppingCartItems().filter(item => !ids.includes(item.productId));
+    saveShoppingCartItems(nextCart);
+    shoppingState.selectedDeleteIds.clear();
+    shoppingState.deleteMode = false;
+    renderShoppingDeleteModeUI();
+    renderShoppingProductList();
+    renderShoppingCartList();
+}
+
+function addProductToCart(productId) {
+    const product = getShoppingProducts().find(item => item.id === productId);
+    if (!product) return;
+    const cart = getShoppingCartItems();
+    cart.push({
+        id: `cart_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        productId: product.id,
+        title: product.title,
+        price: formatShoppingPrice(product.price),
+        createdAt: Date.now()
+    });
+    saveShoppingCartItems(cart);
+    renderShoppingCartList();
+    alert('已加入购物车');
+}
+
+function renderShoppingProductList() {
+    const listEl = document.getElementById('shopping-list');
+    const emptyEl = document.getElementById('shopping-empty');
+    if (!listEl || !emptyEl) return;
+    const products = getShoppingProducts().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    listEl.innerHTML = '';
+    if (!products.length) {
+        if (!shoppingState.loading) emptyEl.innerText = '点击右上角 + 开始添加商品';
+        emptyEl.style.display = 'block';
+        return;
+    }
+    emptyEl.style.display = 'none';
+    products.forEach(product => {
+        const card = document.createElement('div');
+        card.className = `shopping-item ${shoppingState.deleteMode ? '' : 'adding-space'}`;
+        const textPreview = product.description ? product.description.slice(0, 60) : '还没有商品描述';
+        const cover = product.image
+            ? `<img src="${product.image}" alt="${escapeHTML(product.title)}">`
+            : `<span>${escapeHTML(textPreview)}</span>`;
+        const checked = shoppingState.selectedDeleteIds.has(product.id) ? 'checked' : '';
+        const deleteCheck = shoppingState.deleteMode
+            ? `<input class="shopping-item-select" type="checkbox" ${checked}>`
+            : '';
+        const addBtn = shoppingState.deleteMode
+            ? ''
+            : `<button type="button" class="shopping-add-cart-btn">加购物车</button>`;
+        card.innerHTML = `
+            ${deleteCheck}
+            <div class="shopping-item-cover">${cover}</div>
+            <div class="shopping-item-title">${escapeHTML(product.title || '未命名商品')}</div>
+            <div class="shopping-item-price">${escapeHTML(formatShoppingPrice(product.price))}</div>
+            ${addBtn}
+        `;
+        const checkEl = card.querySelector('.shopping-item-select');
+        if (checkEl) {
+            checkEl.onchange = (evt) => {
+                if (evt.target.checked) shoppingState.selectedDeleteIds.add(product.id);
+                else shoppingState.selectedDeleteIds.delete(product.id);
+            };
+        }
+        const addBtnEl = card.querySelector('.shopping-add-cart-btn');
+        if (addBtnEl) {
+            addBtnEl.onclick = (evt) => {
+                evt.stopPropagation();
+                addProductToCart(product.id);
+            };
+        }
+        card.onclick = () => {
+            if (shoppingState.deleteMode) {
+                if (checkEl) {
+                    checkEl.checked = !checkEl.checked;
+                    checkEl.dispatchEvent(new Event('change'));
+                }
+                return;
+            }
+            openShoppingDetailModal(product.description || '还没有商品描述');
+        };
+        listEl.appendChild(card);
+    });
+}
+
+function appendShoppingProducts(items, source = 'ai') {
+    const current = getShoppingProducts();
+    const next = current.concat((items || []).map(item => normalizeShoppingProduct(item, source)));
+    saveShoppingProducts(next);
+    renderShoppingProductList();
+}
+
+function getFallbackShoppingProducts() {
+    return [
+        { title: '可口可乐 330ml', price: 3.5, description: '经典汽水，冰镇后口感更佳。', category: '食物饮料' },
+        { title: 'A4 线圈笔记本', price: 12.9, description: '日常记录和学习做笔记都很方便。', category: '文具' },
+        { title: '维达抽纸 3层', price: 16.8, description: '家庭常备生活用品，柔韧不易破。', category: '生活用品' },
+        { title: '星巴克拿铁（中杯）', price: 32, description: '奶香与咖啡平衡，通勤提神常见选择。', category: '食物饮料' },
+        { title: 'MUJI 中性笔 0.5mm', price: 6, description: '书写顺滑，办公与学习常用。', category: '文具' },
+        { title: '任天堂 Switch 游戏卡', price: 299, description: '热门主机游戏，适合休闲娱乐。', category: '数码娱乐' },
+        { title: '雅诗兰黛小棕瓶 30ml', price: 650, description: '经典护肤精华，日常护肤常见。', category: '美妆' }
+    ];
+}
+
+function extractJsonString(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    const fenceMatch = raw.match(/```json\s*([\s\S]*?)```/i) || raw.match(/```\s*([\s\S]*?)```/i);
+    if (fenceMatch && fenceMatch[1]) return fenceMatch[1].trim();
+    const objStart = raw.indexOf('{');
+    const arrStart = raw.indexOf('[');
+    let start = -1;
+    if (objStart >= 0 && arrStart >= 0) start = Math.min(objStart, arrStart);
+    else start = Math.max(objStart, arrStart);
+    if (start >= 0) return raw.slice(start).trim();
+    return raw;
+}
+
+function toPlainChatText(msg) {
+    if (!msg || typeof msg !== 'object') return '';
+    if (typeof msg.content === 'string') return msg.content;
+    if (msg.type === 'image') return `[图片] ${msg.content || ''}`;
+    if (msg.type === 'video') return `[视频] ${msg.content || ''}`;
+    if (msg.type === 'voice') return `[语音] ${msg.content || ''}`;
+    return String(msg.content || '');
+}
+
+async function requestShoppingProducts(prompt) {
+    const settings = DB.getSettings();
+    if (!settings.url || !settings.key || !settings.model) {
+        throw new Error('请先在设置中填写 API 地址、API Key 和模型名称');
+    }
+    const res = await fetch(getChatCompletionsUrl(settings.url), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.key}`
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7
+        })
+    });
+    if (!res.ok) throw new Error(`请求失败：${res.status}`);
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || '';
+    const jsonText = extractJsonString(content);
+    const parsed = JSON.parse(jsonText);
+    const products = Array.isArray(parsed) ? parsed : parsed.products;
+    if (!Array.isArray(products)) throw new Error('返回格式错误');
+    return products;
+}
+
+async function handleShoppingEntryOption(type) {
+    if (shoppingState.loading) return;
+    if (type === 'random') {
+        closeShoppingEntryModal();
+        await generateRandomShoppingProducts();
+    } else if (type === 'custom') {
+        openShoppingCustomModal();
+    }
+}
+
+async function generateRandomShoppingProducts() {
+    setShoppingLoading(true, '正在生成随机商品...');
+    try {
+        const prompt = [
+            '请你生成 5-7 个真实存在、贴近生活的商品。',
+            '品类可覆盖：食物、生活用品、文具、奢侈品等。',
+            '请只返回 JSON，不要返回额外文本。',
+            '格式：{"products":[{"title":"商品名","description":"商品描述","price":"价格"}]}',
+            '每个商品都要有名称、简洁描述和价格。'
+        ].join('\n');
+        let products = await requestShoppingProducts(prompt);
+        if (products.length > 7) products = products.slice(0, 7);
+        if (products.length < 5) {
+            const fallback = getFallbackShoppingProducts().slice(0, 5 - products.length);
+            products = products.concat(fallback);
+        }
+        appendShoppingProducts(products, 'random');
+    } catch (err) {
+        console.error(err);
+        appendShoppingProducts(getFallbackShoppingProducts().slice(0, 5), 'fallback');
+        alert(`随机商品生成失败，已使用内置商品。原因：${err.message || err}`);
+    } finally {
+        setShoppingLoading(false);
+        renderShoppingProductList();
+    }
+}
+
+async function handleShoppingGuessLike(contactId) {
+    if (shoppingState.loading) return;
+    closeShoppingRoleModal();
+    setShoppingLoading(true, '正在根据角色喜好生成商品...');
+    try {
+        const contacts = DB.getContacts();
+        const role = contacts.find(c => c.id === contactId);
+        if (!role) throw new Error('未找到该角色');
+        // 优先使用该角色绑定的用户账号，避免串用其他账号人设。
+        const boundUserAccount = role.userAccountId ? getUserAccountById(role.userAccountId) : null;
+        const userAccount = boundUserAccount || getPreferredUserAccount();
+        const chats = (DB.getChats()[contactId] || []).slice(-18).map(msg => {
+            const who = msg.role === 'user' ? '用户' : '角色';
+            return `${who}: ${toPlainChatText(msg)}`;
+        }).join('\n');
+        const contactUserName = String(role.userSettings?.userName || '').trim();
+        const contactUserPersona = String(role.userSettings?.userPersona || '').trim();
+        const userName = (userAccount && userAccount.name) || contactUserName || '我';
+        const userPersona = (userAccount && userAccount.persona) || contactUserPersona || '未设置';
+        const userProfileText = `用户名称：${userName}\n用户人设：${userPersona}`;
+        const rolePersona = role.persona || '未设置';
+        const prompt = [
+            '请根据角色设定、用户设定和最近聊天内容，推荐该角色可能喜欢的商品。',
+            '你必须生成 5-7 个真实存在、贴近生活且可购买的商品。',
+            '请只输出 JSON，不要输出额外解释。',
+            '格式：{"products":[{"title":"商品名","description":"商品描述","price":"价格"}]}',
+            `角色名称：${role.name || '未知角色'}`,
+            `角色人设：${rolePersona}`,
+            userProfileText,
+            '最近聊天上下文：',
+            chats || '暂无聊天记录'
+        ].join('\n');
+        let products = await requestShoppingProducts(prompt);
+        if (products.length > 7) products = products.slice(0, 7);
+        if (products.length < 5) {
+            const fallback = getFallbackShoppingProducts().slice(0, 5 - products.length);
+            products = products.concat(fallback);
+        }
+        appendShoppingProducts(products, 'guess');
+    } catch (err) {
+        console.error(err);
+        appendShoppingProducts(getFallbackShoppingProducts().slice(0, 5), 'fallback');
+        alert(`猜你喜欢生成失败，已使用内置商品。原因：${err.message || err}`);
+    } finally {
+        setShoppingLoading(false);
+        renderShoppingProductList();
+    }
+}
+
+function readImageFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+async function submitShoppingCustomProduct() {
+    const titleEl = document.getElementById('shopping-custom-title');
+    const priceEl = document.getElementById('shopping-custom-price');
+    const descEl = document.getElementById('shopping-custom-desc');
+    const imageEl = document.getElementById('shopping-custom-image');
+    if (!titleEl || !priceEl || !descEl || !imageEl) return;
+    const title = String(titleEl.value || '').trim();
+    const priceNum = Number(priceEl.value);
+    const desc = String(descEl.value || '').trim();
+    if (!title) return alert('请填写商品名称');
+    if (!Number.isFinite(priceNum) || priceNum < 0) return alert('请填写正确的商品价格');
+    let image = '';
+    const file = imageEl.files && imageEl.files[0];
+    if (file) {
+        try {
+            image = await readImageFileAsDataURL(file);
+        } catch (err) {
+            console.error(err);
+            alert('图片读取失败，请重试');
+            return;
+        }
+    }
+    appendShoppingProducts([{
+        title,
+        price: `¥${priceNum.toFixed(2)}`,
+        description: desc,
+        image
+    }], 'custom');
+    titleEl.value = '';
+    priceEl.value = '';
+    descEl.value = '';
+    imageEl.value = '';
+    closeShoppingCustomModal();
+}
+
+function getShoppingCartTotalAmount() {
+    return getShoppingCartItems().reduce((sum, item) => sum + parseShoppingPriceNumber(item.price), 0);
+}
+
+function formatShoppingOrderTime(ts) {
+    const d = new Date(ts || Date.now());
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const hour = String(d.getHours()).padStart(2, '0');
+    const minute = String(d.getMinutes()).padStart(2, '0');
+    return `${month}-${day} ${hour}:${minute}`;
+}
+
+function completeShoppingOrder(source = 'self') {
+    const cart = getShoppingCartItems().slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    if (!cart.length) return null;
+    const productsMap = {};
+    getShoppingProducts().forEach(item => { productsMap[item.id] = item; });
+    const orderTime = Date.now();
+    const orderId = `order_${orderTime}_${Math.random().toString(36).slice(2, 8)}`;
+    const total = Number(cart.reduce((sum, item) => sum + parseShoppingPriceNumber(item.price), 0).toFixed(2));
+    const count = cart.length;
+    const purchased = getShoppingPurchasedOrders();
+    const nextPurchased = purchased.concat(cart.map(item => {
+        const product = productsMap[item.productId] || null;
+        return {
+            id: `purchased_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            productId: item.productId,
+            title: product?.title || item.title || '未命名商品',
+            price: formatShoppingPrice(item.price),
+            image: product?.image || '',
+            description: product?.description || '',
+            purchasedAt: orderTime,
+            orderId,
+            source
+        };
+    }));
+    saveShoppingPurchasedOrders(nextPurchased);
+    saveShoppingCartItems([]);
+    renderShoppingPurchasedList();
+    renderShoppingCartList();
+    renderShoppingCheckoutView();
+    return {
+        orderId,
+        orderTime,
+        orderTimeText: formatShoppingOrderTime(orderTime),
+        count,
+        total
+    };
+}
+
+function renderShoppingCartList() {
+    const list = document.getElementById('shopping-cart-list');
+    if (!list) return;
+    const cart = getShoppingCartItems().slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    if (!cart.length) {
+        list.innerHTML = '<div style="padding:6px 0;color:#999;font-size:13px;">购物车为空</div>';
+        return;
+    }
+    list.innerHTML = cart.map(item => `
+        <div class="shopping-cart-item">
+            <span>${escapeHTML(item.title || '未命名商品')}</span>
+            <span class="shopping-cart-price">${escapeHTML(formatShoppingPrice(item.price))}</span>
+        </div>
+    `).join('');
+}
+
+function renderShoppingCheckoutView() {
+    const list = document.getElementById('shopping-checkout-list');
+    const totalEl = document.getElementById('shopping-checkout-total');
+    if (!list || !totalEl) return;
+    const cart = getShoppingCartItems().slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    if (!cart.length) {
+        list.innerHTML = '<div style="padding:14px 0;color:#999;font-size:13px;">购物车为空</div>';
+    } else {
+        const productsMap = {};
+        getShoppingProducts().forEach(item => { productsMap[item.id] = item; });
+        list.innerHTML = cart.map(item => {
+            const product = productsMap[item.productId] || null;
+            const description = product?.description || '';
+            const title = product?.title || item.title || '未命名商品';
+            const image = product?.image || '';
+            const priceText = formatShoppingPrice(item.price);
+            const textPreview = description ? description.slice(0, 60) : '还没有商品描述';
+            const cover = image
+                ? `<img src="${image}" alt="${escapeHTML(title)}">`
+                : `<span>${escapeHTML(textPreview)}</span>`;
+            return `
+                <div class="shopping-item">
+                    <div class="shopping-item-cover">${cover}</div>
+                    <div class="shopping-item-title">${escapeHTML(title)}</div>
+                    <div class="shopping-item-price">${escapeHTML(priceText)}</div>
+                </div>
+            `;
+        }).join('');
+    }
+    totalEl.innerText = `合计 ${formatWalletCurrency(getShoppingCartTotalAmount())}`;
+}
+
+function renderShoppingPurchasedList() {
+    const list = document.getElementById('shopping-purchased-list');
+    if (!list) return;
+    const purchased = getShoppingPurchasedOrders().slice().sort((a, b) => (b.purchasedAt || 0) - (a.purchasedAt || 0));
+    if (!purchased.length) {
+        list.innerHTML = '<div style="padding:14px 0;color:#999;font-size:13px;">暂无已购买商品</div>';
+        return;
+    }
+    list.innerHTML = purchased.map(item => {
+        const textPreview = item.description ? item.description.slice(0, 60) : '还没有商品描述';
+        const cover = item.image
+            ? `<img src="${item.image}" alt="${escapeHTML(item.title || '商品')}">`
+            : `<span>${escapeHTML(textPreview)}</span>`;
+        return `
+            <div class="shopping-item adding-space">
+                <div class="shopping-item-cover">${cover}</div>
+                <div class="shopping-item-title">${escapeHTML(item.title || '未命名商品')}</div>
+                <div class="shopping-item-price">${escapeHTML(formatShoppingPrice(item.price))}</div>
+                <button type="button" class="shopping-gift-btn" data-id="${item.id}">赠送给TA</button>
+            </div>
+        `;
+    }).join('');
+    list.querySelectorAll('.shopping-gift-btn').forEach(btn => {
+        btn.addEventListener('click', (evt) => {
+            evt.stopPropagation();
+            openShoppingGiftModal(btn.dataset.id || '');
+        });
+    });
+}
+
+function confirmShoppingAgentPay(contactId) {
+    const total = Number(getShoppingCartTotalAmount().toFixed(2));
+    if (total <= 0) return alert('购物车为空');
+    const orderCount = getShoppingCartItems().length;
+    const orderTime = Date.now();
+    const orderTimeText = formatShoppingOrderTime(orderTime);
+    const contacts = DB.getContacts();
+    const target = contacts.find(item => item.id === contactId);
+    if (!target) return alert('未找到该角色');
+    const currencyCode = target.userSettings?.currencyUnit || 'cny';
+    const amountText = formatAmountByCurrency(total, currencyCode);
+    const chats = DB.getChats();
+    if (!chats[target.id]) chats[target.id] = [];
+    chats[target.id].push({
+        role: 'user',
+        type: 'pay_invite_req',
+        content: '邀请你代付',
+        amount: total,
+        currencyUnit: currencyCode,
+        amountText,
+        orderCount,
+        orderTime,
+        orderTimeText,
+        status: 'pending',
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(chats);
+    closeShoppingAgentPayModal();
+    alert(`已向 ${target.name || '该角色'} 发送“邀请你代付”卡片，请到聊天中点击呼叫AI等待对方回复。`);
+}
+
+function confirmShoppingGift(contactId) {
+    const purchasedId = shoppingState.selectedGiftPurchasedId;
+    if (!purchasedId) return alert('未选择商品');
+    const purchased = getShoppingPurchasedOrders().find(item => item.id === purchasedId);
+    if (!purchased) return alert('未找到该商品');
+    const contacts = DB.getContacts();
+    const target = contacts.find(item => item.id === contactId);
+    if (!target) return alert('未找到该角色');
+    const currencyCode = target.userSettings?.currencyUnit || 'cny';
+    const priceNum = parseShoppingPriceNumber(purchased.price);
+    const amountText = formatAmountByCurrency(priceNum, currencyCode);
+    const orderTimeText = formatShoppingOrderTime(purchased.purchasedAt);
+    const chats = DB.getChats();
+    if (!chats[target.id]) chats[target.id] = [];
+    chats[target.id].push({
+        role: 'user',
+        type: 'gift_req',
+        content: '赠送你一份礼物',
+        title: purchased.title,
+        image: purchased.image || '',
+        amount: priceNum,
+        amountText,
+        currencyUnit: currencyCode,
+        orderTime: purchased.purchasedAt,
+        orderTimeText,
+        status: 'pending',
+        timestamp: Date.now(),
+        mode: 'online'
+    });
+    DB.saveChats(chats);
+    closeShoppingGiftModal();
+    alert(`已向 ${target.name || '该角色'} 发送礼物卡片，请到聊天中点击呼叫AI等待对方回复。`);
+}
+
+function submitShoppingCheckout() {
+    const total = Number(getShoppingCartTotalAmount().toFixed(2));
+    if (total <= 0) return alert('购物车为空');
+    const ok = spendWalletBalance(total, '购物中心结账');
+    if (!ok) return alert('钱包余额不足');
+    completeShoppingOrder('self');
+    closeShoppingCheckoutView();
+    alert(`结账成功，已扣除 ${formatWalletCurrency(total)}`);
+}
+
+function initShoppingCartFab() {
+    const fab = document.getElementById('shopping-cart-fab');
+    const app = document.getElementById('app-shopping');
+    if (!fab || !app) return;
+    const data = getShoppingDataNormalized();
+    const x = Number(data.fabPos?.x);
+    const y = Number(data.fabPos?.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+        setShoppingFabPosition(x, y);
+    } else {
+        const defaultLeft = app.clientWidth - 68;
+        const defaultTop = app.clientHeight - 150;
+        setShoppingFabPosition(defaultLeft, defaultTop);
+    }
+    if (shoppingState.fabInited) return;
+    shoppingState.fabInited = true;
+    fab.addEventListener('click', () => {
+        if (!shoppingState.fabMoved) openShoppingCartModal();
+    });
+    fab.addEventListener('pointerdown', (evt) => {
+        shoppingState.fabPointerId = evt.pointerId;
+        shoppingState.fabMoved = false;
+        shoppingState.fabDownX = evt.clientX;
+        shoppingState.fabDownY = evt.clientY;
+        shoppingState.fabStartLeft = Number(fab.dataset.left || 0);
+        shoppingState.fabStartTop = Number(fab.dataset.top || 0);
+        fab.setPointerCapture(evt.pointerId);
+    });
+    fab.addEventListener('pointermove', (evt) => {
+        if (shoppingState.fabPointerId !== evt.pointerId) return;
+        const dx = evt.clientX - shoppingState.fabDownX;
+        const dy = evt.clientY - shoppingState.fabDownY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) shoppingState.fabMoved = true;
+        if (!shoppingState.fabMoved) return;
+        const maxLeft = Math.max(8, app.clientWidth - fab.offsetWidth - 8);
+        const maxTop = Math.max(96, app.clientHeight - fab.offsetHeight - 18);
+        const nextLeft = Math.max(8, Math.min(maxLeft, shoppingState.fabStartLeft + dx));
+        const nextTop = Math.max(96, Math.min(maxTop, shoppingState.fabStartTop + dy));
+        setShoppingFabPosition(nextLeft, nextTop);
+    });
+    fab.addEventListener('pointerup', (evt) => {
+        if (shoppingState.fabPointerId !== evt.pointerId) return;
+        fab.releasePointerCapture(evt.pointerId);
+        shoppingState.fabPointerId = null;
+        const dataNow = getShoppingDataNormalized();
+        dataNow.fabPos = {
+            x: Number(fab.dataset.left || 0),
+            y: Number(fab.dataset.top || 0)
+        };
+        saveShoppingDataNormalized(dataNow);
+        setTimeout(() => { shoppingState.fabMoved = false; }, 0);
+    });
+}
+
+function setShoppingFabPosition(left, top) {
+    const fab = document.getElementById('shopping-cart-fab');
+    if (!fab) return;
+    fab.style.left = `${left}px`;
+    fab.style.top = `${top}px`;
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+    fab.dataset.left = String(left);
+    fab.dataset.top = String(top);
+}
+
+// --- 塔罗牌 App 功能 ---
+const TAROT_ROLES = ['过去', '现在', '未来'];
+const TAROT_CARD_POOL = [
+    { name: '愚者', meaning: '新的起点、勇敢启程、未知中的信任' },
+    { name: '魔术师', meaning: '行动力、资源整合、把想法变成现实' },
+    { name: '女祭司', meaning: '直觉、内在洞察、先观察再决定' },
+    { name: '皇后', meaning: '滋养、成长、情感与创造力的丰盛' },
+    { name: '皇帝', meaning: '秩序、责任、建立稳定边界' },
+    { name: '教皇', meaning: '传统、规则、向可靠经验学习' },
+    { name: '恋人', meaning: '关系选择、价值一致、真诚沟通' },
+    { name: '战车', meaning: '推进、意志、在拉扯中保持方向' },
+    { name: '力量', meaning: '温柔的掌控、耐心、内在勇气' },
+    { name: '隐者', meaning: '独处反思、寻找答案、沉淀后行动' },
+    { name: '命运之轮', meaning: '转机、周期变化、顺势而为' },
+    { name: '正义', meaning: '平衡、因果、理性与公平判断' },
+    { name: '倒吊人', meaning: '换位思考、暂停、重新理解处境' },
+    { name: '死神', meaning: '结束与重生、断舍离、迎接新阶段' },
+    { name: '节制', meaning: '协调、修复、循序渐进的改善' },
+    { name: '恶魔', meaning: '执念、束缚、识别让你内耗的模式' },
+    { name: '高塔', meaning: '突变、真相显现、旧结构被打破' },
+    { name: '星星', meaning: '希望、疗愈、对未来保持信念' },
+    { name: '月亮', meaning: '不安、模糊、需要辨识情绪与事实' },
+    { name: '太阳', meaning: '清晰、成功、被看见与积极能量' },
+    { name: '审判', meaning: '觉醒、复盘、做出关键决定' },
+    { name: '世界', meaning: '完成、整合、进入成熟的新周期' }
+];
+const tarotState = {
+    inited: false,
+    starsInited: false,
+    stage: 'input',
+    question: '',
+    deck: [],
+    selected: [null, null, null],
+    shuffleTimer: null,
+    aiLoading: false
+};
+
+function initTarotApp() {
+    initTarotStars();
+    if (!tarotState.inited) {
+        tarotState.inited = true;
+        const cardGrid = document.getElementById('tarot-cards-grid');
+        if (cardGrid) {
+            cardGrid.addEventListener('click', (event) => {
+                const slot = event.target.closest('.tarot-card-slot');
+                if (!slot) return;
+                const idx = Number(slot.dataset.index);
+                if (!Number.isInteger(idx)) return;
+                revealTarotCardAt(idx);
+            });
+        }
+    }
+    showTarotStage('input');
+}
+
+function pauseTarotRuntime() {
+    if (tarotState.shuffleTimer) {
+        clearTimeout(tarotState.shuffleTimer);
+        tarotState.shuffleTimer = null;
+    }
+}
+
+function initTarotStars() {
+    if (tarotState.starsInited) return;
+    const layer = document.getElementById('tarot-star-layer');
+    if (!layer) return;
+    tarotState.starsInited = true;
+    layer.innerHTML = '';
+    for (let i = 0; i < 42; i++) {
+        const star = document.createElement('span');
+        star.className = 'tarot-star';
+        const size = Math.random() * 2.4 + 0.9;
+        star.style.width = `${size}px`;
+        star.style.height = `${size}px`;
+        star.style.left = `${Math.random() * 100}%`;
+        star.style.top = `${Math.random() * 100}%`;
+        star.style.animationDuration = `${Math.random() * 7 + 5}s`;
+        star.style.animationDelay = `${Math.random() * 6}s`;
+        layer.appendChild(star);
+    }
+}
+
+function showTarotStage(stage) {
+    tarotState.stage = stage;
+    const map = {
+        input: document.getElementById('tarot-view-input'),
+        draw: document.getElementById('tarot-view-draw'),
+        ai: document.getElementById('tarot-view-ai')
+    };
+    Object.values(map).forEach((el) => {
+        if (!el) return;
+        el.classList.remove('active');
+    });
+    if (map[stage]) map[stage].classList.add('active');
+}
+
+function resetTarotFlow(options = {}) {
+    const preserveQuestion = options.preserveQuestion === true;
+    pauseTarotRuntime();
+    tarotState.deck = [];
+    tarotState.selected = [null, null, null];
+    tarotState.aiLoading = false;
+    tarotState.question = preserveQuestion ? tarotState.question : '';
+    const input = document.getElementById('tarot-question-input');
+    if (input && !preserveQuestion) input.value = '';
+    const drawTip = document.getElementById('tarot-draw-tip');
+    if (drawTip) drawTip.innerText = '请静心等待，牌面正在被命运之风洗净';
+    const shuffleArea = document.getElementById('tarot-shuffle-area');
+    if (shuffleArea) shuffleArea.classList.remove('active');
+    const cardsGrid = document.getElementById('tarot-cards-grid');
+    if (cardsGrid) cardsGrid.classList.remove('active');
+    const aiBtn = document.getElementById('tarot-ai-btn');
+    if (aiBtn) {
+        aiBtn.classList.remove('active');
+        aiBtn.disabled = true;
+    }
+    const summary = document.getElementById('tarot-picked-summary');
+    if (summary) summary.innerHTML = '';
+    const aiResult = document.getElementById('tarot-ai-result');
+    if (aiResult) aiResult.innerText = 'AI 解牌中，请稍候...';
+    const restartBtn = document.getElementById('tarot-restart-btn');
+    if (restartBtn) restartBtn.style.display = 'none';
+}
+
+function restartTarotFlow() {
+    resetTarotFlow({ preserveQuestion: false });
+    showTarotStage('input');
+}
+
+function startTarotSession() {
+    const questionInput = document.getElementById('tarot-question-input');
+    if (!questionInput) return;
+    const question = String(questionInput.value || '').trim();
+    if (!question) {
+        alert('请先输入你想得到解答的问题');
+        return;
+    }
+    tarotState.question = question;
+    tarotState.deck = shuffleTarotDeck(TAROT_CARD_POOL.slice());
+    tarotState.selected = [null, null, null];
+    tarotState.aiLoading = false;
+
+    showTarotStage('draw');
+    renderTarotCardsBackOnly();
+
+    const shuffleArea = document.getElementById('tarot-shuffle-area');
+    const cardsGrid = document.getElementById('tarot-cards-grid');
+    const drawTip = document.getElementById('tarot-draw-tip');
+    const aiBtn = document.getElementById('tarot-ai-btn');
+    if (shuffleArea) shuffleArea.classList.add('active');
+    if (cardsGrid) cardsGrid.classList.remove('active');
+    if (drawTip) drawTip.innerText = '请静心等待，牌面正在被命运之风洗净';
+    if (aiBtn) {
+        aiBtn.classList.remove('active');
+        aiBtn.disabled = true;
+    }
+
+    pauseTarotRuntime();
+    tarotState.shuffleTimer = setTimeout(() => {
+        tarotState.shuffleTimer = null;
+        if (shuffleArea) shuffleArea.classList.remove('active');
+        if (cardsGrid) cardsGrid.classList.add('active');
+        if (drawTip) drawTip.innerText = '请依次点击三张塔罗牌，揭示过去 / 现在 / 未来';
+    }, 2600);
+}
+
+function shuffleTarotDeck(cards) {
+    for (let i = cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = cards[i];
+        cards[i] = cards[j];
+        cards[j] = temp;
+    }
+    return cards;
+}
+
+function renderTarotCardsBackOnly() {
+    const wrap = document.getElementById('tarot-cards-grid');
+    if (!wrap) return;
+    wrap.innerHTML = TAROT_ROLES.map((role, idx) => `
+        <div class="tarot-card-slot" data-index="${idx}">
+            <div class="tarot-card-inner">
+                <div class="tarot-card-front"></div>
+                <div class="tarot-card-back">
+                    <div class="tarot-card-role">${role}</div>
+                    <div class="tarot-card-name">等待翻开</div>
+                    <div class="tarot-card-meaning">轻触此牌揭示命运讯息</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function revealTarotCardAt(index) {
+    if (tarotState.stage !== 'draw') return;
+    const cardsGrid = document.getElementById('tarot-cards-grid');
+    if (!cardsGrid || !cardsGrid.classList.contains('active')) return;
+    if (index < 0 || index >= TAROT_ROLES.length) return;
+    if (tarotState.selected[index]) return;
+    if (!tarotState.deck.length) tarotState.deck = shuffleTarotDeck(TAROT_CARD_POOL.slice());
+    const card = tarotState.deck.pop();
+    if (!card) return;
+    tarotState.selected[index] = { role: TAROT_ROLES[index], name: card.name, meaning: card.meaning };
+    renderTarotSelectedState();
+
+    const allRevealed = tarotState.selected.every(Boolean);
+    if (allRevealed) {
+        const drawTip = document.getElementById('tarot-draw-tip');
+        if (drawTip) drawTip.innerText = '三张牌已揭示，点击下方按钮进入 AI 辅助解牌';
+        const aiBtn = document.getElementById('tarot-ai-btn');
+        if (aiBtn) {
+            aiBtn.classList.add('active');
+            aiBtn.disabled = false;
+        }
+    }
+}
+
+function renderTarotSelectedState() {
+    const wrap = document.getElementById('tarot-cards-grid');
+    if (!wrap) return;
+    const slots = wrap.querySelectorAll('.tarot-card-slot');
+    slots.forEach((slot, idx) => {
+        const picked = tarotState.selected[idx];
+        const back = slot.querySelector('.tarot-card-back');
+        if (!back) return;
+        if (picked) {
+            slot.classList.add('revealed');
+            const roleEl = back.querySelector('.tarot-card-role');
+            const nameEl = back.querySelector('.tarot-card-name');
+            const meaningEl = back.querySelector('.tarot-card-meaning');
+            if (roleEl) roleEl.innerText = picked.role;
+            if (nameEl) nameEl.innerText = picked.name;
+            if (meaningEl) meaningEl.innerText = picked.meaning;
+        } else {
+            slot.classList.remove('revealed');
+        }
+    });
+}
+
+function renderTarotPickedSummary() {
+    const summary = document.getElementById('tarot-picked-summary');
+    if (!summary) return;
+    summary.innerHTML = tarotState.selected.filter(Boolean).map(item => `
+        <div class="tarot-meaning-item">
+            <b>${tarotEscapeHtml(item.role)}：${tarotEscapeHtml(item.name)}</b><br>
+            ${tarotEscapeHtml(item.meaning)}
+        </div>
+    `).join('');
+}
+
+function tarotEscapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function requestTarotAIReading() {
+    if (tarotState.aiLoading) return;
+    if (!tarotState.selected.every(Boolean)) {
+        alert('请先翻开三张牌');
+        return;
+    }
+    const settings = DB.getSettings();
+    if (!settings.url || !settings.key || !settings.model) {
+        alert('请先在设置中填写 API 地址、API Key 和模型名称');
+        return;
+    }
+
+    tarotState.aiLoading = true;
+    showTarotStage('ai');
+    renderTarotPickedSummary();
+    const aiResult = document.getElementById('tarot-ai-result');
+    const restartBtn = document.getElementById('tarot-restart-btn');
+    if (aiResult) aiResult.innerText = 'AI 解牌中，请稍候...';
+    if (restartBtn) restartBtn.style.display = 'none';
+
+    try {
+        const cardText = tarotState.selected.map(item => `${item.role}：${item.name}（${item.meaning}）`).join('\n');
+        const prompt = [
+            '你是专业塔罗顾问，请根据用户问题与三张牌给出解读。',
+            `用户问题：${tarotState.question}`,
+            '抽到的牌：',
+            cardText,
+            '要求：',
+            '1) 输出中文，不少于200字；',
+            '2) 结构包含：总体趋势、关键矛盾、行动建议；',
+            '3) 语气温和具体，不要神化，不要空泛；',
+            '4) 不要输出 Markdown 标题，不要输出 JSON。'
+        ].join('\n');
+
+        const response = await fetch(getChatCompletionsUrl(settings.url), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.key}`
+            },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.75
+            })
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) throw new Error('API 返回为空');
+        if (aiResult) aiResult.innerText = content.trim();
+    } catch (err) {
+        console.error(err);
+        if (aiResult) aiResult.innerText = `AI 解牌失败：${err.message || err}`;
+    } finally {
+        tarotState.aiLoading = false;
+        if (restartBtn) restartBtn.style.display = 'block';
+    }
 }

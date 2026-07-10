@@ -29,16 +29,37 @@
         <div class="notch"></div>
         <div class="status-bar">
             <span id="clock-time">12:00</span>
-            <span>100%</span>
+            <span id="battery-level">100%</span>
         </div>
 
         <!-- 1. 锁屏 -->
         <div id="lock-screen" class="screen active">
-            <div class="clock" id="lock-clock">12:00</div>
-            <div class="date" id="lock-date">1月1日 星期一</div>
-            <div class="slider-container">
-                <div class="slider-text">滑动来解锁</div>
-                <input type="range" min="0" max="100" value="0" id="unlock-slider">
+            <div class="lock-screen-overlay"></div>
+            <div class="lock-screen-content">
+                <div class="clock" id="lock-clock">12:00</div>
+                <div class="date" id="lock-date">1月1日 星期一</div>
+                <div class="lock-passcode-title">输入密码</div>
+                <div class="lock-passcode-dots" id="lock-passcode-dots" aria-label="开屏密码输入状态">
+                    <span class="lock-passcode-dot"></span>
+                    <span class="lock-passcode-dot"></span>
+                    <span class="lock-passcode-dot"></span>
+                    <span class="lock-passcode-dot"></span>
+                </div>
+                <div class="lock-passcode-error" id="lock-passcode-error">密码错误</div>
+                <div class="lock-keypad" aria-label="数字密码键盘">
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('1')">1</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('2')">2</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('3')">3</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('4')">4</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('5')">5</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('6')">6</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('7')">7</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('8')">8</button>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('9')">9</button>
+                    <div class="lock-key lock-key-placeholder" aria-hidden="true"></div>
+                    <button type="button" class="lock-key" onclick="pressLockPasscodeDigit('0')">0</button>
+                    <button type="button" class="lock-key lock-key-delete" onclick="deleteLockPasscodeDigit()">删除</button>
+                </div>
             </div>
         </div>
 
@@ -56,22 +77,29 @@
                     <div class="home-page" id="home-page-1">
                         <div class="home-widget-container">
                             <div class="home-widget" id="home-widget" onclick="triggerWidgetUpload()">
-                                <span>点击上传图片</span>
+                                <span class="home-widget-bg-text">点击上传图片</span>
                                 <img id="home-widget-img" src="">
+                                <div class="home-widget-avatar-area">
+                                    <div class="home-widget-avatar" id="home-widget-avatar" onclick="triggerWidgetAvatarUpload(event)">
+                                        <span class="home-widget-avatar-placeholder">点击上传</span>
+                                        <img id="home-widget-avatar-img" src="">
+                                    </div>
+                                    <div class="home-widget-user-tag" id="home-widget-user-tag" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveWidgetUserTag()" onkeydown="handleWidgetUserTagKeydown(event)">@user</div>
+                                </div>
                             </div>
-                            <input type="file" id="widget-file-input" style="display:none" accept="image/*" onchange="uploadWidgetImage(this)">
+                            <input type="file" id="widget-avatar-file-input" style="display:none" accept="image/*" onchange="uploadWidgetAvatar(this)">
                         </div>
 
                         <!-- APP 图标网格 -->
                         <div class="app-grid">
-                            <div class="app-icon" id="icon-app-vk" onclick="openApp('app-vk')">VK<div class="app-label">Vkontakte</div></div>
-                            <div class="app-icon" id="icon-app-contacts" onclick="openApp('app-contacts')">👤<div class="app-label">通讯录</div></div>
-                            <div class="app-icon" id="icon-app-memos" onclick="openApp('app-memos')" style="background-color:#f1c40f; color:#000;">📝<div class="app-label">备忘录</div></div>
-                            <div class="app-icon" id="icon-app-calendar" onclick="openApp('app-calendar')" style="background-color:#fff; color:#ff3b30;">📅<div class="app-label">日历</div></div>
-                            <div class="app-icon" id="icon-app-worldbook" onclick="openApp('app-worldbook')">📖<div class="app-label">世界书</div></div>
-                            <div class="app-icon" id="icon-app-spy-list" onclick="openApp('app-spy-list')">👁️<div class="app-label">查岗</div></div>
-                            <div class="app-icon" id="icon-app-theme" onclick="openApp('app-theme')">🎨<div class="app-label">美化</div></div>
-                            <div class="app-icon" id="icon-app-settings" onclick="openApp('app-settings')">⚙️<div class="app-label">设置</div></div>
+                            <div class="app-icon icon-image" id="icon-app-vk" onclick="openApp('app-vk')"><img class="app-icon-custom-image" src="https://img.cdn1.vip/i/6a02ad3833ea4_1778560312.jpg" alt="Vkontakte"><div class="app-label">Vkontakte</div></div>
+                            <div class="app-icon" id="icon-app-contacts" onclick="openApp('app-contacts')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg><div class="app-label">通讯录</div></div>
+                            <div class="app-icon" id="icon-app-memos" onclick="openApp('app-memos')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></svg><div class="app-label">备忘录</div></div>
+                            <div class="app-icon" id="icon-app-calendar" onclick="openApp('app-calendar')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><path d="M21 14V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M3 10h18"/><path d="m16 20 2 2 4-4"/></svg><div class="app-label">日历</div></div>
+                            <div class="app-icon" id="icon-app-worldbook" onclick="openApp('app-worldbook')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 15H17a2 2 0 0 0-2 2v4.54"/><path d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17"/><path d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05"/><circle cx="12" cy="12" r="10"/></svg><div class="app-label">世界书</div></div>
+                            <div class="app-icon" id="icon-app-spy-list" onclick="openApp('app-spy-list')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg><div class="app-label">查岗</div></div>
+                            <div class="app-icon" id="icon-app-theme" onclick="openApp('app-theme')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"/></svg><div class="app-label">美化</div></div>
+                            <div class="app-icon" id="icon-app-settings" onclick="openApp('app-settings')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><div class="app-label">设置</div></div>
                         </div>
                     </div>
 
@@ -87,18 +115,18 @@
 
                             <!-- 右上角：四个应用 -->
                             <div class="page2-app-grid">
-                                <div class="app-icon" id="icon-app-couple" onclick="openApp('app-couple')" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">💕<div class="app-label">情侣空间</div></div>
-                                <div class="app-icon" id="icon-app-tomato" onclick="openApp('app-tomato')" style="background: linear-gradient(135deg, #ff6348, #ff4757);">🍅<div class="app-label">番茄钟</div></div>
-                                <div class="app-icon" id="icon-app-music" onclick="openApp('app-music')" style="background: linear-gradient(135deg, #ff2d55, #ff375f);">🎵<div class="app-label">音乐</div></div>
-                                <div class="app-icon" id="icon-app-forum" onclick="openApp('app-forum')" style="background: linear-gradient(135deg, #5856d6, #6c5ce7);">💬<div class="app-label">论坛</div></div>
+                                <div class="app-icon" id="icon-app-couple" onclick="openApp('app-couple')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg><div class="app-label">情侣空间</div></div>
+                                <div class="app-icon" id="icon-app-tomato" onclick="openApp('app-tomato')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/><path d="m9 13 2 2 4-4"/></svg><div class="app-label">番茄钟</div></div>
+                                <div class="app-icon" id="icon-app-music" onclick="openApp('app-music')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><div class="app-label">音乐</div></div>
+                                <div class="app-icon icon-image" id="icon-app-forum" onclick="openApp('app-forum')"><img class="app-icon-custom-image" src="https://img.cdn1.vip/i/6a02adae30a70_1778560430.jpg" alt="论坛"><div class="app-label">论坛</div></div>
                             </div>
 
                             <!-- 左下角：四个应用 -->
                             <div class="page2-app-grid">
-                                <div class="app-icon" id="icon-app-shopping" style="background: linear-gradient(135deg, #ff9500, #ff8c00);">🛒<div class="app-label">购物</div></div>
-                                <div class="app-icon" id="icon-app-game" onclick="openApp('app-game')" style="background: linear-gradient(135deg, #ffd166, #ffb347);">🎮<div class="app-label">游戏</div></div>
-                                <div class="app-icon" id="icon-app-accounting" style="background: linear-gradient(135deg, #007aff, #0a84ff);">📊<div class="app-label">记账</div></div>
-                                <div class="app-icon" id="icon-app-wallet" style="background: linear-gradient(135deg, #ffcc00, #ffd60a);">💰<div class="app-label">钱包</div></div>
+                                <div class="app-icon" id="icon-app-shopping" onclick="openApp('app-shopping')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/></svg><div class="app-label">购物</div></div>
+                                <div class="app-icon" id="icon-app-game" onclick="openApp('app-game')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg><div class="app-label">游戏</div></div>
+                                <div class="app-icon" id="icon-app-accounting" onclick="openApp('app-accounting')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg><div class="app-label">记账</div></div>
+                                <div class="app-icon" id="icon-app-wallet" onclick="openApp('app-wallet')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg><div class="app-label">钱包</div></div>
                             </div>
 
                             <!-- 右下角：新设计区域 -->
@@ -142,17 +170,89 @@
 
             <!-- 底部固定应用栏 -->
             <div class="bottom-app-bar">
-                <div class="bottom-app-icon" onclick="openApp('app-question-box')">
-                    <div class="bottom-app-icon-emoji">📮</div>
+                <div class="bottom-app-item" onclick="openApp('app-question-box')">
+                    <div class="bottom-app-icon" id="icon-bottom-question-box">
+                    <div class="bottom-app-icon-svg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10.5V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h12.5"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="M18 15.28c.2-.4.5-.8.9-1a2.1 2.1 0 0 1 2.6.4c.3.4.5.8.5 1.3 0 1.3-2 2-2 2"/><path d="M20 22v.01"/></svg></div>
+                    </div>
                     <div class="bottom-app-icon-label">提问箱</div>
                 </div>
-                <div class="bottom-app-icon">
-                    <div class="bottom-app-icon-emoji">💬</div>
-                    <div class="bottom-app-icon-label">短信</div>
+                <div class="bottom-app-item" onclick="openApp('app-kitchen')">
+                    <div class="bottom-app-icon" id="icon-bottom-kitchen">
+                    <div class="bottom-app-icon-svg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"/><path d="M6 17h12"/></svg></div>
+                    </div>
+                    <div class="bottom-app-icon-label">小厨房</div>
                 </div>
-                <div class="bottom-app-icon">
-                    <div class="bottom-app-icon-emoji">📧</div>
-                    <div class="bottom-app-icon-label">电子邮件</div>
+                <div class="bottom-app-item" onclick="openApp('app-tarot')">
+                    <div class="bottom-app-icon" id="icon-bottom-tarot">
+                    <div class="bottom-app-icon-svg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/></svg></div>
+                    </div>
+                    <div class="bottom-app-icon-label">塔罗牌</div>
+                </div>
+            </div>
+
+            <div id="widget-upload-modal" class="widget-upload-modal" onclick="closeWidgetUploadModal()">
+                <div class="widget-upload-modal-content" onclick="event.stopPropagation()">
+                    <div class="widget-upload-modal-header">
+                        <span class="widget-upload-cancel" onclick="closeWidgetUploadModal()">取消</span>
+                        <span class="widget-upload-title">首页长方形轮播设置</span>
+                        <span class="widget-upload-save" onclick="saveWidgetSlides()">保存</span>
+                    </div>
+                    <div class="widget-upload-tip">最多可上传 5 张图片，支持本地上传或 URL 上传。上传 2 张及以上会自动轮播。</div>
+
+                    <div class="widget-upload-slot">
+                        <div class="widget-upload-slot-title">图片 1</div>
+                        <div class="widget-upload-slot-actions">
+                            <button type="button" class="widget-upload-btn" onclick="triggerWidgetSlotFile(0)">本地上传</button>
+                            <button type="button" class="widget-upload-btn clear" onclick="clearWidgetSlot(0)">清空</button>
+                        </div>
+                        <input type="file" id="widget-slot-file-0" style="display:none" accept="image/*" onchange="uploadWidgetSlotFile(this, 0)">
+                        <input type="text" id="widget-slot-url-0" class="widget-upload-url" placeholder="或输入图片 URL" oninput="setWidgetSlotUrl(0, this.value)">
+                        <div id="widget-slot-preview-0" class="widget-upload-preview"><span>未设置</span></div>
+                    </div>
+
+                    <div class="widget-upload-slot">
+                        <div class="widget-upload-slot-title">图片 2</div>
+                        <div class="widget-upload-slot-actions">
+                            <button type="button" class="widget-upload-btn" onclick="triggerWidgetSlotFile(1)">本地上传</button>
+                            <button type="button" class="widget-upload-btn clear" onclick="clearWidgetSlot(1)">清空</button>
+                        </div>
+                        <input type="file" id="widget-slot-file-1" style="display:none" accept="image/*" onchange="uploadWidgetSlotFile(this, 1)">
+                        <input type="text" id="widget-slot-url-1" class="widget-upload-url" placeholder="或输入图片 URL" oninput="setWidgetSlotUrl(1, this.value)">
+                        <div id="widget-slot-preview-1" class="widget-upload-preview"><span>未设置</span></div>
+                    </div>
+
+                    <div class="widget-upload-slot">
+                        <div class="widget-upload-slot-title">图片 3</div>
+                        <div class="widget-upload-slot-actions">
+                            <button type="button" class="widget-upload-btn" onclick="triggerWidgetSlotFile(2)">本地上传</button>
+                            <button type="button" class="widget-upload-btn clear" onclick="clearWidgetSlot(2)">清空</button>
+                        </div>
+                        <input type="file" id="widget-slot-file-2" style="display:none" accept="image/*" onchange="uploadWidgetSlotFile(this, 2)">
+                        <input type="text" id="widget-slot-url-2" class="widget-upload-url" placeholder="或输入图片 URL" oninput="setWidgetSlotUrl(2, this.value)">
+                        <div id="widget-slot-preview-2" class="widget-upload-preview"><span>未设置</span></div>
+                    </div>
+
+                    <div class="widget-upload-slot">
+                        <div class="widget-upload-slot-title">图片 4</div>
+                        <div class="widget-upload-slot-actions">
+                            <button type="button" class="widget-upload-btn" onclick="triggerWidgetSlotFile(3)">本地上传</button>
+                            <button type="button" class="widget-upload-btn clear" onclick="clearWidgetSlot(3)">清空</button>
+                        </div>
+                        <input type="file" id="widget-slot-file-3" style="display:none" accept="image/*" onchange="uploadWidgetSlotFile(this, 3)">
+                        <input type="text" id="widget-slot-url-3" class="widget-upload-url" placeholder="或输入图片 URL" oninput="setWidgetSlotUrl(3, this.value)">
+                        <div id="widget-slot-preview-3" class="widget-upload-preview"><span>未设置</span></div>
+                    </div>
+
+                    <div class="widget-upload-slot">
+                        <div class="widget-upload-slot-title">图片 5</div>
+                        <div class="widget-upload-slot-actions">
+                            <button type="button" class="widget-upload-btn" onclick="triggerWidgetSlotFile(4)">本地上传</button>
+                            <button type="button" class="widget-upload-btn clear" onclick="clearWidgetSlot(4)">清空</button>
+                        </div>
+                        <input type="file" id="widget-slot-file-4" style="display:none" accept="image/*" onchange="uploadWidgetSlotFile(this, 4)">
+                        <input type="text" id="widget-slot-url-4" class="widget-upload-url" placeholder="或输入图片 URL" oninput="setWidgetSlotUrl(4, this.value)">
+                        <div id="widget-slot-preview-4" class="widget-upload-preview"><span>未设置</span></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -165,11 +265,7 @@
                 <div class="action-btn"></div>
             </div>
             <div class="app-content">
-                <div class="toggle-switch">
-                    <span class="toggle-label">无边框全屏模式</span>
-                    <label class="switch"><input type="checkbox" id="fullscreen-toggle" onchange="toggleFullscreen()"><span class="slider"></span></label>
-                </div>
-                <div class="form-group"><label>API Base URL</label><input type="text" id="api-url" placeholder="https://api.openai.com/v1"></div>
+                <div class="form-group"><label>API Base URL</label><input type="text" id="api-url" placeholder="https://api.openai.com/v1 或 https://api.openai.com/v3"></div>
                 <div class="form-group"><label>API Key</label><input type="password" id="api-key" placeholder="sk-..."></div>
                 
                 <div class="form-group">
@@ -189,6 +285,16 @@
                     </div>
                     <div style="font-size:11px; color:#888; margin-top:8px;">温度范围：0（精确）- 2（创造性），默认 0.7</div>
                 </div>
+
+                <div class="settings-section-title" style="margin-top:20px;">后台保活和通知</div>
+                <div class="toggle-switch">
+                    <span class="toggle-label">后台保活（静音循环音频）</span>
+                    <label class="switch"><input type="checkbox" id="keep-alive-toggle"><span class="slider"></span></label>
+                </div>
+                <div style="font-size:11px; color:#888; margin-bottom:15px;">开启后，页面切到后台时会循环播放静音音频，降低后台被系统挂起的概率。</div>
+                <button class="save-btn" style="background:#5856d6; margin-bottom:10px;" onclick="requestBrowserNotificationPermission()">开启浏览器通知权限</button>
+                <div id="notification-permission-status" style="font-size:12px; color:#34c759; margin-bottom:10px; display:none;">已成功获取通知权限</div>
+                <button class="save-btn" style="background:#333; margin-bottom:20px;" onclick="testBrowserNotificationStatus()">测试通知发送状态</button>
 
                 <!-- System Prompt 已隐藏 -->
                 <input type="hidden" id="system-prompt">
@@ -213,20 +319,49 @@
                 <div class="action-btn" onclick="openContactForm()">+</div>
             </div>
             <div class="app-content">
-                <div id="add-contact-area" class="add-contact-form">
-                    <h3 id="contact-form-title" style="margin-top:0">添加联系人</h3>
-                    <input type="hidden" id="contact-id-hidden">
-                    <div class="form-group">
-                        <label>头像 (文件 或 URL)</label>
-                        <input type="file" id="contact-avatar-input" accept="image/*">
-                        <input type="text" id="contact-avatar-url" placeholder="或者输入图片URL" style="margin-top:5px;">
+                <div id="contacts-add-view">
+                    <div id="add-contact-area" class="add-contact-form">
+                        <h3 id="contact-form-title" style="margin-top:0">添加联系人</h3>
+                        <input type="hidden" id="contact-id-hidden">
+                        <div class="form-group">
+                            <label>头像 (文件 或 URL)</label>
+                            <input type="file" id="contact-avatar-input" accept="image/*">
+                            <input type="text" id="contact-avatar-url" placeholder="或者输入图片URL" style="margin-top:5px;">
+                        </div>
+                        <div class="form-group"><label>姓名</label><input type="text" id="contact-name-input"></div>
+                        <div class="form-group"><label>人设 (Prompt)</label><textarea id="contact-persona-input"></textarea></div>
+                        <button class="save-btn" onclick="saveContact()">保存</button>
+                        <button class="save-btn" onclick="closeContactForm()" style="background:#eee; color:#333; margin-top:10px;">取消</button>
                     </div>
-                    <div class="form-group"><label>姓名</label><input type="text" id="contact-name-input"></div>
-                    <div class="form-group"><label>人设 (Prompt)</label><textarea id="contact-persona-input"></textarea></div>
-                    <button class="save-btn" onclick="saveContact()">保存</button>
-                    <button class="save-btn" onclick="closeContactForm()" style="background:#eee; color:#333; margin-top:10px;">取消</button>
+                    <div id="contacts-list"></div>
                 </div>
-                <div id="contacts-list"></div>
+                <div id="contacts-account-view" style="display:none;">
+                    <div id="user-accounts-list"></div>
+                </div>
+            </div>
+            <div class="contacts-bottom-bar">
+                <button type="button" id="contacts-tab-add" class="contacts-tab-btn active" onclick="switchContactsTab('add')">添加联系人</button>
+                <button type="button" id="contacts-tab-account" class="contacts-tab-btn" onclick="switchContactsTab('account')">我的账号</button>
+            </div>
+            <div id="user-account-editor-modal" class="contacts-account-editor-modal">
+                <div class="contacts-account-editor-box">
+                    <div class="settings-modal-header">
+                        <span>编辑人设账号</span>
+                        <span style="color:#007aff; cursor:pointer;" onclick="closeUserAccountEditor()">完成</span>
+                    </div>
+                    <div class="settings-modal-content">
+                        <input type="hidden" id="user-account-id-hidden">
+                        <div style="text-align:center;">
+                            <img id="user-account-avatar-preview" class="user-avatar-upload" src="" onclick="document.getElementById('user-account-avatar-input').click()">
+                            <input type="file" id="user-account-avatar-input" style="display:none;" accept="image/*" onchange="previewUserAccountAvatar(this)">
+                            <input type="text" id="user-account-avatar-url" placeholder="或者输入图片URL" style="margin-top:5px; width:80%; font-size:12px; padding:5px;">
+                            <div style="font-size:12px; color:#999; margin-bottom:10px;">点击头像上传或输入URL</div>
+                        </div>
+                        <div class="form-group"><label>用户名称</label><input type="text" id="user-account-name-input" placeholder="例如：我"></div>
+                        <div class="form-group"><label>用户人设</label><textarea id="user-account-persona-input" placeholder="例如：你是一个路过的冒险家..." style="height:100px;"></textarea></div>
+                        <button class="save-btn" onclick="saveUserAccount()">保存账号</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -277,18 +412,18 @@
         <div id="app-spy-home" class="screen">
             <div class="app-header">
                 <div style="width:60px;"></div> 
-                <div class="app-title" id="spy-home-title" style="color:#fff; padding:0;">Role Phone</div>
+                <div class="app-title" id="spy-home-title">Role Phone</div>
                 <div class="action-btn"></div>
             </div>
             <!-- 专用图标网格容器 -->
             <div class="spy-app-grid">
-                <div class="app-icon" id="spy-icon-vk" onclick="openSpyVK()">VK<div class="app-label">Vkontakte</div></div>
-                <div class="app-icon" id="spy-icon-memos" onclick="openSpyMemos()" style="background-color:#f1c40f; color:#000;">📝<div class="app-label">备忘录</div></div>
+                <div class="app-icon" id="spy-icon-vk" onclick="openSpyVK()"><div class="spy-icon-graphic"><img src="https://img.cdn1.vip/i/6a02ad3833ea4_1778560312.jpg" alt="Vkontakte"></div><div class="app-label">Vkontakte</div></div>
+                <div class="app-icon" id="spy-icon-memos" onclick="openSpyMemos()"><div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></svg></div><div class="app-label">备忘录</div></div>
                 <!-- 新增：浏览器和日记图标 -->
-                <div class="app-icon" id="spy-icon-browser" onclick="openSpyBrowser()" style="background-color:#007aff; color:#fff;">🌐<div class="app-label">浏览器</div></div>
-                <div class="app-icon" id="spy-icon-diary" onclick="openSpyDiary()" style="background-color:#8e44ad; color:#fff;">📔<div class="app-label">日记</div></div>
+                <div class="app-icon" id="spy-icon-browser" onclick="openSpyBrowser()"><div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 15H17a2 2 0 0 0-2 2v4.54"/><path d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17"/><path d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05"/><circle cx="12" cy="12" r="10"/></svg></div><div class="app-label">浏览器</div></div>
+                <div class="app-icon" id="spy-icon-diary" onclick="openSpyDiary()"><div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M16 2v20"/></svg></div><div class="app-label">日记</div></div>
                 <!-- 新增：设置图标 -->
-                <div class="app-icon" id="spy-icon-settings" onclick="openSpySettings()" style="background-color:#8e8e93; color:#fff;">⚙️<div class="app-label">设置</div></div>
+                <div class="app-icon" id="spy-icon-settings" onclick="openSpySettings()"><div class="spy-icon-graphic"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></div><div class="app-label">设置</div></div>
             </div>
         </div>
 
@@ -363,7 +498,7 @@
                     
                     <div id="spy-theme-input-color">
                         <div class="color-picker-wrapper">
-                            <input type="color" id="spy-theme-wallpaper-color" value="#ffffff" style="width:50px; height:40px; padding:0; border:none;">
+                            <input type="color" id="spy-theme-wallpaper-color" value="#f2f4f5" style="width:50px; height:40px; padding:0; border:none;">
                             <span>选择颜色</span>
                         </div>
                     </div>
@@ -439,13 +574,32 @@
                 <div class="action-btn"></div>
             </div>
             <div class="app-content">
-                <div class="theme-section-title">全局美化预设</div>
-                <div style="display:flex; gap:10px; margin-bottom:20px;">
-                    <button class="save-btn" style="background:#333;" onclick="exportThemePreset()">导出预设 (JSON)</button>
-                    <button class="save-btn" style="background:#007aff;" onclick="document.getElementById('import-theme-file').click()">导入预设</button>
-                    <input type="file" id="import-theme-file" style="display:none" onchange="importThemePreset(this)" accept=".json,application/json,text/plain,*/*">
+                <div class="toggle-switch">
+                    <span class="toggle-label">无边框全屏模式</span>
+                    <label class="switch"><input type="checkbox" id="fullscreen-toggle" onchange="toggleFullscreen()" checked><span class="slider"></span></label>
                 </div>
-                <div style="font-size:11px; color:#888; margin-top:-15px; margin-bottom:20px;">包含：壁纸、边框、图标、聊天背景/气泡、线下模式背景。</div>
+                <div class="toggle-switch">
+                    <span class="toggle-label">隐藏顶部刘海屏</span>
+                    <label class="switch"><input type="checkbox" id="hide-notch-toggle" onchange="toggleNotchVisibility()"><span class="slider"></span></label>
+                </div>
+                <div class="toggle-switch">
+                    <span class="toggle-label">隐藏顶部时间与电量</span>
+                    <label class="switch"><input type="checkbox" id="hide-status-info-toggle" onchange="toggleStatusInfoVisibility()"><span class="slider"></span></label>
+                </div>
+
+                <hr class="theme-divider">
+
+                <div class="theme-section-title">开屏密码</div>
+                <div class="toggle-switch">
+                    <span class="toggle-label">关闭开屏密码</span>
+                    <label class="switch"><input type="checkbox" id="disable-lock-passcode-toggle" onchange="toggleLockPasscodeDisabled()"><span class="slider"></span></label>
+                </div>
+                <div class="form-group">
+                    <label>修改开屏密码</label>
+                    <input type="password" id="lock-passcode-input" inputmode="numeric" maxlength="4" placeholder="请输入4位数字密码" oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
+                    <div class="theme-note">默认密码为 5168，仅支持 4 位数字。</div>
+                    <button class="save-btn" style="margin-top:12px;" onclick="saveLockPasscode()">保存开屏密码</button>
+                </div>
 
                 <hr class="theme-divider">
 
@@ -506,6 +660,9 @@
                         <option value="icon-app-game">游戏</option>
                         <option value="icon-app-accounting">记账</option>
                         <option value="icon-app-wallet">钱包</option>
+                        <option value="icon-bottom-question-box">提问箱（底部栏）</option>
+                        <option value="icon-bottom-kitchen">小厨房（底部栏）</option>
+                        <option value="icon-bottom-tarot">塔罗牌（底部栏）</option>
                     </select>
                     
                     <label style="margin-top:10px">图标图片</label>
@@ -528,20 +685,30 @@
                     </div>
                 </div>
 
-                <!-- 新增：全局字体颜色设置 -->
+                <!-- 新增：桌面字体颜色设置 -->
                 <div class="form-group" style="margin-top:20px;">
-                    <label>全局字体颜色</label>
+                    <label>桌面字体颜色</label>
                     <div class="color-picker-wrapper">
                         <input type="color" id="theme-font-color" value="#000000" style="width:50px; height:40px; padding:0; border:none;">
                         <span>选择颜色</span>
                     </div>
-                    <button class="save-btn" style="margin-top:10px;" onclick="saveFontColor()">保存字体颜色</button>
+                    <button class="save-btn" style="margin-top:10px;" onclick="saveFontColor()">保存桌面字体颜色</button>
                 </div>
 
                 <hr class="theme-divider">
 
                 <!-- 新增：一键清空美化 -->
                 <button class="save-btn" style="background:#ff3b30; margin-bottom:30px;" onclick="resetAllThemes()">⚠️ 一键清空所有美化</button>
+
+                <hr class="theme-divider">
+
+                <div class="theme-section-title">全局美化预设</div>
+                <div style="display:flex; gap:10px; margin-bottom:20px;">
+                    <button class="save-btn" style="background:#333;" onclick="exportThemePreset()">导出预设 (JSON)</button>
+                    <button class="save-btn" style="background:#007aff;" onclick="document.getElementById('import-theme-file').click()">导入预设</button>
+                    <input type="file" id="import-theme-file" style="display:none" onchange="importThemePreset(this)" accept=".json,application/json,text/plain,*/*">
+                </div>
+                <div style="font-size:11px; color:#888; margin-top:-15px; margin-bottom:20px;">包含：仅桌面美化（桌面壁纸、桌面图标、桌面字体颜色、全局字体）。</div>
             </div>
         </div>
 
@@ -599,7 +766,7 @@
                 <div class="call-controls-container">
                     <!-- 通话界面的输入框 -->
                     <div class="call-input-container">
-                        <button class="icon-btn trigger-ai-btn" onclick="triggerAIResponse()">✨</button>
+                        <button class="icon-btn trigger-ai-btn" onclick="triggerAIResponse()">☆</button>
                         <input type="text" class="chat-input" id="call-message-input" placeholder="通话中..." onkeydown="handleEnterKey(event)">
                         <button class="icon-btn send-btn" onclick="sendMessage()">➤</button>
                     </div>
@@ -615,7 +782,21 @@
                 <div class="app-header offline-header-glass">
                     <div class="back-btn" onclick="exitOfflineMode()">退出</div>
                     <div class="app-title">线下见面</div>
-                    <div class="action-btn" onclick="openOfflineSettings()">⚙️</div>
+                    <div class="offline-header-actions">
+                        <button class="chat-header-icon-btn offline-status-icon-btn" onclick="toggleOfflineStatusBar()" aria-label="状态栏">
+                            <span class="chat-thought-toggle">❤</span>
+                        </button>
+                        <div class="action-btn" onclick="openOfflineSettings()">⚙️</div>
+                        <div class="action-btn offline-bagua-trigger" onclick="openOfflineBuzzwordTool()" aria-label="去八股工具">✏️</div>
+                    </div>
+                </div>
+                <div id="offline-status-panel">
+                    <div class="offline-status-close" onclick="toggleOfflineStatusBar(false)">✕</div>
+                    <div class="offline-status-title">❤ 状态栏</div>
+                    <div class="offline-status-item"><strong>【心情】</strong><p id="offline-status-mood">暂无</p></div>
+                    <div class="offline-status-item"><strong>【服装状态】</strong><p id="offline-status-outfit">暂无</p></div>
+                    <div class="offline-status-item"><strong>【动作】</strong><p id="offline-status-action">暂无</p></div>
+                    <div class="offline-status-item"><strong>【心声独白】</strong><p id="offline-status-inner">暂无</p></div>
                 </div>
                 <div id="offline-history"></div>
                 
@@ -645,22 +826,11 @@
             </div>
 
             <div class="chat-tools-bar" id="chat-tools-bar">
-                <button class="tool-btn" onclick="toggleStickerPanel()">
-                    <span class="tool-icon">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="12" r="8"></circle>
-                            <circle cx="9" cy="10" r="0.9"></circle>
-                            <circle cx="15" cy="10" r="0.9"></circle>
-                            <path d="M8.5 14c.9 1.2 2.2 1.8 3.5 1.8s2.6-.6 3.5-1.8"></path>
-                        </svg>
-                    </span>
-                    <span class="tool-label">表情包</span>
-                </button>
                 <button class="tool-btn" onclick="regenerateLastResponse()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M20 7v5h-5"></path>
-                            <path d="M20 12a8 8 0 1 1-2.2-5.5L20 7"></path>
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
                         </svg>
                     </span>
                     <span class="tool-label">刷新</span>
@@ -668,8 +838,8 @@
                 <button class="tool-btn" onclick="continueChat()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M5.5 7.5L11 12l-5.5 4.5z"></path>
-                            <path d="M13 7.5l5.5 4.5L13 16.5z"></path>
+                            <path d="m6 17 5-5-5-5"></path>
+                            <path d="m13 17 5-5-5-5"></path>
                         </svg>
                     </span>
                     <span class="tool-label">继续</span>
@@ -677,10 +847,11 @@
                 <button class="tool-btn" onclick="openTransferModal()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="4.5" y="7" width="15" height="10" rx="2"></rect>
-                            <path d="M12 9.8v4.4"></path>
-                            <path d="M9.5 11h5"></path>
-                            <path d="M9.5 13h5"></path>
+                            <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"></path>
+                            <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"></path>
+                            <path d="m2 16 6 6"></path>
+                            <circle cx="16" cy="9" r="2.9"></circle>
+                            <circle cx="6" cy="5" r="3"></circle>
                         </svg>
                     </span>
                     <span class="tool-label">转账</span>
@@ -688,42 +859,55 @@
                 <button class="tool-btn" onclick="openOfflineMode()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M8 8a6 6 0 0 1 8 8"></path>
-                            <path d="M5 5a10 10 0 0 1 14 14"></path>
-                            <line x1="5" y1="19" x2="19" y2="5"></line>
+                            <path d="M11 20H2"></path>
+                            <path d="M11 4.562v16.157a1 1 0 0 0 1.242.97L19 20V5.562a2 2 0 0 0-1.515-1.94l-4-1A2 2 0 0 0 11 4.561z"></path>
+                            <path d="M11 4H8a2 2 0 0 0-2 2v14"></path>
+                            <path d="M14 12h.01"></path>
+                            <path d="M22 20h-3"></path>
                         </svg>
                     </span>
                     <span class="tool-label">线下模式</span>
                 </button>
-                <button class="tool-btn tool-placeholder-btn" type="button">
+                <button class="tool-btn" type="button" onclick="openRedPacketModal()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="5" y="6.5" width="14" height="11" rx="1.8"></rect>
-                            <path d="M8.5 6.5V5h7v1.5"></path>
-                            <path d="M9 11h6"></path>
-                            <path d="M10.2 13h3.6"></path>
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"></path>
+                            <path d="M12 18V6"></path>
                         </svg>
                     </span>
                     <span class="tool-label">红包</span>
                 </button>
-                <button class="tool-btn tool-placeholder-btn" type="button">
+                <button class="tool-btn tool-placeholder-btn" type="button" onclick="openVoiceModal()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M14 8v7.5a2.5 2.5 0 1 1-1-2"></path>
-                            <path d="M14 8l5-1.5v7a2.5 2.5 0 1 1-1-2"></path>
+                            <path d="M12 19v3"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <rect x="9" y="2" width="6" height="13" rx="3"></rect>
                         </svg>
                     </span>
                     <span class="tool-label">语音</span>
                 </button>
-                <button class="tool-btn tool-placeholder-btn" type="button">
+                <button class="tool-btn" type="button" onclick="openImageModal()">
                     <span class="tool-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="5" y="6.5" width="14" height="11" rx="2"></rect>
-                            <path d="M7.5 15l3.2-3.5 2.5 2.6 2.3-2.1 1.5 3"></path>
-                            <circle cx="9" cy="9.5" r="1"></circle>
+                            <path d="M16 5h6"></path>
+                            <path d="M19 2v6"></path>
+                            <path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"></path>
+                            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+                            <circle cx="9" cy="9" r="2"></circle>
                         </svg>
                     </span>
                     <span class="tool-label">图片</span>
+                </button>
+                <button class="tool-btn" type="button" onclick="openVideoModal()">
+                    <span class="tool-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"></path>
+                        </svg>
+                    </span>
+                    <span class="tool-label">视频</span>
                 </button>
             </div>
 
@@ -734,9 +918,19 @@
 
             <div class="chat-input-area">
                 <button class="icon-btn tools-toggle-btn" id="toggle-tools-btn" onclick="toggleChatToolsBar()" aria-label="展开工具栏">+</button>
-                <input type="text" class="chat-input" id="message-input" placeholder="输入消息..." onkeydown="handleEnterKey(event)">
+                <div class="chat-input-wrapper">
+                    <input type="text" class="chat-input" id="message-input" placeholder="输入消息..." onkeydown="handleEnterKey(event)">
+                    <button class="input-emoji-btn" onclick="toggleStickerPanel()" aria-label="打开表情包">☺</button>
+                </div>
                 <button class="icon-btn send-btn" onclick="sendMessage()">➤</button>
-                <button class="icon-btn trigger-ai-btn" onclick="triggerAIResponse()">✨</button>
+                <button class="icon-btn trigger-ai-btn" onclick="triggerAIResponse()" aria-label="呼叫AI">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path>
+                        <path d="M20 2v4"></path>
+                        <path d="M22 4h-4"></path>
+                        <circle cx="4" cy="20" r="2"></circle>
+                    </svg>
+                </button>
             </div>
 
             <div class="ctx-overlay" id="ctx-overlay" onclick="closeAllOverlays()"></div>
@@ -772,7 +966,8 @@
                     <h3>转账</h3>
                     <div class="form-group">
                         <label>金额</label>
-                        <input type="number" id="transfer-amount" placeholder="输入金额">
+                        <input type="number" id="transfer-amount" placeholder="输入金额" oninput="updateTransferCurrencyPreview()">
+                        <div id="transfer-currency-preview" class="currency-convert-preview">将转换为【人民币¥】0¥</div>
                     </div>
                     <div class="form-group">
                         <label>备注</label>
@@ -781,6 +976,95 @@
                     <div style="display:flex; gap:10px;">
                         <button class="save-btn" style="background:#eee; color:#333;" onclick="closeTransferModal()">取消</button>
                         <button class="save-btn" onclick="sendTransfer()">确认转账</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="redpacket-modal">
+                <div class="redpacket-box">
+                    <h3>红包</h3>
+                    <div class="form-group">
+                        <label>金额</label>
+                        <input type="number" id="redpacket-amount" placeholder="输入红包金额" oninput="updateRedPacketCurrencyPreview()">
+                        <div id="redpacket-currency-preview" class="currency-convert-preview redpacket">将转换为【人民币¥】0¥</div>
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <input type="text" id="redpacket-note" placeholder="输入备注">
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="save-btn" style="background:#f2d7a7; color:#7b2d14;" onclick="sendRedPacket()">塞钱进红包</button>
+                        <button class="save-btn" style="background:#b7221f;" onclick="closeRedPacketModal()">取消</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="image-modal">
+                <div class="transfer-box media-upload-box">
+                    <h3>发送图片</h3>
+                    <div class="form-group">
+                        <label>上传图片（本地或 URL）</label>
+                        <input type="file" id="chat-image-file" accept="image/*" onchange="previewChatImageFile(this)">
+                        <input type="text" id="chat-image-url" placeholder="或输入图片 URL" style="margin-top:8px;">
+                    </div>
+                    <div class="form-group">
+                        <label>图片描述（必填）</label>
+                        <textarea id="chat-image-desc" placeholder="描述一下这张图片..."></textarea>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="save-btn" style="background:#eee; color:#333;" onclick="closeImageModal()">取消</button>
+                        <button class="save-btn" onclick="sendImageMessage()">发送图片</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="video-modal">
+                <div class="transfer-box media-upload-box">
+                    <h3>发送视频</h3>
+                    <div class="form-group">
+                        <label>上传视频封面（选填，本地或 URL）</label>
+                        <input type="file" id="chat-video-cover-file" accept="image/*" onchange="previewVideoCoverFile(this)">
+                        <input type="text" id="chat-video-cover-url" placeholder="或输入视频封面 URL" style="margin-top:8px;">
+                    </div>
+                    <div class="form-group">
+                        <label>视频描述（必填）</label>
+                        <textarea id="chat-video-desc" placeholder="描述一下这个视频..."></textarea>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="save-btn" style="background:#eee; color:#333;" onclick="closeVideoModal()">取消</button>
+                        <button class="save-btn" onclick="sendVideoMessage()">发送视频</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="video-detail-modal" onclick="closeVideoDetailModal()">
+                <div class="video-detail-box" onclick="event.stopPropagation()">
+                    <h3>这个视频的内容：</h3>
+                    <div id="video-detail-text"></div>
+                    <button class="save-btn" style="margin-top:14px; background:#eee; color:#333;" onclick="closeVideoDetailModal()">关闭</button>
+                </div>
+            </div>
+
+            <div id="voice-modal" onclick="handleVoiceModalBackdrop(event)">
+                <div class="voice-modal-box" onclick="event.stopPropagation()">
+                    <h3>语音输入</h3>
+                    <div id="voice-record-status" class="voice-record-status">长按开始录音</div>
+                    <button
+                        id="voice-record-btn"
+                        class="voice-record-btn"
+                        type="button"
+                        aria-label="长按录音"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 19v3"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <rect x="9" y="2" width="6" height="13" rx="3"></rect>
+                        </svg>
+                    </button>
+                    <textarea id="voice-transcript-input" placeholder="语音转文字会显示在这里，可手动编辑"></textarea>
+                    <div class="voice-modal-actions">
+                        <button class="save-btn voice-cancel-btn" type="button" onclick="closeVoiceModal()">取消</button>
+                        <button class="save-btn voice-send-btn" type="button" onclick="sendVoiceMessage()">发送语音</button>
                     </div>
                 </div>
             </div>
@@ -836,25 +1120,48 @@
                 </div>
                 <div class="settings-modal-content">
                     <div class="settings-section-title" style="margin-top:0">当前对话的用户设定</div>
-                    <div style="text-align:center;">
-                        <img id="user-setting-avatar-preview" class="user-avatar-upload" src="" onclick="document.getElementById('user-setting-avatar-input').click()">
-                        <input type="file" id="user-setting-avatar-input" style="display:none;" accept="image/*" onchange="previewUserAvatar(this)">
-                        <input type="text" id="user-setting-avatar-url" placeholder="或者输入图片URL" style="margin-top:5px; width:80%; font-size:12px; padding:5px;">
-                        <div style="font-size:12px; color:#999; margin-bottom:10px;">点击头像上传或输入URL</div>
+                    <div class="form-group">
+                        <label>绑定我的账号</label>
+                        <select id="chat-user-account-select"></select>
                     </div>
-                    <div class="form-group"><label>用户名称</label><input type="text" id="user-setting-name" placeholder="例如：旅行者"></div>
-                    <div class="form-group"><label>用户人设</label><textarea id="user-setting-persona" placeholder="例如：你是一个路过的冒险家..." style="height:80px;"></textarea></div>
+                    <div style="text-align:center; margin-bottom:10px;">
+                        <img id="chat-user-account-avatar-preview" class="user-avatar-upload" src="">
+                        <div id="chat-user-account-name-preview" style="font-size:14px; font-weight:600; color:#222; margin-bottom:4px;"></div>
+                    </div>
 
                     <div class="toggle-switch" style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
                         <span class="toggle-label" style="font-size:14px; font-weight:bold;">开启 AI 时间感知</span>
                         <label class="switch"><input type="checkbox" id="time-perception-toggle"><span class="slider"></span></label>
                     </div>
                     <div style="font-size:11px; color:#888; margin-bottom:20px;">开启后，AI 将知道当前现实时间，并根据作息和回复间隔做出反应。</div>
+                    <div class="settings-section-title" style="margin-top:-2px;">心声模式设置</div>
+                    <div class="toggle-switch" style="margin-top:-4px;">
+                        <span class="toggle-label" style="font-size:14px; font-weight:bold;">默认心声模式</span>
+                        <label class="switch"><input type="checkbox" id="thought-mode-default-toggle" onchange="handleThoughtModeToggle('default')"><span class="slider"></span></label>
+                    </div>
+                    <div class="toggle-switch" style="margin-top:-5px;">
+                        <span class="toggle-label" style="font-size:14px; font-weight:bold;">仿思考链长心声模式</span>
+                        <label class="switch"><input type="checkbox" id="thought-mode-long-toggle" onchange="handleThoughtModeToggle('long_chain')"><span class="slider"></span></label>
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-bottom:20px;">两个开关只能二选一。开启仿思考链长心声后，角色会输出更长、更真实的内心独白。</div>
                     <div class="toggle-switch" style="margin-top:-5px;">
                         <span class="toggle-label" style="font-size:14px; font-weight:bold;">开启 html小剧场</span>
                         <label class="switch"><input type="checkbox" id="html-theater-toggle"><span class="slider"></span></label>
                     </div>
                     <div style="font-size:11px; color:#888; margin-bottom:20px;">开启此功能后可能会增加token消耗。</div>
+                    <div class="form-group" style="margin-top:-6px;">
+                        <label>角色使用的货币单位设置</label>
+                        <select id="role-currency-unit-select">
+                            <option value="cny">人民币¥</option>
+                            <option value="twd">台币NT$（0.2台币=1人民币）</option>
+                            <option value="hkd">港币HK$（0.9港币=1人民币）</option>
+                            <option value="usd">美元$（1美元=7人民币）</option>
+                            <option value="eur">欧元€（1欧元=8人民币）</option>
+                            <option value="jpy">日元¥（1日元=0.04人民币）</option>
+                            <option value="gbp">英镑£（1英镑=9人民币）</option>
+                            <option value="rub">卢布₽（0.09卢布=1人民币）</option>
+                        </select>
+                    </div>
 
                     <div class="settings-section-title">记忆与上下文</div>
                     <div class="toggle-switch">
@@ -862,13 +1169,24 @@
                         <label class="switch"><input type="checkbox" id="auto-summary-toggle"><span class="slider"></span></label>
                     </div>
                     <div class="form-group">
-                        <label>总结频率 (轮)</label>
-                        <input type="number" id="summary-interval-input" placeholder="默认20" value="20">
+                        <label>总结频率 (条)</label>
+                        <input type="number" id="summary-interval-input" placeholder="默认50" value="50">
                     </div>
                     <div class="form-group">
                         <label>上下文记忆数量 (条)</label>
                         <input type="number" id="context-limit-input" placeholder="默认100" value="100">
                     </div>
+
+                    <div class="settings-section-title">后台消息设置</div>
+                    <div class="toggle-switch">
+                        <span class="toggle-label" style="font-size:14px; font-weight:bold;">开启后台自动发消息</span>
+                        <label class="switch"><input type="checkbox" id="bg-msg-toggle"><span class="slider"></span></label>
+                    </div>
+                    <div class="form-group">
+                        <label>角色每 x 分钟发一次消息</label>
+                        <input type="number" id="bg-msg-interval-input" min="1" placeholder="默认60" value="60">
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-bottom:20px;">仅在浏览器处于后台时生效。建议先开启通知权限，以便收到后台回复通知。</div>
 
                     <div class="settings-section-title">绑定局部世界书</div>
                     <div class="bind-wb-list" id="bind-wb-list"></div>
@@ -973,6 +1291,7 @@
                             <option value="third">第三人称（用用户名称称呼用户）</option>
                             <option value="first_char">角色第一人称（角色视角，用"我"称呼角色，用"你"称呼用户）</option>
                         </select>
+                        <div style="font-size:11px; color:#888; margin-top:5px;">该设置只影响【正文】的人称；【状态栏】会始终锁定为角色当前状态。</div>
                     </div>
                     
                     <div class="form-group" style="margin-top:20px;">
@@ -990,6 +1309,28 @@
                         <input type="color" id="offline-dialog-color" value="#bbbfd3">
                     </div>
                     <button class="save-btn" onclick="saveOfflineSettings()">保存</button>
+                </div>
+            </div>
+
+            <div id="offline-bagua-modal" class="offline-bagua-modal" onclick="closeOfflineBuzzwordTool()">
+                <div class="offline-bagua-modal-content" onclick="event.stopPropagation()">
+                    <div class="offline-bagua-header">
+                        <span class="offline-bagua-close" onclick="closeOfflineBuzzwordTool()">关闭</span>
+                        <span class="offline-bagua-title">✏️ 去八股工具</span>
+                        <div class="offline-bagua-toolbar">
+                            <button type="button" class="offline-bagua-tool-btn" onclick="addOfflineBuzzwordRule()" aria-label="新增规则">+</button>
+                            <button type="button" class="offline-bagua-tool-btn" onclick="removeOfflineBuzzwordRule()" aria-label="删除最新规则">-</button>
+                            <button type="button" class="offline-bagua-tool-btn text" onclick="exportOfflineBuzzwordRules()">导出</button>
+                            <button type="button" class="offline-bagua-tool-btn text" onclick="triggerOfflineBuzzwordImport()">导入</button>
+                        </div>
+                    </div>
+                    <div class="offline-bagua-tip">左侧填写需要处理的词，中间选择“屏蔽”或“替换”，右侧填写替换词。屏蔽模式下右侧留空即可。</div>
+                    <div class="offline-bagua-list" id="offline-bagua-list"></div>
+                    <div class="offline-bagua-empty" id="offline-bagua-empty">当前没有规则，点击右上角 + 新增一行。</div>
+                    <div class="offline-bagua-footer">
+                        <button class="save-btn" onclick="saveOfflineBuzzwordRules()">保存规则</button>
+                    </div>
+                    <input type="file" id="offline-bagua-import-input" accept="application/json,.json" style="display:none" onchange="importOfflineBuzzwordRules(event)">
                 </div>
             </div>
 
@@ -1026,7 +1367,6 @@
             <div class="memo-top-tabs">
                 <button id="memo-zone-btn-longTerm" class="memo-top-tab active" onclick="switchMemoZone('longTerm')">长效记忆</button>
                 <button id="memo-zone-btn-shortTerm" class="memo-top-tab" onclick="switchMemoZone('shortTerm')">短效记忆</button>
-                <button id="memo-zone-btn-schedule" class="memo-top-tab" onclick="switchMemoZone('schedule')">日程记忆</button>
                 <button id="memo-zone-btn-impression" class="memo-top-tab" onclick="switchMemoZone('impression')">用户印象</button>
             </div>
             <div class="app-content memo-list" id="memo-detail-list"></div>
@@ -1038,11 +1378,18 @@
                     <span style="color:#007aff; cursor:pointer;" onclick="closeMemoSettings()">完成</span>
                 </div>
                 <div class="settings-modal-content">
-                    <div class="settings-section-title" style="margin-top:0">四区记忆管理</div>
+                    <div class="settings-section-title" style="margin-top:0">记忆管理</div>
                     <button class="save-btn" style="background:#ff9500; margin-bottom:10px;" onclick="addImportantMemoryFromSettings()">+ 添加长效记忆</button>
                     <button class="save-btn" style="background:#34c759; margin-bottom:10px;" onclick="addShortMemoryFromSettings()">+ 添加短效记忆</button>
-                    <button class="save-btn" style="background:#007aff; margin-bottom:10px;" onclick="addScheduleMemoryFromSettings()">+ 添加日程记忆</button>
-                    <button class="save-btn" style="background:#af52de; margin-bottom:20px;" onclick="editImpressionFromSettings()">+ 编辑用户印象</button>
+                    <button class="save-btn" style="background:#af52de; margin-bottom:10px;" onclick="editImpressionFromSettings()">+ 编辑用户印象</button>
+                    <button class="save-btn" style="background:#007aff; margin-bottom:10px;" onclick="openShortToLongTransferModal()">选择短效记忆转为长效记忆</button>
+                    <button class="save-btn" style="background:#5856d6; margin-bottom:20px;" onclick="summarizeUserImpressionsFromSettings()">一键总结用户印象</button>
+                    <div class="memo-import-export-row">
+                        <button class="save-btn memo-transfer-btn" style="background:#5ac8fa;" onclick="exportCurrentMemoMemories()">导出当前记忆</button>
+                        <button class="save-btn memo-transfer-btn" style="background:#30b0c7;" onclick="triggerImportCurrentMemoMemories()">导入并覆盖当前角色</button>
+                    </div>
+                    <div class="memo-import-export-tip">支持导入旧项目备份中的 memories，也支持导入新 AI 聊天器导出的记忆 JSON。导入后会覆盖当前角色原有记忆内容。</div>
+                    <input id="memo-memory-import-input" type="file" accept=".json,application/json" hidden onchange="handleMemoMemoryImport(event)">
                     
                     <div class="settings-section-title">每日总结设置</div>
                     
@@ -1068,6 +1415,18 @@
                 </div>
             </div>
 
+            <!-- 短效转长效弹窗 -->
+            <div id="memo-transfer-modal">
+                <div class="settings-modal-header">
+                    <span>选择短效记忆转为长效记忆</span>
+                    <span style="color:#007aff; cursor:pointer;" onclick="closeShortToLongTransferModal()">完成</span>
+                </div>
+                <div class="settings-modal-content">
+                    <div id="memo-transfer-list" style="max-height:45vh; overflow-y:auto;"></div>
+                    <button class="save-btn" style="background:#ff9500; margin-top:12px;" onclick="confirmTransferShortToLong()">移动选中记忆</button>
+                </div>
+            </div>
+
             <!-- 备忘录编辑弹窗 -->
             <div id="memo-editor-modal">
                 <div class="settings-modal-header">
@@ -1076,11 +1435,9 @@
                 </div>
                 <div class="settings-modal-content">
                     <div id="memo-editor-impression-tabs" class="memo-impression-tabs" style="display:none;">
-                        <button id="memo-impression-btn-profile" class="memo-impression-tab active" onclick="switchImpressionSection('profile')">基本画像</button>
-                        <button id="memo-impression-btn-personality" class="memo-impression-tab" onclick="switchImpressionSection('personality')">性格认知</button>
+                        <button id="memo-impression-btn-profile" class="memo-impression-tab active" onclick="switchImpressionSection('profile')">基础认知</button>
                         <button id="memo-impression-btn-relationship" class="memo-impression-tab" onclick="switchImpressionSection('relationship')">我们的关系</button>
-                        <button id="memo-impression-btn-attitude" class="memo-impression-tab" onclick="switchImpressionSection('attitude')">我对TA的态度</button>
-                        <button id="memo-impression-btn-notes" class="memo-impression-tab" onclick="switchImpressionSection('notes')">互动备注</button>
+                        <button id="memo-impression-btn-notes" class="memo-impression-tab" onclick="switchImpressionSection('notes')">关于TA的注意事项</button>
                     </div>
 
                     <div class="form-group">
@@ -1559,14 +1916,42 @@
                     <div class="forum-settings-btn" onclick="openForumSettings()">⚙️</div>
                 </div>
             </div>
-            
-            <div class="forum-tabs">
-                <div class="forum-tab active" id="forum-tab-following" onclick="switchForumTab('following')">关注</div>
-                <div class="forum-tab" id="forum-tab-recommended" onclick="switchForumTab('recommended')">为你推荐</div>
+
+            <div id="forum-feed-view">
+                <div class="forum-tabs">
+                    <div class="forum-tab active" id="forum-tab-following" onclick="switchForumTab('following')">关注</div>
+                    <div class="forum-tab" id="forum-tab-recommended" onclick="switchForumTab('recommended')">为你推荐</div>
+                </div>
+
+                <div class="forum-content" id="forum-posts-container">
+                    <!-- 帖子将在这里动态生成 -->
+                </div>
             </div>
-            
-            <div class="forum-content" id="forum-posts-container">
-                <!-- 帖子将在这里动态生成 -->
+
+            <div id="forum-profile-view" style="display:none;">
+                <div class="forum-profile-top">
+                    <button class="forum-switch-account-btn" onclick="openForumAccountSwitchModal()">切换账号</button>
+                    <div class="forum-profile-wallpaper" id="forum-profile-wallpaper" onclick="triggerForumWallpaperUpload()">
+                        <div class="forum-profile-wallpaper-tip">点击上传壁纸</div>
+                    </div>
+                    <input type="file" id="forum-profile-wallpaper-input" style="display:none;" accept="image/*" onchange="uploadForumProfileWallpaper(this)">
+                    <div class="forum-profile-avatar-circle" id="forum-profile-avatar-circle">
+                        <img id="forum-profile-avatar-img" src="" alt="头像">
+                    </div>
+                </div>
+                <div class="forum-profile-body">
+                    <div class="forum-profile-name" id="forum-profile-name">我</div>
+                    <div class="forum-profile-sections">
+                        <button id="forum-profile-tab-posts" class="forum-profile-tab-btn active" onclick="switchForumProfileSection('posts')">帖子</button>
+                        <button id="forum-profile-tab-likes" class="forum-profile-tab-btn" onclick="switchForumProfileSection('likes')">喜欢</button>
+                    </div>
+                    <div id="forum-profile-post-list" class="forum-profile-post-list"></div>
+                </div>
+            </div>
+
+            <div class="forum-bottom-nav">
+                <button id="forum-nav-home" class="forum-bottom-btn active" onclick="switchForumView('home')">首页</button>
+                <button id="forum-nav-my" class="forum-bottom-btn" onclick="switchForumView('my')">我的</button>
             </div>
 
             <!-- Forum Action Sheet -->
@@ -1575,6 +1960,41 @@
                     <div class="forum-action-sheet-item" onclick="handleForumEditAction()">编辑</div>
                     <div class="forum-action-sheet-item delete" onclick="handleForumDeleteAction()">删除</div>
                     <div class="forum-action-sheet-cancel" onclick="closeForumActionSheet()">取消</div>
+                </div>
+            </div>
+
+            <button id="forum-fab" class="forum-fab" type="button">+</button>
+        </div>
+
+        <!-- 论坛发帖弹窗 -->
+        <div id="forum-create-post-modal" class="forum-modal">
+            <div class="forum-modal-content">
+                <div class="forum-modal-header">
+                    <span onclick="closeForumCreatePostModal()" style="color:#999; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#fff;">发布帖子</span>
+                    <span onclick="submitForumUserPost()" style="color:#5856d6; cursor:pointer;">发布</span>
+                </div>
+                <div class="forum-modal-body">
+                    <div class="forum-form-group">
+                        <label class="forum-label">正文</label>
+                        <textarea id="forum-create-text" class="forum-textarea" placeholder="写点什么吧..."></textarea>
+                    </div>
+                    <div class="forum-form-group">
+                        <label class="forum-label">本次帖子标签（最多8个）</label>
+                        <div style="display:flex; gap:8px;">
+                            <input id="forum-create-tag-input" type="text" placeholder="输入标签后回车或点添加" style="flex:1; background:#000; border:1px solid #333; color:#fff; border-radius:8px; padding:10px;" onkeydown="handleForumTagInputKeydown(event)">
+                            <button type="button" class="forum-create-tag-add-btn" onclick="addForumDraftTagFromInput()">添加</button>
+                        </div>
+                        <div id="forum-default-tag-list" class="forum-default-tag-list">
+                            <button type="button" class="forum-default-tag-btn" onclick="addForumDraftTag('日常')">#日常</button>
+                            <button type="button" class="forum-default-tag-btn" onclick="addForumDraftTag('水贴')">#水贴</button>
+                            <button type="button" class="forum-default-tag-btn" onclick="addForumDraftTag('分享')">#分享</button>
+                            <button type="button" class="forum-default-tag-btn" onclick="addForumDraftTag('交友')">#交友</button>
+                            <button type="button" class="forum-default-tag-btn" onclick="addForumDraftTag('兴趣')">#兴趣</button>
+                            <button type="button" class="forum-default-tag-btn" onclick="addForumDraftTag('负能')">#负能</button>
+                        </div>
+                        <div id="forum-selected-tag-list" class="forum-selected-tag-list"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1592,11 +2012,45 @@
                         <label class="forum-label">论坛设定 (System Prompt)</label>
                         <textarea id="forum-system-prompt" class="forum-textarea" placeholder="例如：这是一个二次元爱好者聚集的论坛..."></textarea>
                     </div>
+
+                    <div class="forum-form-group">
+                        <label class="forum-label">角色发帖数量（每次生成）</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input id="forum-character-post-min" type="number" min="1" value="5" style="flex:1; background:#000; border:1px solid #333; color:#fff; border-radius:8px; padding:10px;">
+                            <span style="color:#999;">到</span>
+                            <input id="forum-character-post-max" type="number" min="1" value="10" style="flex:1; background:#000; border:1px solid #333; color:#fff; border-radius:8px; padding:10px;">
+                            <span style="color:#999;">条</span>
+                        </div>
+                        <div style="font-size: 11px; color: #999; margin-top: 8px;">当最小数量大于等于当前账号绑定角色数时，每个角色至少生成 1 条。</div>
+                    </div>
+
+                    <div class="forum-form-group">
+                        <label class="forum-label">NPC发帖数量（每次生成）</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input id="forum-npc-post-min" type="number" min="1" value="5" style="flex:1; background:#000; border:1px solid #333; color:#fff; border-radius:8px; padding:10px;">
+                            <span style="color:#999;">到</span>
+                            <input id="forum-npc-post-max" type="number" min="1" value="10" style="flex:1; background:#000; border:1px solid #333; color:#fff; border-radius:8px; padding:10px;">
+                            <span style="color:#999;">条</span>
+                        </div>
+                    </div>
+
+                    <div class="forum-form-group">
+                        <label class="forum-label">世界书</label>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding:8px 0; border-bottom:1px solid #333;">
+                            <span style="font-size:13px; color:#fff;">启用全局世界书</span>
+                            <label class="switch" style="transform:scale(0.9); transform-origin:right center;">
+                                <input id="forum-use-global-worldbook" type="checkbox">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div id="forum-worldbook-bind-roles" style="max-height: 260px; overflow-y: auto; border:1px solid #333; border-radius:8px; padding:8px;"></div>
+                        <div style="font-size: 11px; color: #999; margin-top: 8px;">可为角色绑定“局部世界书”条目，仅影响该角色在论坛中的发帖内容。</div>
+                    </div>
                     
                     <div class="forum-form-group" style="margin-top: 20px;">
-                        <label class="forum-label">绑定发帖角色</label>
+                        <label class="forum-label">当前账号可见角色</label>
                         <div id="forum-bind-characters" style="max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
-                        <div style="font-size: 11px; color: #999; margin-top: 8px;">勾选后，只有绑定的角色才能在论坛发帖</div>
+                        <div style="font-size: 11px; color: #999; margin-top: 8px;">根据角色绑定的用户人设自动识别，无需手动勾选。</div>
                     </div>
                     
                     <button class="forum-clear-btn" onclick="clearAllForumPosts()">清空所有帖子</button>
@@ -1616,13 +2070,42 @@
                     <div class="forum-add-options">
                         <div class="forum-add-option" onclick="generateForumPosts('character')">
                             <div class="forum-add-icon">👤</div>
-                            <div class="forum-add-text">看看TA的帖子</div>
+                            <div class="forum-add-text">看看TA们的帖子</div>
                         </div>
                         <div class="forum-add-option" onclick="generateForumPosts('passerby')">
                             <div class="forum-add-icon">👥</div>
                             <div class="forum-add-text">看看大家在聊什么</div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 论坛主账号选择弹窗 -->
+        <div id="forum-account-required-modal" class="forum-modal">
+            <div class="forum-modal-content forum-account-required-content">
+                <div class="forum-modal-header forum-account-required-header">
+                    <span style="color:#333;"></span>
+                    <span style="font-weight:bold; color:#111;">选择论坛主账号</span>
+                    <span style="color:#333;"></span>
+                </div>
+                <div class="forum-modal-body forum-account-required-body">
+                    <div class="forum-account-required-tip">请选择一个用户人设作为论坛主账号，选择后才能进入论坛。</div>
+                    <div id="forum-account-required-list" class="forum-account-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 论坛切换账号弹窗 -->
+        <div id="forum-account-switch-modal" class="forum-modal" onclick="closeForumAccountSwitchModal()">
+            <div class="forum-modal-content forum-account-switch-content" onclick="event.stopPropagation()">
+                <div class="forum-modal-header forum-account-required-header">
+                    <span onclick="closeForumAccountSwitchModal()" style="color:#666; cursor:pointer;">取消</span>
+                    <span style="font-weight:bold; color:#111;">切换论坛账号</span>
+                    <span></span>
+                </div>
+                <div class="forum-modal-body forum-account-required-body">
+                    <div id="forum-account-switch-list" class="forum-account-list"></div>
                 </div>
             </div>
         </div>
@@ -1708,8 +2191,8 @@
                     </div>
                     
                     <div class="music-form-group">
-                        <label class="music-label">音乐直链</label>
-                        <input type="text" id="music-url-input" class="music-input" placeholder="https://music.163.com/song/media/outer/url?id=歌曲ID.mp3">
+                        <label class="music-label">音乐直链 <span style="color:#ff2d55;">*必填</span></label>
+                        <input type="text" id="music-url-input" class="music-input" placeholder="https://music.163.com/song/media/outer/url?id=歌曲ID.mp3" required>
                         <div class="music-hint">格式：https://music.163.com/song/media/outer/url?id=歌曲ID.mp3</div>
                     </div>
                     
@@ -1737,7 +2220,11 @@
                     </div>
                     
                     <div class="music-form-group">
-                        <label class="music-label">歌词LRC文件 <span style="color:#999;">(请粘贴LRC文件的歌词内容)</span></label>
+                        <label class="music-label">歌词LRC文件 <span style="color:#999;">(可粘贴内容或上传.lrc文件)</span></label>
+                        <div style="margin-bottom:8px;">
+                            <button type="button" class="music-btn" onclick="document.getElementById('music-lyrics-file').click()">上传lrc文件</button>
+                            <input type="file" id="music-lyrics-file" accept=".lrc,text/plain" style="display:none;" onchange="handleLyricsFileUpload(this)">
+                        </div>
                         <textarea id="music-lyrics-input" class="music-textarea" placeholder="[00:00.00]歌词内容&#10;[00:05.00]第二行歌词&#10;..."></textarea>
                     </div>
                 </div>
@@ -1931,7 +2418,245 @@
             </div>
         </div>
 
-        <!-- 23. 游戏 App -->
+        <!-- 23. 购物 App -->
+        <div id="app-shopping" class="screen">
+            <div class="shopping-header">
+                <button class="shopping-back-btn" type="button" onclick="goHome()">返回</button>
+                <div class="shopping-title">购物中心</div>
+                <div class="shopping-header-actions">
+                    <button id="shopping-delete-btn" class="shopping-delete-btn" type="button" onclick="toggleShoppingDeleteMode()" aria-label="删除模式">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-icon lucide-trash"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                    <button id="shopping-purchased-btn" class="shopping-purchased-btn" type="button" onclick="openShoppingPurchasedView()" aria-label="已购买的商品">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-bag-icon lucide-shopping-bag"><path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/></svg>
+                    </button>
+                    <button class="shopping-add-btn" type="button" onclick="openShoppingEntryModal()">+</button>
+                </div>
+            </div>
+            <div class="shopping-content">
+                <div id="shopping-empty" class="shopping-empty">点击右上角 + 开始添加商品</div>
+                <div id="shopping-list" class="shopping-list"></div>
+            </div>
+            <div id="shopping-delete-toolbar" class="shopping-delete-toolbar">
+                <button class="shopping-delete-cancel" type="button" onclick="cancelShoppingDeleteMode()">取消</button>
+                <button class="shopping-delete-confirm" type="button" onclick="confirmShoppingDeleteSelected()">删除已选商品</button>
+            </div>
+
+            <button id="shopping-cart-fab" class="shopping-cart-fab" type="button" aria-label="购物车">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-cart-icon lucide-shopping-cart"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+            </button>
+
+            <div id="shopping-entry-modal" class="shopping-modal" onclick="closeShoppingEntryModal()">
+                <div class="shopping-modal-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">选择添加方式</div>
+                    <button class="shopping-option-btn" type="button" onclick="handleShoppingEntryOption('random')">随便逛逛（自动生成随机商品）</button>
+                    <button class="shopping-option-btn" type="button" onclick="openShoppingRoleModal()">猜TA喜欢（生成TA可能喜欢的商品）</button>
+                    <button class="shopping-option-btn" type="button" onclick="openShoppingCustomModal()">自由挑选（自己创建商品）</button>
+                    <button class="shopping-cancel-btn" type="button" onclick="closeShoppingEntryModal()">取消</button>
+                </div>
+            </div>
+
+            <div id="shopping-role-modal" class="shopping-modal" onclick="closeShoppingRoleModal()">
+                <div class="shopping-modal-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">选择角色</div>
+                    <div id="shopping-role-list" class="shopping-role-list"></div>
+                    <button class="shopping-cancel-btn" type="button" onclick="closeShoppingRoleModal()">取消</button>
+                </div>
+            </div>
+
+            <div id="shopping-custom-modal" class="shopping-modal" onclick="closeShoppingCustomModal()">
+                <div class="shopping-modal-card shopping-custom-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">创建商品</div>
+                    <label class="shopping-form-label">商品封面（可选）</label>
+                    <input id="shopping-custom-image" class="shopping-form-input" type="file" accept="image/*">
+                    <label class="shopping-form-label">商品名称（必填）</label>
+                    <input id="shopping-custom-title" class="shopping-form-input" type="text" placeholder="请输入商品名称">
+                    <label class="shopping-form-label">商品价格（必填）</label>
+                    <input id="shopping-custom-price" class="shopping-form-input" type="number" min="0" step="0.01" placeholder="请输入价格">
+                    <label class="shopping-form-label">商品描述（可选）</label>
+                    <textarea id="shopping-custom-desc" class="shopping-form-textarea" placeholder="请输入商品描述"></textarea>
+                    <div class="shopping-custom-actions">
+                        <button class="shopping-cancel-btn" type="button" onclick="closeShoppingCustomModal()">取消</button>
+                        <button class="shopping-confirm-btn" type="button" onclick="submitShoppingCustomProduct()">完成</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="shopping-detail-modal" class="shopping-modal" onclick="closeShoppingDetailModal()">
+                <div class="shopping-modal-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">商品描述</div>
+                    <div id="shopping-detail-text" class="shopping-detail-text"></div>
+                    <button class="shopping-cancel-btn" type="button" onclick="closeShoppingDetailModal()">关闭</button>
+                </div>
+            </div>
+
+            <div id="shopping-cart-modal" class="shopping-modal" onclick="closeShoppingCartModal()">
+                <div class="shopping-modal-card shopping-cart-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">购物车</div>
+                    <div id="shopping-cart-list" class="shopping-cart-list"></div>
+                    <div class="shopping-cart-footer">
+                        <button class="shopping-confirm-btn shopping-cart-checkout-btn" type="button" onclick="openShoppingCheckoutView()">结账</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="shopping-checkout-view" class="shopping-checkout-view">
+                <div class="shopping-checkout-header">
+                    <div class="shopping-checkout-title">结账</div>
+                </div>
+                <div id="shopping-checkout-list" class="shopping-checkout-list"></div>
+                <div class="shopping-checkout-bottom">
+                    <button class="shopping-checkout-back-btn" type="button" onclick="closeShoppingCheckoutView()">返回</button>
+                    <div class="shopping-checkout-right">
+                        <span id="shopping-checkout-total" class="shopping-checkout-total">合计 ¥0.00</span>
+                        <button class="shopping-checkout-agent-btn" type="button" onclick="openShoppingAgentPayModal()">请TA代付</button>
+                        <button class="shopping-checkout-pay-btn" type="button" onclick="submitShoppingCheckout()">结账</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="shopping-agent-pay-modal" class="shopping-modal" onclick="closeShoppingAgentPayModal()">
+                <div class="shopping-modal-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">选择代付角色</div>
+                    <div id="shopping-agent-pay-role-list" class="shopping-role-list"></div>
+                    <button class="shopping-cancel-btn" type="button" onclick="closeShoppingAgentPayModal()">取消</button>
+                </div>
+            </div>
+
+            <div id="shopping-purchased-view" class="shopping-checkout-view">
+                <div class="shopping-checkout-header">
+                    <button class="shopping-purchased-back-btn" type="button" onclick="closeShoppingPurchasedView()">返回</button>
+                    <div class="shopping-checkout-title">已购买的商品</div>
+                </div>
+                <div id="shopping-purchased-list" class="shopping-checkout-list"></div>
+            </div>
+
+            <div id="shopping-gift-modal" class="shopping-modal" onclick="closeShoppingGiftModal()">
+                <div class="shopping-modal-card" onclick="event.stopPropagation()">
+                    <div class="shopping-modal-title">选择赠送角色</div>
+                    <div id="shopping-gift-role-list" class="shopping-role-list"></div>
+                    <button class="shopping-cancel-btn" type="button" onclick="closeShoppingGiftModal()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 24. 记账 App -->
+        <div id="app-accounting" class="screen">
+            <div class="accounting-page active" id="accounting-balance-view">
+                <button class="wallet-top-left-back" type="button" onclick="goHome()">返回</button>
+                <div class="wallet-top-right" onclick="openAccountingDetailView()">收支明细</div>
+                <div class="wallet-main-center accounting-balance-center">
+                    <div class="wallet-balance-circle">¥</div>
+                    <div class="wallet-balance-label">记账余额</div>
+                    <div class="wallet-balance-amount" id="accounting-balance-amount">¥0.00</div>
+                </div>
+                <div class="wallet-main-actions accounting-balance-actions">
+                    <button class="wallet-action-btn recharge" type="button" onclick="openAccountingBalanceModal()">设置余额</button>
+                </div>
+            </div>
+
+            <div class="accounting-page" id="accounting-chat-view">
+                <div class="app-header accounting-chat-header">
+                    <div class="back-btn chat-arrow-back" onclick="goHome()" aria-label="返回主界面">←</div>
+                    <div class="accounting-chat-title-wrap">
+                        <span id="accounting-chat-title" class="accounting-chat-title">记账</span>
+                        <span id="accounting-chat-stats" class="accounting-chat-stats">本月 支出0元 收入0元</span>
+                    </div>
+                    <div class="action-btn chat-header-actions">
+                        <button class="chat-header-icon-btn info-icon-btn" onclick="openAccountingRoleModal()" aria-label="添加陪你记账的角色">
+                            <span class="info-icon-shape">i</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="chat-messages accounting-chat-messages" id="accounting-chat-history"></div>
+                <div class="typing-indicator" id="accounting-typing-indicator">记账搭子正在回复...</div>
+
+                <div class="accounting-input-area">
+                    <input type="text" id="accounting-item-input" class="accounting-item-input" placeholder="本次买了什么" onkeydown="handleAccountingEnter(event)">
+                    <button class="accounting-type-toggle" id="accounting-type-toggle" type="button" onclick="toggleAccountingType()">支出</button>
+                    <input type="number" id="accounting-amount-input" class="accounting-amount-input" min="0.01" step="0.01" placeholder="金额" onkeydown="handleAccountingEnter(event)">
+                    <button class="icon-btn send-btn" type="button" onclick="submitAccountingEntry()">➤</button>
+                </div>
+            </div>
+
+            <div class="accounting-bottom-bar">
+                <button type="button" id="accounting-tab-balance" class="accounting-tab-btn active" onclick="switchAccountingTab('balance')">余额</button>
+                <button type="button" id="accounting-tab-chat" class="accounting-tab-btn" onclick="switchAccountingTab('chat')">记账</button>
+            </div>
+
+            <div id="accounting-balance-modal" class="wallet-action-modal" onclick="closeAccountingBalanceModal(event)">
+                <div class="wallet-action-modal-card" onclick="event.stopPropagation()">
+                    <div class="wallet-action-modal-title">设置余额</div>
+                    <input id="accounting-balance-input" class="wallet-action-input" type="number" min="0" step="0.01" placeholder="请输入余额">
+                    <div class="wallet-action-modal-btns">
+                        <button class="wallet-modal-btn cancel" type="button" onclick="closeAccountingBalanceModal()">取消</button>
+                        <button class="wallet-modal-btn confirm" type="button" onclick="confirmAccountingBalance()">确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="accounting-role-modal" class="wallet-action-modal" onclick="closeAccountingRoleModal(event)">
+                <div class="wallet-action-modal-card accounting-role-card" onclick="event.stopPropagation()">
+                    <div class="wallet-action-modal-title">添加陪你记账的角色</div>
+                    <div id="accounting-role-list" class="accounting-role-list"></div>
+                    <div class="wallet-action-modal-btns">
+                        <button class="wallet-modal-btn cancel" type="button" onclick="closeAccountingRoleModal()">取消</button>
+                        <button class="wallet-modal-btn confirm" type="button" onclick="saveAccountingRoleSelection()">完成</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wallet-detail-shell accounting-detail-shell" id="accounting-detail-view">
+                <div class="wallet-detail-header">
+                    <button class="wallet-detail-back" type="button" onclick="closeAccountingDetailView()">返回</button>
+                    <div class="wallet-detail-title">收支明细</div>
+                    <div class="wallet-detail-placeholder"></div>
+                </div>
+                <div class="wallet-detail-list" id="accounting-detail-list"></div>
+            </div>
+        </div>
+
+        <!-- 25. 钱包 App -->
+        <div id="app-wallet" class="screen">
+            <div class="wallet-main-shell" id="wallet-main-view">
+                <button class="wallet-top-left-back" type="button" onclick="goHome()">返回</button>
+                <div class="wallet-top-right" onclick="openWalletDetailView()">收支明细</div>
+
+                <div class="wallet-main-center">
+                    <div class="wallet-balance-circle">¥</div>
+                    <div class="wallet-balance-label">我的零钱</div>
+                    <div class="wallet-balance-amount" id="wallet-balance-amount">¥0.00</div>
+                </div>
+
+                <div class="wallet-main-actions">
+                    <button class="wallet-action-btn recharge" type="button" onclick="openWalletActionModal('recharge')">充值</button>
+                    <button class="wallet-action-btn withdraw" type="button" onclick="openWalletActionModal('withdraw')">提现</button>
+                </div>
+            </div>
+
+            <div class="wallet-detail-shell" id="wallet-detail-view">
+                <div class="wallet-detail-header">
+                    <button class="wallet-detail-back" type="button" onclick="closeWalletDetailView()">返回</button>
+                    <div class="wallet-detail-title">收支明细</div>
+                    <div class="wallet-detail-placeholder"></div>
+                </div>
+                <div class="wallet-detail-list" id="wallet-detail-list"></div>
+            </div>
+
+            <div id="wallet-action-modal" class="wallet-action-modal" onclick="closeWalletActionModal(event)">
+                <div class="wallet-action-modal-card" onclick="event.stopPropagation()">
+                    <div class="wallet-action-modal-title" id="wallet-action-modal-title">充值</div>
+                    <input id="wallet-action-input" class="wallet-action-input" type="number" min="0.01" step="0.01" placeholder="请输入金额">
+                    <div class="wallet-action-modal-btns">
+                        <button class="wallet-modal-btn cancel" type="button" onclick="closeWalletActionModal()">取消</button>
+                        <button class="wallet-modal-btn confirm" type="button" onclick="confirmWalletAction()">确认</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 25. 游戏 App -->
         <div id="app-game" class="screen">
             <div class="app-header game-header">
                 <div class="back-btn" id="game-header-back-btn" onclick="goHome()">Home</div>
@@ -1984,8 +2709,136 @@
             </div>
         </div>
 
+        <!-- 26. 小厨房 App -->
+        <div id="app-kitchen" class="screen">
+            <div class="app-header kitchen-header">
+                <div class="back-btn" onclick="goHome()">Home</div>
+                <div class="app-title">小厨房</div>
+                <div class="kitchen-header-actions">
+                    <button class="action-btn kitchen-clear-btn" type="button" onclick="clearKitchenPot()">清空</button>
+                </div>
+            </div>
+
+            <div class="kitchen-container">
+                <div class="kitchen-pot-area">
+                    <button class="kitchen-tool-switch-btn" type="button" onclick="openKitchenToolModal()">厨具切换</button>
+                    <button class="kitchen-recipe-float-btn" type="button" onclick="openKitchenRecipeModal()">食谱参考</button>
+                    <div class="kitchen-tool-icon-wrap">
+                        <div class="kitchen-tool-icon" id="kitchen-current-tool-icon"></div>
+                        <div class="kitchen-tool-name" id="kitchen-current-tool-name">锅</div>
+                    </div>
+                    <div class="kitchen-pot-contents" id="kitchen-pot-display">
+                        <span class="kitchen-pot-placeholder">点击下方食材加入当前厨具</span>
+                    </div>
+                </div>
+
+                <button class="kitchen-cook-btn" type="button" onclick="startKitchenCooking()">合成</button>
+
+                <div class="kitchen-shelf-area">
+                    <div class="kitchen-category-tabs">
+                        <button class="kitchen-tab-btn" id="kitchen-tab-veg" type="button" onclick="switchKitchenTab('veg')">蔬菜</button>
+                        <button class="kitchen-tab-btn" id="kitchen-tab-fruit" type="button" onclick="switchKitchenTab('fruit')">水果</button>
+                        <button class="kitchen-tab-btn" id="kitchen-tab-drink" type="button" onclick="switchKitchenTab('drink')">饮品</button>
+                        <button class="kitchen-tab-btn active" id="kitchen-tab-staple" type="button" onclick="switchKitchenTab('staple')">主食</button>
+                        <button class="kitchen-tab-btn" id="kitchen-tab-meat" type="button" onclick="switchKitchenTab('meat')">肉类</button>
+                        <button class="kitchen-tab-btn" id="kitchen-tab-condiments" type="button" onclick="switchKitchenTab('condiments')">调料</button>
+                        <button class="kitchen-tab-btn" id="kitchen-tab-others" type="button" onclick="switchKitchenTab('others')">其他</button>
+                    </div>
+                    <div class="kitchen-ingredient-grid" id="kitchen-shelf-grid"></div>
+                </div>
+            </div>
+
+            <div id="kitchen-overlay" class="kitchen-overlay">
+                <div id="kitchen-loading-state" class="kitchen-loading-state">
+                    <div class="kitchen-loading-spinner">🥘</div>
+                    <div class="kitchen-loading-title">正在制作中...</div>
+                    <div class="kitchen-loading-desc">大厨正在努力翻炒</div>
+                </div>
+                <div id="kitchen-result-state" class="kitchen-result-state">
+                    <div class="kitchen-result-title">合成成功!</div>
+                    <div id="kitchen-result-emoji" class="kitchen-result-emoji">🍣</div>
+                    <div id="kitchen-result-text" class="kitchen-result-text">已成功制作 <b>寿司</b></div>
+                    <button class="kitchen-gift-btn" type="button" onclick="openKitchenGiftModal()">将食物赠送给TA</button>
+                    <button class="kitchen-reset-btn" type="button" onclick="resetKitchenApp()">再做一份</button>
+                </div>
+            </div>
+
+            <div id="kitchen-tool-modal" class="kitchen-tool-modal" onclick="closeKitchenToolModal()">
+                <div class="kitchen-tool-modal-card" onclick="event.stopPropagation()">
+                    <div class="kitchen-tool-modal-title">选择厨具</div>
+                    <div id="kitchen-tool-option-list" class="kitchen-tool-option-list"></div>
+                </div>
+            </div>
+
+            <div id="kitchen-recipe-modal" class="kitchen-tool-modal" onclick="closeKitchenRecipeModal()">
+                <div class="kitchen-recipe-modal-card" onclick="event.stopPropagation()">
+                    <div class="kitchen-tool-modal-title">食谱参考</div>
+                    <div id="kitchen-recipe-list" class="kitchen-recipe-list"></div>
+                </div>
+            </div>
+
+            <div id="kitchen-gift-modal" class="kitchen-tool-modal" onclick="closeKitchenGiftModal()">
+                <div class="kitchen-gift-modal-card" onclick="event.stopPropagation()">
+                    <div class="kitchen-tool-modal-title">选择赠送对象</div>
+                    <div id="kitchen-gift-list" class="kitchen-gift-list"></div>
+                    <div class="kitchen-gift-actions">
+                        <button class="kitchen-gift-cancel" type="button" onclick="closeKitchenGiftModal()">取消</button>
+                        <button class="kitchen-gift-confirm" type="button" onclick="confirmKitchenGift()">确认赠送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 27. 塔罗牌 App -->
+        <div id="app-tarot" class="screen">
+            <div class="app-header tarot-header">
+                <div class="back-btn" onclick="goHome()">Home</div>
+                <div class="app-title">塔罗牌</div>
+                <div class="action-btn"></div>
+            </div>
+            <div class="tarot-app-shell">
+                <div class="tarot-aurora-glow"></div>
+                <div class="tarot-star-layer" id="tarot-star-layer"></div>
+                <div id="tarot-view-input" class="tarot-stage-view active">
+                    <div class="tarot-question-panel">
+                        <div class="tarot-panel-title">输入你想得到解答的问题</div>
+                        <textarea id="tarot-question-input" placeholder="例如：我接下来三个月该如何选择工作方向？"></textarea>
+                        <button id="tarot-start-btn" class="tarot-main-btn" onclick="startTarotSession()">开始占卜</button>
+                    </div>
+                </div>
+
+                <div id="tarot-view-draw" class="tarot-stage-view">
+                    <div class="tarot-stage-card">
+                        <div id="tarot-draw-tip" class="tarot-panel-title">请静心等待，牌面正在被命运之风洗净</div>
+                        <div id="tarot-shuffle-area" class="tarot-shuffle-area active">
+                            <div class="tarot-shuffle-deck">
+                                <span class="tarot-shuffle-card"></span>
+                                <span class="tarot-shuffle-card"></span>
+                                <span class="tarot-shuffle-card"></span>
+                                <span class="tarot-shuffle-card"></span>
+                                <span class="tarot-shuffle-card"></span>
+                            </div>
+                            <div class="tarot-shuffle-text">洗牌中...</div>
+                        </div>
+                        <div id="tarot-cards-grid" class="tarot-cards-grid"></div>
+                        <button id="tarot-ai-btn" class="tarot-main-btn" onclick="requestTarotAIReading()" disabled>让 AI 辅助解牌</button>
+                    </div>
+                </div>
+
+                <div id="tarot-view-ai" class="tarot-stage-view">
+                    <div class="tarot-reading-panel">
+                        <div class="tarot-panel-title">AI 辅助解牌</div>
+                        <div id="tarot-picked-summary"></div>
+                        <div id="tarot-ai-result" class="tarot-ai-result">AI 解牌中，请稍候...</div>
+                        <button id="tarot-restart-btn" class="tarot-main-btn" onclick="restartTarotFlow()" style="display:none;">再问一个问题</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 隐藏的音频元素 -->
         <audio id="music-audio" preload="auto"></audio>
+        <audio id="keep-alive-audio" preload="none" loop playsinline muted></audio>
 
         <div class="home-indicator" onclick="goHome()"></div>
     </div>
